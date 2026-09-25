@@ -1,0 +1,39 @@
+# --- secrets & local config: NEVER committed (public repo) ---
+.env
+.env.*
+*.key
+credentials.json
+secrets.json
+**/config/*.local.*
+*.local.toml
+*.local.yaml
+*.local.yml
+*.local.properties
+
+# --- strategy definitions (real strategy content never enters the repo) ---
+strategies/private/
+
+# --- java / gradle ---
+build/
+.gradle/
+out/
+*.class
+*.jar
+!gradle/wrapper/gradle-wrapper.jar
+
+# --- node / frontend ---
+node_modules/
+dist/
+.vite/
+coverage/
+
+# --- ide / os ---
+.idea/
+*.iml
+.vscode/
+.DS_Store
+
+# --- local data / scratch ---
+*.parquet
+data/local/
+tmp/
