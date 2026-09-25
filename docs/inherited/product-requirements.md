@@ -29,6 +29,11 @@ actually it doesn't work — before caring about a live trade."* (S1-Q3/Q5.)
 **money → craft → platform-for-others → research-instrument.** Money is the ultimate point;
 the way to money is a proven strategy; the way to a proven strategy is backtesting — so the
 backtest/charting pipeline outranks live execution in build order, without hesitation.
+*Clarified 2026-09-25:* "research-instrument" ranks last only as **general/external market
+research** (literature, sentiment, trading-as-a-subject — out of scope, §12); **research into
+the user's own strategies is not that category — it is the core loop and lives inside
+"money"** (it is what backtest-first means). The ranking never deprioritises the
+workbench/backtest pipeline.
 
 **Provider-agnostic identity** ✅ — the product is not named after, or coupled to, any broker.
 IG is the first integration, not the identity. **Name: Tradebench** ✅ (chosen 2026-09-25 — the
@@ -320,6 +325,9 @@ indicative; epics get cut from §5 when the new repo's board is born.)
 - ❌ Public deploys; productising for strangers; anything requiring hardened multi-tenant
   security beyond edge gating + login.
 - ❌ Crypto, FX, single-name equities (indexes only).
+- ❌ General market-research tooling — news, sentiment, literature, studying trading as a
+  subject. The platform researches *the user's strategies against data*, nothing broader
+  (S1-Q2 clarification, 2026-09-25).
 - ❌ Windows as a deployment target; native-installer distribution of any kind.
 - ❌ Provider-managed trade mechanics as the primary execution path (P4 — internal first;
   provider order types optional later).

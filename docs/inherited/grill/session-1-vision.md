@@ -42,6 +42,14 @@ Note the nuance: research-*instrument* ranks last as an identity, but backtestin
 capability (see Q3) — backtesting serves the money goal, it is not market-curiosity for its own
 sake.
 
+**Clarification (Alex, 2026-09-25):** the last-place ranking pigeonholed the word "research."
+What ranks last is *general/external* research — literature, wider market sentiment, studying
+trading as a subject — which stays **outside this project** (Alex may do it elsewhere).
+**Research into the strategies the user builds** — running them over data, exploring indicators,
+extracting verdicts — is technically research too, and that is **core product, living inside
+(a) money**: it is what backtest-first means. Read the ranking accordingly — (c)'s position
+never deprioritises the workbench/backtest loop.
+
 ## Q3 — Success without live trading?
 
 Slight disappointment *if it takes 18 months to get there*, but **not** a failure — and the
