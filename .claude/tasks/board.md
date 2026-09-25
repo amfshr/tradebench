@@ -9,6 +9,15 @@
 (decisions D2) says it ships to the cloud before anything else exists. E2/E3 are stubs awaiting
 their own planning sessions (E3 waits on the indicators-and-predicates design session).
 
+**Next-session menu (set 2026-09-25 evening, Alex's pick-up list):**
+① *Sanity lap* — Claude reads CLAUDE.md → PRD → this board and plays back the project state
+(proves the handoff is self-sufficient). ② *Indicators & predicates design session* — the
+deep-dive Alex requested (gates E3; anchor to Pattern 1 + the range-bar model; file the
+answered record under `docs/design-sessions/`). ③ *Start E1-T1* — Gradle skeleton + CI +
+branch protection; first real code, independent of ②. ④ *Page designs* (optional, `design/`) —
+workbench layout, results page, or the E2 board viewer. Nothing else blocks: Databento scoping
+and PRD open Qs #7/#11 are needed by E3-era work, not now.
+
 ---
 
 ## E1 📡 Collection service, deployed 24/7 — ACTIVE
