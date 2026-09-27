@@ -10,8 +10,9 @@ risk management and analytics. **Backtest-first, live-last**; the product thesis
 the loop between idea and verdict*. Owner/admin: Alex (SWE); future users: his brother and Dad
 (a returning strategy author whose models must slot in as data, never as platform code).
 
-**Status: pre-build.** The requirements phase is complete; Epic 1 (the 24/7 collection service)
-is planned on the board and is the active work.
+**Status: pre-build.** Requirements complete; the DSL's core semantics are ruled (D7–D9,
+design session 2026-09-27); the AI operating framework (E0) is in place. Epic 1 (the 24/7
+collection service) is planned on the board and is the active build epic.
 
 ## Read-first order
 
@@ -20,8 +21,11 @@ is planned on the board and is the active work.
 2. `.claude/tasks/board.md` — the board: the single source of truth for epics/tickets. GitHub is
    for PRs only, never issues.
 3. `docs/decisions.md` — this repo's decision log (why + status). Add to it when a real decision
-   lands; never re-litigate silently.
-4. For anything IG or engineering-doctrine: `docs/inherited/ig-broker-playbook.md` and
+   lands; never re-litigate silently. Design truth: `docs/design-sessions/` (dated answered
+   records) and `docs/design/` (enduring technical specs).
+4. `.claude/ai-framework.md` — **how AI works here**: roles (Claude proposes, Alex rules),
+   guardrails G1–G8, session protocols, directory standard, and the agents/skills inventory.
+5. For anything IG or engineering-doctrine: `docs/inherited/ig-broker-playbook.md` and
    `docs/inherited/prototype-engineering-playbook.md`. For why a prototype decision does/doesn't
    apply here: `docs/inherited/decisions-triage.md`.
 
@@ -62,6 +66,9 @@ stands alone) · P8 data collected forever, source-attributed always · P9 fail 
 
 - Work is tracked on `.claude/tasks/board.md` (see `.claude/task-workflow.md`). Tickets carry a
   DoD; don't add scope; surface `Decision: (TBD)` items instead of implementing past them.
+- Session protocols are project skills: `/sanity-lap` (cold start), `/design-session` (design
+  deep-dives), `/start-ticket` (build work). Project agents: `doctrine-reviewer` (pre-PR),
+  `seed-pack-librarian` (prototype knowledge). Contract: `.claude/ai-framework.md`.
 - **PR-only to `main`** with CI green. The one exception: documentation-only changes may go
   direct to main.
 - This is a **public repository**. Never commit credentials, `.env*`, or **strategy

@@ -1,5 +1,8 @@
 # Task workflow
 
+> AI roles, guardrails (G1–G8), and session protocols live in `.claude/ai-framework.md` — this
+> file covers board mechanics only.
+
 - **The board (`.claude/tasks/board.md`) is the single source of truth.** GitHub is for PRs
   only. Epics carry a mission and references; tickets carry a DoD. Close-out moves a summary
   line to Done history with its evidence (PR, report, ruling).
@@ -16,3 +19,6 @@
   once survived 14 of 19 planted bugs.)
 - **Ideation is not ticketed.** Ideas mature through docs (`docs/`, or a design session with
   Alex) and earn tickets only at the build-start boundary.
+- **Session close-out, every session:** board statuses current, records/decisions filed, work
+  committed or PR'd, next-session menu refreshed. Leave the camp clean — the next session may
+  be months away.

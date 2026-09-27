@@ -89,3 +89,16 @@ fail loud and named (P9). **Why:** forming data is partial *present* information
 look-ahead — P3 stands uncompromised (negative indexes remain compile errors); Pine's repaint
 disease came from backtests that couldn't reproduce live's samples, which this engine design
 removes by construction. (Design session 2026-09-27, ruling by Alex.)
+
+## D10 — AI operating framework: contract, guardrails G1–G8, protocol skills — **Accepted** (2026-09-27)
+
+AI work on Tradebench runs under an explicit contract (`.claude/ai-framework.md`): Alex holds
+rulings/merges/money/broker/deploys; AI proposes, implements ticket-scoped work, reviews, and
+keeps records — never rules. Eight citable guardrails (public-repo discipline incl. the
+strategy-content ban, logged decisions, board as truth, PR-only, testing doctrine, no external
+sends, named-target destructive ops, honest reporting); session protocols codified as skills
+(`/sanity-lap`, `/design-session`, `/start-ticket`); two project agents (`doctrine-reviewer`,
+`seed-pack-librarian`); a standard `.claude/` + `docs/` directory layout. **Why:** AI is the
+standing development partner (PRD §9 AI-workable NFR) and Alex's time is bursty — the rules
+must hold in every session, however cold, without re-negotiation. Framework changes are
+themselves decisions (G2). Enforcement (pre-commit/CI scans, permissions) is E0-T4.
