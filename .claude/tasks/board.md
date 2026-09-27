@@ -47,8 +47,10 @@ daily **heal → Parquet-archive → digest-email** cycle — running 24/7 in th
 its first day no streaming opportunity is missed. Data model carries **user + source dimensions
 from day one** (PRD §7). Acceptance for the epic = T8's shadow-diff verdict.
 
-**References:** PRD §7/§11 · `docs/inherited/ig-broker-playbook.md` (§1–§4 are the porting
-spec) · `docs/inherited/design/phase1-market-data-build-plan.md` (module map + porting order;
+**Ticket plans:** `.claude/tasks/epics/e1-collection-service.md` — per-ticket approach, build
+order, test plan, in-ticket decisions. **References:** PRD §7/§11 ·
+`docs/inherited/ig-broker-playbook.md` (§1–§4 are the porting spec) ·
+`docs/inherited/design/phase1-market-data-build-plan.md` (module map + porting order;
 its deploy framing is superseded by S5 staging/prod decisions) ·
 `docs/inherited/data-platform-design.md` (capture the finest atom, derive the rest;
 CHART:1MINUTE sealed bars only) · engineering playbook §1–§4.

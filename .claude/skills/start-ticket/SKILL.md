@@ -5,8 +5,10 @@ description: Start build work on a board ticket — scope check, branch, doctrin
 
 # Start-ticket protocol
 
-1. **Read before code:** the ticket, its epic's mission and references, and the relevant PRD
-   sections. The board (`.claude/tasks/board.md`) is the single source of truth (G3).
+1. **Read before code:** the ticket, its epic's mission and references, **its plan section in
+   `.claude/tasks/epics/e<n>-<slug>.md`** (refine the plan there if reality has moved — it's a
+   living sketch), and the relevant PRD sections. The board (`.claude/tasks/board.md`) is the
+   single source of truth (G3).
 2. **Scope check.** If the ticket hides an unmade decision, surface it as `Decision: (TBD)`
    and stop — never implement past it. No scope adds: new work earns its own board line, not
    a place on this branch.

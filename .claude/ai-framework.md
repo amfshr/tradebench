@@ -73,6 +73,7 @@ may be months away.
   ai-framework.md      ← this contract
   task-workflow.md     ← board mechanics (how tickets move)
   tasks/board.md       ← THE board (single source of truth)
+  tasks/epics/         ← per-epic plan files (ticket-level approach/test plan)
   agents/              ← project agents (§5)
   skills/              ← project skills (§5)
   settings.json        ← permissions/hooks (E0-T4 — not yet born)
