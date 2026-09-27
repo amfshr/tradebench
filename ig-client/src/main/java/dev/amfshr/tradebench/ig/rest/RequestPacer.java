@@ -41,7 +41,7 @@ public final class RequestPacer {
         long now = monotonicNanos.getAsLong();
         evictExpired(now);
         while (grantsInWindow.size() >= permitsPerWindow) {
-            long oldest = grantsInWindow.peekFirst();
+            long oldest = grantsInWindow.getFirst();
             long waitNanos = (oldest + WINDOW.toNanos()) - now;
             if (waitNanos > 0) {
                 sleeper.sleep(Duration.ofNanos(waitNanos));
@@ -55,7 +55,7 @@ public final class RequestPacer {
     private void evictExpired(long now) {
         // A grant expires exactly WINDOW after it was taken: at the boundary it is expired.
         while (!grantsInWindow.isEmpty()
-                && now - grantsInWindow.peekFirst() >= WINDOW.toNanos()) {
+                && now - grantsInWindow.getFirst() >= WINDOW.toNanos()) {
             grantsInWindow.removeFirst();
         }
     }
