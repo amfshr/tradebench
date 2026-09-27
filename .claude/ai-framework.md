@@ -82,7 +82,8 @@ may be months away.
 docs/
   decisions.md         ← decision log (D1…)
   design-sessions/     ← dated answered records of design sessions
-  design/              ← enduring technical design specs (vocabulary catalogue, grammar…)
+  design/              ← enduring technical design specs (architecture.md, catalogue, grammar…)
+  reference/           ← external reference material (e.g. the scraped IG API summary)
   inherited/           ← read-only prototype seed pack (never edit — D1)
 design/                ← UX/page designs and wireframes (human-facing surfaces)
 CLAUDE.md              ← entrypoint: project truth + conventions; points everywhere else

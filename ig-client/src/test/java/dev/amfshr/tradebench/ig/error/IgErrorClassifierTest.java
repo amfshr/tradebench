@@ -19,6 +19,7 @@ class IgErrorClassifierTest {
             "error.public-api.failure.preferred.account.not.set, FATAL_CONFIG",
             "error.security.account-suspended, FATAL_CONFIG",
             "error.switch.invalid-accountId, FATAL_CONFIG",
+            "error.public-api.failure.missing.credentials, FATAL_CONFIG",
             "validation.pattern.invalid.authenticationRequest.identifier, FATAL_CONFIG",
             "validation.null-not-allowed.request.accountId, FATAL_CONFIG",
             // retryable: a rebuild/backoff fixes these

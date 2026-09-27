@@ -140,9 +140,7 @@ public final class IgSessionManager {
             }
             throw IgErrors.from(mapper, switched, "PUT /session account switch");
         }
-        // Loud like login: switching refreshes tokens (§1.4), so a 200 without token headers
-        // means we'd be carrying stale pre-switch tokens — the "connected but shows nothing"
-        // bug deferred into a confusing downstream failure. Refuse instead.
+
         return tokensFrom(switched).orElseThrow(() -> new IgRetryableException(
                 "Account switch response carried no CST/X-SECURITY-TOKEN headers", 200, null));
     }

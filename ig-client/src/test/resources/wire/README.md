@@ -4,6 +4,18 @@ These fixtures were **authored from the broker playbook's documented wire facts,
 captured from live IG** (T2 had no live capture path). That boundary matters when weighing
 them as evidence:
 
+> **Cross-check 2026-09-27** against the prototype repo (Alex's permission): the scraped
+> labs.ig.com reference (`docs/reference/ig-api-reference-summary.md`, now in this repo),
+> the field-proven `backfill.py` (ran live for months), and trading-ig's source. Newly
+> **corroborated**: prices candles keyed on ISO-format `snapshotTimeUTC` with
+> `openPrice/highPrice/lowPrice/closePrice` as `{bid, ask}` objects (backfill.py parses
+> exactly this); `metadata.allowance.remainingAllowance` + `.allowanceExpiry` (trading-ig
+> reads these names); the full error-code catalogue incl.
+> `error.public-api.failure.missing.credentials`; login/switch/accounts shapes; the
+> dealingRules v3 structure. **Still authored** (validate at first live contact): the
+> `max`/`pageSize` query-param spellings, `totalAllowance`, `lastTraded`,
+> `lastTradedVolume`, and login-response fields we don't read.
+
 - **Playbook-anchored** (independently documented in `docs/inherited/ig-broker-playbook.md`):
   `snapshotTimeUTC` as the timezone-proof key (§4.2) · the dealing-rules `{unit, value}`
   pairs, names, and demo values incl. the PERCENTAGE units (§5.1) · `currentAccountId` +

@@ -21,7 +21,8 @@ public final class IgErrorClassifier {
             "preferred.account.disabled",
             "preferred.account.not.set",
             "error.security.account-suspended",
-            "error.switch.invalid-accountid");
+            "error.switch.invalid-accountid",
+            "failure.missing.credentials");
 
     private IgErrorClassifier() {
     }
