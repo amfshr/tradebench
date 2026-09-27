@@ -15,11 +15,28 @@ java {
 }
 
 dependencies {
+    implementation(libs.jackson.databind)
+
     testImplementation(platform(libs.junit.bom))
     testImplementation(libs.junit.jupiter)
     testRuntimeOnly(libs.junit.platform.launcher)
 }
 
-tasks.withType<Test> {
-    useJUnitPlatform()
+// Default tests run on fakes only. The demo-login smoke (tag "ig-demo") talks to real IG and
+// is integration-gated: excluded from `test`/CI, run explicitly via `demoSmoke` with
+// IG_SMOKE=1 and the IG_DEMO_* env vars set.
+tasks.test {
+    useJUnitPlatform {
+        excludeTags("ig-demo")
+    }
+}
+
+tasks.register<Test>("demoSmoke") {
+    group = "verification"
+    description = "Logs into IG demo (requires IG_SMOKE=1 and IG_DEMO_* env vars)."
+    testClassesDirs = sourceSets.test.get().output.classesDirs
+    classpath = sourceSets.test.get().runtimeClasspath
+    useJUnitPlatform {
+        includeTags("ig-demo")
+    }
 }

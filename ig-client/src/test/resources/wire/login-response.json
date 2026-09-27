@@ -1,0 +1,19 @@
+{
+  "accountType": "CFD",
+  "accountInfo": {"balance": 10000.0, "deposit": 0.0, "profitLoss": 0.0, "available": 10000.0},
+  "currencyIsoCode": "GBP",
+  "currencySymbol": "£",
+  "currentAccountId": "Z6CS3D",
+  "lightstreamerEndpoint": "https://demo-apd.marketdatasystems.com",
+  "accounts": [
+    {"accountId": "Z6CS3D", "accountName": "CFD", "preferred": true, "accountType": "CFD"},
+    {"accountId": "Z6CS3E", "accountName": "Spread bet", "preferred": false, "accountType": "SPREADBET"}
+  ],
+  "clientId": "100112233",
+  "timezoneOffset": 1,
+  "hasActiveDemoAccounts": true,
+  "hasActiveLiveAccounts": true,
+  "trailingStopsEnabled": false,
+  "reroutingEnvironment": null,
+  "dealingEnabled": true
+}
