@@ -7,7 +7,7 @@
 > the system's shape (new module, new deployable, new boundary, changed dataflow). Rulings
 > trace to `docs/decisions.md`; deep design history to `docs/design-sessions/`.
 >
-> Status: v1, 2026-09-27 — reflects E1-T1 (merged) + E1-T2 (PR #2).
+> Status: v1, 2026-09-27 — reflects E1-T1 and E1-T2 (both merged).
 
 ## 1. Context — who and what Tradebench talks to
 
@@ -70,7 +70,7 @@ by release tag; outbound-only network (IG + heartbeat); Linux containers only, n
 
 ## 3. Components
 
-### 3.1 `ig-client` (state: T2 — session + REST core in PR #2)
+### 3.1 `ig-client` (state: T2 merged — session + REST core)
 
 | Package | Components | Responsibility |
 |---|---|---|

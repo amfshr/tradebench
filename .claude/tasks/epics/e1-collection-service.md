@@ -27,7 +27,7 @@ remains the capture of record.
 Done: Gradle 9.8 Kotlin DSL multi-module (`core`, `ig-client`, `market-data-service`),
 Java 25 LTS toolchain, CI + branch protection, walking skeletons mutation-verified. D12.
 
-## T2 — `ig-client`: session + REST core
+## T2 — `ig-client`: session + REST core ✅ (PR #2, 2026-09-27)
 
 **Goal:** an authenticated, paced, typed IG REST core the whole platform stands on.
 **Build order** (build plan §3 — the playbook's own recommendation):
@@ -114,6 +114,9 @@ itself alarms (P9).
    `healed / tickless-at-source / failed`. **Ticks are stream-only** — provably
    unrecoverable from IG REST; the job never claims otherwise.
 2. **Archive**: day's capture → Parquet → object storage (offsite copy, backtest-ready).
+   *(Ruling 2026-09-27: `IgRestClient` throws on a candle without `snapshotTimeUTC` — the
+   healer catches per-request and classifies the outcome `failed`; blast-radius policy is
+   the healer's, never the wire layer's.)*
 3. **Digest email**: counts, gaps, heal outcomes, archive path. Audited `job_runs` row
    every run, clean or not — **the absence of the digest is the alarm** (runbook documents
    the check).

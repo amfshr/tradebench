@@ -13,13 +13,14 @@ language semantics are ruled (design session 2026-09-27, D7–D9); its two desig
 are cut and plannable. E4–E8 name the horizon so the whole road is visible; they hold no
 tickets until their own planning sessions.
 
-**Next-session menu (refreshed 2026-09-27, post E1-T1):**
-① *E1-T2* — `ig-client` session + REST core behind the provider port (broker playbook §1 is
-the porting spec; error taxonomy first). ② *E3-T1 vocabulary catalogue v0* — Claude drafts to
-`docs/design/`, Alex rules line by line. ③ *E0-T4 guardrail enforcement* — CI now exists to
-hang it on (GitGuardian already runs on the repo — fold into the ticket). ④ *E2 planning /
-page designs* — the frontend seat exists and D11 is confirmed. Nothing else blocks: Databento
-scoping and PRD open Qs #7/#11 are needed by E3-era work, not now.
+**Next-session menu (refreshed 2026-09-27, post E1-T2):**
+① *E1-T3 streaming* (Lightstreamer ticks + sealed 1m bars — D13 design nod first) and/or
+*E1-T4 persistence* (Flyway schema — can run in parallel with T3 per the epic plan).
+② *Run the demo smoke* — `IG_SMOKE=1 ./gradlew :ig-client:demoSmoke` with IG_DEMO_* set
+(Alex only; first real-wire contact for T2's session core). ③ *E3-T1 vocabulary catalogue
+v0* — Claude drafts to `docs/design/`, Alex rules line by line. ④ *E0-T4 guardrail
+enforcement* — CI exists; GitGuardian already runs (fold in). ⑤ *E2 planning / page
+designs*. Nothing else blocks: Databento scoping and PRD open Qs #7/#11 are E3-era.
 
 ---
 
@@ -58,7 +59,7 @@ CHART:1MINUTE sealed bars only) · engineering playbook §1–§4.
 | # | Ticket | Status |
 |---|--------|--------|
 | T1 | **Foundations.** Gradle multi-module skeleton (`ig-client`, `market-data-service`, shared `core`; `frontend/` seat reserved, empty), CI on PR (build + test), `.editorconfig`, README badge. Enable branch protection on `main` once the CI check exists (required check; admin bypass stays available for docs-only pushes). **DoD:** green CI on a walking-skeleton test in each module; protection active. | ✅ 2026-09-27 (PR #1) |
-| T2 | **`ig-client`: session + REST core behind the provider port.** REST login/refresh (demo + live envs), typed config (no code defaults; secrets via env beside config — never committed), request pacing guard (IG session rate limits are real — playbook + engineering playbook §4.6), typed errors. **DoD:** unit suite on fakes; one integration-gated smoke that logs into demo. | 🔶 |
+| T2 | **`ig-client`: session + REST core behind the provider port.** REST login/refresh (demo + live envs), typed config (no code defaults; secrets via env beside config — never committed), request pacing guard (IG session rate limits are real — playbook + engineering playbook §4.6), typed errors. **DoD:** unit suite on fakes; one integration-gated smoke that logs into demo. | ✅ 2026-09-27 (PR #2; smoke ready — needs Alex's IG_DEMO_* env) |
 | T3 | **Streaming: ticks + sealed 1m bars.** Lightstreamer Java SDK: PRICE (ticks) + CHART:1MINUTE (accept `CONS_END=1` only) per market; cheap-work-only on callback threads, everything queued to one consumer; per-market subscriptions (identity-vs-addressing per triage D16). **DoD:** a live demo session captures a full DAX day of ticks + 1m bars locally. | ⬜ |
 | T4 | **Persistence.** Flyway from birth: `instruments`, `ticks`, `bars_1m` (user + source columns from day one), `service_events`, `job_runs`; least-privilege roles (triage D22); testcontainers suite; generated schema render + CI drift gate (triage D23). **DoD:** captured data lands via the real write path; drift gate green. | ⬜ |
 | T5 | **Resilience belt.** Reconnect stack; staleness watchdog on injectable clocks — should-be-ticking derived from the stream itself, monotonic/awake vs wall time split, escalation ladder (triage D25); gap detection writing gap rows; structured `service_events` + quiet-is-healthy warnings stream. **DoD:** scripted failure scenarios (dead socket, silent-while-connected, host suspend) pass on fakes — each test mutation-verified. | ⬜ |
@@ -127,3 +128,11 @@ captured/imported data to chew on (E1 + first Databento decisions).
   green on mutation-verified walking skeletons, branch protection active (required check
   `build`, admin bypass for docs-only). First `/start-ticket` + `doctrine-reviewer` run in
   anger. Foundation choices logged as D12. Evidence: PR #1 (merged).
+- **2026-09-27 — E1-T2 ig-client session + REST core** ✅: §1.6 taxonomy, login→switch→token
+  re-read, validate-before-relogin + 61s stagger, sliding-window pacer in the library, REST
+  v3 markets/prices keyed on snapshotTimeUTC (fail-loud, never guess — Alex's ruling: client
+  throws, T6's healer classifies), injectable timeouts, exact BigDecimals. 15 mutations
+  killed; doctrine-review F1–F5 fixed; wire fixtures cross-checked against the prototype's
+  scraped labs.ig.com reference (now at `docs/reference/`) + field-proven backfill code.
+  D13 (design nod) born from this ticket's feedback; architecture.md v1 seeded. Evidence:
+  PR #2 (merged).
