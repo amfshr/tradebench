@@ -10,9 +10,9 @@ risk management and analytics. **Backtest-first, live-last**; the product thesis
 the loop between idea and verdict*. Owner/admin: Alex (SWE); future users: his brother and Dad
 (a returning strategy author whose models must slot in as data, never as platform code).
 
-**Status: pre-build.** Requirements complete; the DSL's core semantics are ruled (D7–D9,
+**Status: building.** Requirements complete; the DSL's core semantics are ruled (D7–D9,
 design session 2026-09-27); the AI operating framework (E0) is in place. Epic 1 (the 24/7
-collection service) is planned on the board and is the active build epic.
+collection service) is the active build epic — foundations (T1) in flight.
 
 ## Read-first order
 
