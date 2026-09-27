@@ -102,3 +102,13 @@ sends, named-target destructive ops, honest reporting); session protocols codifi
 standing development partner (PRD §9 AI-workable NFR) and Alex's time is bursty — the rules
 must hold in every session, however cold, without re-negotiation. Framework changes are
 themselves decisions (G2). Enforcement (pre-commit/CI scans, permissions) is E0-T4.
+
+## D11 — Board viewer: markdown is the write model, the web app is the read model — **Accepted** (2026-09-27)
+
+The in-repo markdown board (`.claude/tasks/board.md`) stays the canonical **write model** —
+agents edit it, git versions it. E2's locally-served React/TS app renders it (plus
+epics/vision docs) **read-only** for humans, as the first frontend warm-up project. GitHub
+Issues get linked only if outside collaborators ever arrive. **Why:** agent-editable planning
+artifacts are a PRD §9 NFR (AI-workable codebase); a read-only render adds daily human value
+without forking the source of truth. Resolves PRD open Q#10 (grill S5-Q8's ⚖️ recommendation,
+confirmed by Alex).

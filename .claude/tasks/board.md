@@ -68,9 +68,9 @@ CHART:1MINUTE sealed bars only) · engineering playbook §1–§4.
 
 The first frontend warm-up: a small locally-served React/TS app rendering this markdown board
 (and the epics/vision docs) as pages — MD stays the write model for agents, the app is the read
-model for humans (grill S5-Q8, PRD §10 ⚖️ pending Alex's formal nod). Low stakes, real daily
-value, exercises the frontend toolchain + backend-streaming shape before the charting UI.
-**Plan when:** Alex wants a break from E1 or E1-T1 lands the frontend seat.
+model for humans. **Shape confirmed by Alex 2026-09-27 (D11; PRD open Q#10 resolved).** Low
+stakes, real daily value, exercises the frontend toolchain + backend-streaming shape before the
+charting UI. **Plan when:** Alex wants a break from E1 or E1-T1 lands the frontend seat.
 
 ## E3 🧪 Indicator DSL v0 + backtest spine — DESIGN-GATED
 
@@ -107,7 +107,7 @@ captured/imported data to chew on (E1 + first Databento decisions).
 
 - E3 design gates: vocabulary catalogue v0 (E3-T1) → off-repo acceptance-anchor check (E3-T2).
 - Databento initial purchase scoping (≥2yr DAX+NASDAQ ticks — PRD §7) — needed by E3, not E1.
-- PRD open questions #7–#11 — none block E0/E1. (#6 resolved 2026-09-27; #5 = E3-T1.)
+- PRD open questions #7–#11 — none block E0/E1. (#6 and #10 resolved 2026-09-27; #5 = E3-T1.)
 
 ## Done history
 
