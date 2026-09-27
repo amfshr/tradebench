@@ -1,0 +1,27 @@
+// The deployable collection-service app (Spring Boot arrives with E1-T2/T3).
+// Apps depend on libraries, never sideways between apps (phase-1 build plan §2).
+plugins {
+    java
+}
+
+group = "dev.amfshr.tradebench"
+version = "0.1.0-SNAPSHOT"
+
+java {
+    toolchain {
+        languageVersion = JavaLanguageVersion.of(25)
+    }
+}
+
+dependencies {
+    implementation(project(":core"))
+    implementation(project(":ig-client"))
+
+    testImplementation(platform(libs.junit.bom))
+    testImplementation(libs.junit.jupiter)
+    testRuntimeOnly(libs.junit.platform.launcher)
+}
+
+tasks.withType<Test> {
+    useJUnitPlatform()
+}

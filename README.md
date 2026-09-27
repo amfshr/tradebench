@@ -1,5 +1,7 @@
 # Tradebench
 
+[![CI](https://github.com/amfshr/tradebench/actions/workflows/ci.yml/badge.svg)](https://github.com/amfshr/tradebench/actions/workflows/ci.yml)
+
 **The bench you work at** — a multi-user web platform covering the whole algorithmic-trading
 pipeline: collect and store market data, explore it visually with custom indicators, define
 strategies in a DSL, backtest them visually or as jobs, and promote proven models to automated
@@ -20,7 +22,8 @@ run a strategy over years of data and learn it doesn't work *before* caring abou
 **Stack:** Java 21+ / Spring Boot services · React/TypeScript frontend (this monorepo) ·
 PostgreSQL · Redis Streams (provisional) · Docker · staging + prod, promoted by release tag.
 
-**Status:** pre-build. Epic 1 — the 24/7 market-data collection service — is planned and next.
+**Status:** building. Epic 1 — the 24/7 market-data collection service — is in progress
+(T1 foundations).
 
 *Predecessor: a private Python prototype (2026) that ran live on IG demo; Tradebench inherits
 its lessons, not its code. Strategy definitions and credentials never enter this repository.*
