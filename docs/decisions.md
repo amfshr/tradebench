@@ -112,3 +112,16 @@ Issues get linked only if outside collaborators ever arrive. **Why:** agent-edit
 artifacts are a PRD §9 NFR (AI-workable codebase); a read-only render adds daily human value
 without forking the source of truth. Resolves PRD open Q#10 (grill S5-Q8's ⚖️ recommendation,
 confirmed by Alex).
+
+## D12 — Foundation choices at first code: Java 25 LTS, `dev.amfshr.tradebench`, Gradle Kotlin DSL — **Accepted** (2026-09-27)
+
+E1-T1 (PR #1) fixed three durable choices. **Java 25 LTS toolchain** — Alex's ruling: start on
+the current LTS rather than last cycle's; supersedes the phase-1 build plan's "Java 21 LTS"
+(written before Java 25 had a year of maturity); CLAUDE.md's "Java 21+" convention is
+unchanged, 25 satisfies it. **Package root `dev.amfshr.tradebench`** — derived from the
+product's own domain (`tradebench.amfshr.dev`, D5); the plan's `com.amfshr.trading.*` was a
+pre-Tradebench placeholder. **Gradle multi-module, Kotlin DSL, version catalog,
+wrapper-pinned (9.8.0)** — the PRD §10 ⚖️ "Gradle confirm at design" is hereby confirmed in
+practice (half of PRD open Q#4; tick-lake storage format remains open). **Why:** a greenfield
+platform with years of runway should not plan a mid-life JDK bump; domain-derived packages
+match product identity; the wrapper pins every machine and CI to one Gradle.

@@ -23,7 +23,7 @@ run a strategy over years of data and learn it doesn't work *before* caring abou
 PostgreSQL · Redis Streams (provisional) · Docker · staging + prod, promoted by release tag.
 
 **Status:** building. Epic 1 — the 24/7 market-data collection service — is in progress
-(T1 foundations).
+(foundations merged; IG client core next).
 
 *Predecessor: a private Python prototype (2026) that ran live on IG demo; Tradebench inherits
 its lessons, not its code. Strategy definitions and credentials never enter this repository.*

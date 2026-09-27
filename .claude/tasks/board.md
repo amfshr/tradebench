@@ -13,13 +13,13 @@ language semantics are ruled (design session 2026-09-27, D7–D9); its two desig
 are cut and plannable. E4–E8 name the horizon so the whole road is visible; they hold no
 tickets until their own planning sessions.
 
-**Next-session menu (refreshed 2026-09-27):**
-① *Start E1-T1* — Gradle skeleton + CI + branch protection; first real code (Alex's stated
-next after the docs pass). ② *E3-T1 vocabulary catalogue v0* — Claude drafts to
-`docs/design/`, Alex rules line by line. ③ *E0-T4 guardrail enforcement* — pairs naturally
-with E1-T1's CI. ④ *Page designs* (optional, `design/`) — workbench layout, results page, or
-the E2 board viewer. Nothing else blocks: Databento scoping and PRD open Qs #7/#11 are needed
-by E3-era work, not now.
+**Next-session menu (refreshed 2026-09-27, post E1-T1):**
+① *E1-T2* — `ig-client` session + REST core behind the provider port (broker playbook §1 is
+the porting spec; error taxonomy first). ② *E3-T1 vocabulary catalogue v0* — Claude drafts to
+`docs/design/`, Alex rules line by line. ③ *E0-T4 guardrail enforcement* — CI now exists to
+hang it on (GitGuardian already runs on the repo — fold into the ticket). ④ *E2 planning /
+page designs* — the frontend seat exists and D11 is confirmed. Nothing else blocks: Databento
+scoping and PRD open Qs #7/#11 are needed by E3-era work, not now.
 
 ---
 
@@ -35,8 +35,8 @@ testing doctrine G5 binds to) · PRD §9.
 | # | Ticket | Status |
 |---|--------|--------|
 | T1 | **The contract.** `.claude/ai-framework.md`: roles (Claude proposes, Alex rules), guardrails G1–G8, session protocols, directory standard; CLAUDE.md + task-workflow.md wired to it; `docs/design/` seat created. **DoD:** a cold session can state the rules it operates under from the read-first chain alone. | ✅ 2026-09-27 |
-| T2 | **Project agents v1.** `doctrine-reviewer` (pre-PR diff review against conventions, testing doctrine, guardrails) + `seed-pack-librarian` (prototype knowledge with citations + triage status). **DoD:** both defined and invocable; proven in anger on first real use (E1-era). | ✅ 2026-09-27 (in-anger proof pending) |
-| T3 | **Project skills v1.** `/sanity-lap`, `/design-session`, `/start-ticket` — each protocol codified from a session that actually worked. **DoD:** each skill invocable and produces its artifact. | ✅ 2026-09-27 (`/start-ticket` unproven until E1-T1) |
+| T2 | **Project agents v1.** `doctrine-reviewer` (pre-PR diff review against conventions, testing doctrine, guardrails) + `seed-pack-librarian` (prototype knowledge with citations + triage status). **DoD:** both defined and invocable; proven in anger on first real use (E1-era). | ✅ 2026-09-27 (`doctrine-reviewer` proven on PR #1: pass-with-findings, both addressed) |
+| T3 | **Project skills v1.** `/sanity-lap`, `/design-session`, `/start-ticket` — each protocol codified from a session that actually worked. **DoD:** each skill invocable and produces its artifact. | ✅ 2026-09-27 (all three proven same day; `/start-ticket` drove E1-T1 → PR #1) |
 | T4 | **Guardrail enforcement.** Pre-commit + CI scan for credentials and strategy-content patterns (a seeded fake-secret fixture must go red — mutation-verified, per doctrine); `.claude/settings.json` permissions baseline; hooks only if a real need shows. **DoD:** planted violations caught in CI; permissions documented in the framework doc. | ⬜ (pairs with E1-T1's CI) |
 
 ## E1 📡 Collection service, deployed 24/7 — ACTIVE
@@ -55,7 +55,7 @@ CHART:1MINUTE sealed bars only) · engineering playbook §1–§4.
 
 | # | Ticket | Status |
 |---|--------|--------|
-| T1 | **Foundations.** Gradle multi-module skeleton (`ig-client`, `market-data-service`, shared `core`; `frontend/` seat reserved, empty), CI on PR (build + test), `.editorconfig`, README badge. Enable branch protection on `main` once the CI check exists (required check; admin bypass stays available for docs-only pushes). **DoD:** green CI on a walking-skeleton test in each module; protection active. | 🔶 |
+| T1 | **Foundations.** Gradle multi-module skeleton (`ig-client`, `market-data-service`, shared `core`; `frontend/` seat reserved, empty), CI on PR (build + test), `.editorconfig`, README badge. Enable branch protection on `main` once the CI check exists (required check; admin bypass stays available for docs-only pushes). **DoD:** green CI on a walking-skeleton test in each module; protection active. | ✅ 2026-09-27 (PR #1) |
 | T2 | **`ig-client`: session + REST core behind the provider port.** REST login/refresh (demo + live envs), typed config (no code defaults; secrets via env beside config — never committed), request pacing guard (IG session rate limits are real — playbook + engineering playbook §4.6), typed errors. **DoD:** unit suite on fakes; one integration-gated smoke that logs into demo. | ⬜ |
 | T3 | **Streaming: ticks + sealed 1m bars.** Lightstreamer Java SDK: PRICE (ticks) + CHART:1MINUTE (accept `CONS_END=1` only) per market; cheap-work-only on callback threads, everything queued to one consumer; per-market subscriptions (identity-vs-addressing per triage D16). **DoD:** a live demo session captures a full DAX day of ticks + 1m bars locally. | ⬜ |
 | T4 | **Persistence.** Flyway from birth: `instruments`, `ticks`, `bars_1m` (user + source columns from day one), `service_events`, `job_runs`; least-privilege roles (triage D22); testcontainers suite; generated schema render + CI drift gate (triage D23). **DoD:** captured data lands via the real write path; drift gate green. | ⬜ |
@@ -107,7 +107,8 @@ captured/imported data to chew on (E1 + first Databento decisions).
 
 - E3 design gates: vocabulary catalogue v0 (E3-T1) → off-repo acceptance-anchor check (E3-T2).
 - Databento initial purchase scoping (≥2yr DAX+NASDAQ ticks — PRD §7) — needed by E3, not E1.
-- PRD open questions #7–#11 — none block E0/E1. (#6 and #10 resolved 2026-09-27; #5 = E3-T1.)
+- PRD open questions #7–#11 — none block E0/E1. (#6 and #10 resolved 2026-09-27; #5 = E3-T1;
+  #4 half-resolved: Gradle confirmed in practice (D12), tick-lake storage format still open.)
 
 ## Done history
 
@@ -119,3 +120,8 @@ captured/imported data to chew on (E1 + first Databento decisions).
 - **2026-09-27 — E0-T1/T2/T3 + board/epics/docs pass**: AI operating framework v1 (contract,
   2 agents, 3 skills, directory standard), CLAUDE.md/task-workflow wiring, `docs/design/`
   seat, this board structure (E0 born, E3 design-gate tickets, horizon epics named).
+- **2026-09-27 — E1-T1 Foundations** ✅: Gradle 9.8 multi-module skeleton (`core` /
+  `ig-client` / `market-data-service`, Java 25 LTS toolchain, `dev.amfshr.tradebench`), CI
+  green on mutation-verified walking skeletons, branch protection active (required check
+  `build`, admin bypass for docs-only). First `/start-ticket` + `doctrine-reviewer` run in
+  anger. Foundation choices logged as D12. Evidence: PR #1 (merged).
