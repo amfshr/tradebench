@@ -10,13 +10,14 @@
 their own planning sessions (E3 waits on the indicators-and-predicates design session).
 
 **Next-session menu (set 2026-09-25 evening, Alex's pick-up list):**
-① *Sanity lap* — Claude reads CLAUDE.md → PRD → this board and plays back the project state
-(proves the handoff is self-sufficient). ② *Indicators & predicates design session* — the
-deep-dive Alex requested (gates E3; anchor to Pattern 1 + the range-bar model; file the
-answered record under `docs/design-sessions/`). ③ *Start E1-T1* — Gradle skeleton + CI +
-branch protection; first real code, independent of ②. ④ *Page designs* (optional, `design/`) —
-workbench layout, results page, or the E2 board viewer. Nothing else blocks: Databento scoping
-and PRD open Qs #7/#11 are needed by E3-era work, not now.
+① *Sanity lap* — ✅ done 2026-09-27 (handoff proved self-sufficient). ② *Indicators &
+predicates design session* — ✅ done 2026-09-27: answered record at
+`docs/design-sessions/2026-09-27-indicators-and-predicates.md`; decisions D7–D9; PRD open Q#6
+resolved; spawned the vocabulary catalogue v0 + the off-repo acceptance-anchor check.
+③ *Start E1-T1* — Gradle skeleton + CI + branch protection; first real code. ④ *Page designs*
+(optional, `design/`) — workbench layout, results page, or the E2 board viewer. Next up per
+Alex (2026-09-27): board/epics/documentation pass, then ③. Nothing else blocks: Databento
+scoping and PRD open Qs #7/#11 are needed by E3-era work, not now.
 
 ---
 
@@ -57,15 +58,20 @@ value, exercises the frontend toolchain + backend-streaming shape before the cha
 
 The rest of PRD §11 phase 1: basic chart over stored data → indicator DSL v0 (look-ahead
 rejection from day one) → backtest job runner v0 (default FLAT⇄IN_POSITION machine) → first
-results page. **Blocked by:** the indicators-and-predicates design session (PRD open Q #5/#6 —
-Alex requested it; next session's agenda) and enough captured/imported data to chew on (E1 +
-first Databento decisions, PRD open Q on scope of the initial purchase).
+results page. **Design session held 2026-09-27** — core language semantics ruled
+(`docs/design-sessions/2026-09-27-indicators-and-predicates.md`, decisions D7–D9; Q#6
+resolved). **Still blocked by:** the vocabulary catalogue v0 (Q#5, spawned from the session),
+the off-repo acceptance-anchor check (Pattern 1 + range-bar spec — private content, never
+committed here), and enough captured/imported data to chew on (E1 + first Databento
+decisions).
 
 ---
 
 ## Waits / externals
 
-- Indicators-and-predicates grill/design session (Alex + Claude) — gates E3 planning.
+- ~~Indicators-and-predicates grill/design session~~ ✅ held 2026-09-27 — replaced by: the
+  vocabulary catalogue v0 (Claude proposes, Alex rules) + the off-repo acceptance-anchor check
+  (Pattern 1 + range-bar spec against the R1–R8 semantics) — both gate E3 planning.
 - Databento initial purchase scoping (≥2yr DAX+NASDAQ ticks — PRD §7) — needed by E3, not E1.
 - PRD open questions #7–#11 — none block E1.
 
