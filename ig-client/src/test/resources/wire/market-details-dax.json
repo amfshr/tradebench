@@ -1,0 +1,41 @@
+{
+  "instrument": {
+    "epic": "IX.D.DAX.DAILY.IP",
+    "expiry": "DFB",
+    "name": "Germany 40",
+    "forceOpenAllowed": true,
+    "stopsLimitsAllowed": true,
+    "lotSize": 1.0,
+    "unit": "AMOUNT",
+    "type": "INDICES",
+    "controlledRiskAllowed": true,
+    "streamingPricesAvailable": true,
+    "marketId": "DE30",
+    "currencies": [{"code": "GBP", "symbol": "£", "baseExchangeRate": 1.0, "isDefault": true}]
+  },
+  "dealingRules": {
+    "minStepDistance": {"unit": "POINTS", "value": 1.0},
+    "minDealSize": {"unit": "POINTS", "value": 0.04},
+    "minControlledRiskStopDistance": {"unit": "PERCENTAGE", "value": 2.0},
+    "minNormalStopOrLimitDistance": {"unit": "POINTS", "value": 8.0},
+    "maxStopOrLimitDistance": {"unit": "PERCENTAGE", "value": 75.0},
+    "controlledRiskSpacing": {"unit": "POINTS", "value": 125.0},
+    "marketOrderPreference": "AVAILABLE_DEFAULT_OFF",
+    "trailingStopsPreference": "AVAILABLE"
+  },
+  "snapshot": {
+    "marketStatus": "TRADEABLE",
+    "netChange": 12.5,
+    "percentageChange": 0.05,
+    "updateTime": "14:57:03",
+    "delayTime": 0,
+    "bid": 24510.5,
+    "offer": 24511.7,
+    "high": 24590.0,
+    "low": 24405.0,
+    "binaryOdds": null,
+    "decimalPlacesFactor": 1,
+    "scalingFactor": 1,
+    "controlledRiskExtraSpread": 2.0
+  }
+}

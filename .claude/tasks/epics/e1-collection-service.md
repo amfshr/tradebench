@@ -31,14 +31,20 @@ Java 25 LTS toolchain, CI + branch protection, walking skeletons mutation-verifi
 
 **Goal:** an authenticated, paced, typed IG REST core the whole platform stands on.
 **Build order** (build plan §3 — the playbook's own recommendation):
-1. **Error taxonomy first**: `FATAL | RETRYABLE | SESSION_DEAD` — prevents both classic
-   failure modes (retrying a fatal into a lockout; dying on a transient).
+1. **Error taxonomy first**: fatal-config vs retryable — prevents both classic failure
+   modes (retrying a fatal into a lockout; dying on a transient). *(Refined in-build
+   2026-09-27: the enum is two-class; "session-dead" is a context, not an error code —
+   handled behaviourally by `IgSessionManager.afterFailure()` (cheap GET /session
+   validation → fresh login only when tokens are dead, §1.2/§1.6). T5's supervisor calls
+   `afterFailure()`; there is no SESSION_DEAD class to look for.)*
 2. **Session**: v2/v3 login → account switch → token store (CST/XST from response headers,
    token↔account binding, no login cache); re-login policy; demo/live selected by ONE flag
    that also picks base URL + API key (playbook §1.1–§1.5, §1.7 — preferred-account trap).
-3. **REST endpoints E1 needs**: market details, historical prices v3 (T6's heal path —
-   numpoints+1 and TZ traps, §4.2), dealing rules; positions/orders as stubs only (module
-   shape honest, nothing calls them).
+3. **REST endpoints E1 needs**: market details (incl. dealing-rules snapshot, §5.1),
+   historical prices v3 (T6's heal path — numpoints+1 and TZ traps, §4.2; parse the
+   allowance metadata for T6's budget). *(Refined at start 2026-09-27: positions/orders
+   stubs dropped — dead uncalled code invites rot; the OMS era adds them against real
+   contract tests.)*
 4. **Pacing guard**: request budget honouring IG's real session limits (§6).
 **Stack:** JDK `HttpClient` + Jackson; zero Spring in this module (rule from T1).
 **Config:** typed, no code defaults, secrets via env beside config (G1); instance-named.

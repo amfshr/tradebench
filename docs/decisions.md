@@ -125,3 +125,13 @@ wrapper-pinned (9.8.0)** — the PRD §10 ⚖️ "Gradle confirm at design" is h
 practice (half of PRD open Q#4; tick-lake storage format remains open). **Why:** a greenfield
 platform with years of runway should not plan a mid-life JDK bump; domain-derived packages
 match product identity; the wrapper pins every machine and CI to one Gradle.
+
+## D13 — Design nod before implementation on substantial tickets — **Accepted** (2026-09-27)
+
+`/start-ticket` gains a mandatory step: before implementation code is written on any
+substantial ticket, AI posts the intended design (modules/packages, key interfaces and
+injection seams, in-ticket decisions with recommendations) and waits for Alex's nod or
+amendments. Trivial/mechanical tickets may skip, saying so. **Why:** E1-T2 landed
+fully-formed and Alex's ruling is that "Claude proposes, Alex rules" applies to code design,
+not just product design — the say happens before the code exists, not in review after.
+(Framework change per G2.)

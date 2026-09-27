@@ -58,9 +58,11 @@ Sessions come in three shapes; each has a project skill that carries the protoco
   `docs/design-sessions/` **the same day**; decisions go to the log; the board gets touched.
   (Question sheets → answered records is the project's calibration-truth pattern, playbook
   §5.2.)
-- **Build → `/start-ticket`.** Ticket-scoped; branch per ticket; doctrine-bound tests; PR with
-  the DoD restated. Small, self-contained increments — every merged PR leaves the repo
-  shippable and self-explaining.
+- **Build → `/start-ticket`.** Ticket-scoped; **design nod before implementation** on any
+  substantial ticket (intended shape, seams, in-ticket decisions → Alex's nod — proposing
+  applies to code design too); branch per ticket; doctrine-bound tests; PR with the DoD
+  restated. Small, self-contained increments — every merged PR leaves the repo shippable and
+  self-explaining.
 
 **Close-out (every session, any shape):** board statuses current, records/decisions filed,
 work committed or PR'd, next-session menu refreshed. Leave the camp clean — the next session
@@ -80,7 +82,8 @@ may be months away.
 docs/
   decisions.md         ← decision log (D1…)
   design-sessions/     ← dated answered records of design sessions
-  design/              ← enduring technical design specs (vocabulary catalogue, grammar…)
+  design/              ← enduring technical design specs (architecture.md, catalogue, grammar…)
+  reference/           ← external reference material (e.g. the scraped IG API summary)
   inherited/           ← read-only prototype seed pack (never edit — D1)
 design/                ← UX/page designs and wireframes (human-facing surfaces)
 CLAUDE.md              ← entrypoint: project truth + conventions; points everywhere else

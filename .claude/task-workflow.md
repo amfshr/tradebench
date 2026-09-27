@@ -24,5 +24,6 @@
 - **Ideation is not ticketed.** Ideas mature through docs (`docs/`, or a design session with
   Alex) and earn tickets only at the build-start boundary.
 - **Session close-out, every session:** board statuses current, records/decisions filed, work
-  committed or PR'd, next-session menu refreshed. Leave the camp clean — the next session may
+  committed or PR'd, next-session menu refreshed — and `docs/design/architecture.md` updated
+  whenever the change altered the system's shape. Leave the camp clean — the next session may
   be months away.
