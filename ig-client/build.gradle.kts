@@ -17,6 +17,7 @@ java {
 dependencies {
     api(libs.jspecify)
     implementation(libs.jackson.databind)
+    implementation(libs.lightstreamer.client)
 
     testImplementation(platform(libs.junit.bom))
     testImplementation(libs.junit.jupiter)

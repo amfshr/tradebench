@@ -91,8 +91,14 @@ Every dependency earns its place; the current production set of the whole repo i
 throwaway CLIs that must not drag Spring. Version catalog is the single source of
 versions; wrapper pins Gradle; toolchain pins Java.
 
-## 6. Frontend — reserved
+## 6. Frontend — reserved (provisional shape agreed 2026-09-28)
 
-React/TS conventions, component architecture, state model, and the build/CI lane get
-written here when E2 planning starts. (Alex has ideas queued — this section is
-deliberately empty rather than speculatively filled.)
+Full conventions (component architecture, state model, build/CI lane) get written with E2
+planning — Alex has ideas queued. **Provisional structure, confirmed in principle:**
+`frontend/` is a workspace root (own lockfile/toolchain; CI job keyed on `frontend/**`)
+containing **one product SPA** (`platform/` — PRD sub-platforms as feature folders/routes,
+never micro-frontends: P7 applies to JS too) and the **E2 board viewer as a separate tiny
+app** (`board-viewer/` — dev tool, different stakes/lifecycle; keeps warm-up choices from
+prematurely binding the product app). `shared/` is born only when both apps prove a need.
+Docs split by altitude: frontend design truth in `docs/design/`, component-level docs with
+the code.
