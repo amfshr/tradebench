@@ -84,7 +84,8 @@ class IgStreamClientTest {
         IgSession session = new IgSession(new IgTokens("cstA", "xstA"), "Z6CS3E",
                 "https://demo-apd.marketdatasystems.com", List.of());
         streamSession = new IgStreamClient(fake).connect(session, events, new NoopConnection());
-        streamSession.subscribeMarket(DAX, new NoopState(), new NoopState());
+        streamSession.subscribePrice(DAX, new NoopState());
+        streamSession.subscribeChart1m(DAX, new NoopState());
     }
 
     @Test

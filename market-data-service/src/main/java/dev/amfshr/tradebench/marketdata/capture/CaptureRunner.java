@@ -83,9 +83,11 @@ public final class CaptureRunner {
                         log(instance, "lightstreamer SERVER ERROR " + code + ": " + message);
                     }
                 });
+        // E1 doctrine (the service's policy, not the client's): every market streams the
+        // dual PRICE+CHART pair — ticks for precision, broker 1m bars for the healable record.
         for (String epic : epics) {
-            stream.subscribeMarket(epic, stateListener(instance, "PRICE " + epic),
-                    stateListener(instance, "CHART " + epic));
+            stream.subscribePrice(epic, stateListener(instance, "PRICE " + epic));
+            stream.subscribeChart1m(epic, stateListener(instance, "CHART " + epic));
         }
         pumpThread.start();
 

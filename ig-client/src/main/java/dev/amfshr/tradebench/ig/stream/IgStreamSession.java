@@ -3,9 +3,9 @@ package dev.amfshr.tradebench.ig.stream;
 import java.util.List;
 
 /**
- * One authenticated stream connection; markets subscribe as per-market PRICE+CHART pairs
- * (D16) so one market's failure never has to take down another (T5's witness rule builds
- * on this). Obtained from {@link IgStreamClient#connect}.
+ * One authenticated stream connection. Exposes IG's subscriptions as separate capabilities
+ * — which to combine (e.g. E1's PRICE+CHART pair per market) is the consumer's policy, not
+ * this client's. Obtained from {@link IgStreamClient#connect}.
  */
 public final class IgStreamSession implements AutoCloseable {
 
@@ -27,8 +27,8 @@ public final class IgStreamSession implements AutoCloseable {
         this.events = events;
     }
 
-    public void subscribeMarket(String epic, StreamTransport.StateListener priceState,
-            StreamTransport.StateListener chartState) {
+    /** Bid/ask ticks — account-scoped item (the §1.1 wrong-account trap lives here). */
+    public void subscribePrice(String epic, StreamTransport.StateListener state) {
         String priceItem = "PRICE:" + accountId + ":" + epic;
         connection.subscribe(
                 new StreamTransport.SubscriptionSpec(MERGE, List.of(priceItem), PRICE_FIELDS,
@@ -41,7 +41,11 @@ public final class IgStreamSession implements AutoCloseable {
                         events.onTick(tick);
                     }
                 },
-                priceState);
+                state);
+    }
+
+    /** Sealed 1-minute candles (CONS_END=1); in-progress updates are filtered here. */
+    public void subscribeChart1m(String epic, StreamTransport.StateListener state) {
         String chartItem = "CHART:" + epic + ":1MINUTE";
         // No data adapter for CHART — demo/live expose only the default (§2.1).
         connection.subscribe(
@@ -62,7 +66,7 @@ public final class IgStreamSession implements AutoCloseable {
                         events.onSealedBar(bar);
                     }
                 },
-                chartState);
+                state);
     }
 
     @Override
