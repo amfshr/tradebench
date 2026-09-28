@@ -159,6 +159,34 @@ capability-split subscriptions, provider seams, composition-root `Main`) were ch
 it. The jobs model + REST surface is Market-Data-Manager-era work (E4 horizon, T6 gives
 it Spring); this section exists so the trajectory stays in view.
 
+### 3.5 Serving the data outward — the fan-out plan (provisional until the first consumer)
+
+The ingest pipeline (Buffers → Pump → CaptureStore) is deliberately **not** the
+distribution mechanism — it is the get-it-off-the-socket-durably mechanism, single-consumer
+by design. Distribution starts *after* durability, in three consumer shapes (§3.2 note):
+
+1. **Backtest bulk reads** — read `market_data` directly (D17: the DB *is* the published
+   read product, via a read-only role, T6 design item). Backtests want the healed,
+   canonical record, which only exists post-heal (T6) — a streaming path would serve them
+   worse, not better.
+2. **Live consumers** (dashboards, live/paper bots) — D4 events (Redis Streams,
+   provisional). The tee point is the **CaptureStore seam**: a composite store —
+   persist leg first, then a best-effort publish leg — so the pump, queues, and
+   ack-after-apply chain are untouched. **Persist-then-publish is the invariant**: the
+   stream must never advertise an event the database could lose in a crash. Publishing is
+   at-least-once; consumers are idempotent by key (already platform doctrine). Cost: a
+   consumer's latency includes the pump's write cadence (ticks batch at 500/flush) — fine
+   for charts and analytics; if a consumer ever needs sub-batch latency, that is a new
+   requirement to rule on, not a silent tee-relocation.
+3. **Continuous backtest / catch-up ("follow")** — replay-then-tail: bulk-read the DB to a
+   watermark, subscribe the live stream from it, dedupe on the natural key where they
+   overlap. The engine-side contract (one deterministic time-ordered feed) is the parked
+   E3 event-model design.
+
+None of this is built in E1 (P7: the collection service stands alone; D4: the bus is built
+when its first consumer exists). This section exists so the current shape is read as the
+capture stage of a fan-out, not as the whole pipeline.
+
 ## 4. Key behaviours
 
 ### 4.1 Session bring-up (implemented, T2)
