@@ -5,5 +5,6 @@ import { defineConfig } from 'vite';
 // (docs/, .claude/tasks/) as modules — the app has no backend (E2-T1 nod N2).
 export default defineConfig({
   plugins: [react()],
+  base: process.env.VITE_BASE ?? '/',
   server: { fs: { allow: ['../..'] } },
 });

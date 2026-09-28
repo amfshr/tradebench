@@ -1,9 +1,8 @@
 import { Link, useLocation } from 'react-router-dom';
 
-import { docs } from './content';
-import { buildTree, normalizeRoute } from './tree';
+import { sidebarTree as tree } from './content';
+import { normalizeRoute } from './tree';
 
-const tree = buildTree(docs.map((d) => d.repoPath));
 const OPEN_BY_DEFAULT = new Set(['Product', 'The book', 'Board']);
 
 export function Sidebar() {

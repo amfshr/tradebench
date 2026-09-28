@@ -34,6 +34,20 @@ function itemFor(repoPath: string, groupRoot: string): TreeItem {
   return { route: routeFor(repoPath), label: dir === '' ? name : `${dir}/${name}` };
 }
 
+/** Previous/next within the current route's sidebar group — the book's page-turn. */
+export function neighbours(
+  groups: TreeGroup[],
+  route: string,
+): { prev?: TreeItem; next?: TreeItem } {
+  for (const group of groups) {
+    const index = group.items.findIndex((item) => item.route === route);
+    if (index !== -1) {
+      return { prev: group.items[index - 1], next: group.items[index + 1] };
+    }
+  }
+  return {};
+}
+
 interface GroupSpec {
   label: string;
   root: string;

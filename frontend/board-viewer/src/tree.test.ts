@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'vitest';
 
-import { buildTree, normalizeRoute } from './tree';
+import { buildTree, neighbours, normalizeRoute } from './tree';
 
 describe('normalizeRoute', () => {
   test('the root and trailing slashes normalise to canonical routes', () => {
@@ -58,6 +58,22 @@ describe('buildTree', () => {
       { route: '/board', label: 'Board' },
       { route: '/board/epics/e1-collection-service', label: 'epics/E1 collection service' },
     ]);
+  });
+
+  test('neighbours page-turn stays inside the current group', () => {
+    expect(neighbours(tree, '/docs/book/10-imaginary-late-chapter')).toEqual({
+      prev: {
+        route: '/docs/book/02-threads-and-the-callback-boundary',
+        label: '2 · Threads and the callback boundary',
+      },
+      next: { route: '/docs/book', label: 'Index' },
+    });
+    // Product has one item: no wrap into the next group, no phantom neighbours.
+    expect(neighbours(tree, '/docs/product/overview')).toEqual({
+      prev: undefined,
+      next: undefined,
+    });
+    expect(neighbours(tree, '/no/such/route')).toEqual({});
   });
 
   test('nested inherited files keep their directory in the label', () => {
