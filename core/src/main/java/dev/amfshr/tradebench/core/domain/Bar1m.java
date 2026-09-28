@@ -35,6 +35,7 @@ public record Bar1m(String epic, Instant startUtc, OhlcPrices bid, OhlcPrices as
         return sealInstant();
     }
 
+    /** Per-field mid — THE 1m mid higher TFs aggregate; order is load-bearing (D15d/T8). */
     public OhlcPrices mid() {
         return new OhlcPrices(
                 midOf(bid.open(), ask.open()),
