@@ -36,10 +36,13 @@ jobs:
         working-directory: frontend
       - run: npm test -w board-viewer
         working-directory: frontend
+      # Default base suits amfshr.github.io/tradebench/. A custom domain serves from the
+      # root: set repo Actions variable PAGES_BASE=/ (Settings → Secrets and variables →
+      # Actions → Variables) — no commit needed.
       - run: npm run build -w board-viewer
         working-directory: frontend
         env:
-          VITE_BASE: /tradebench/
+          VITE_BASE: ${{ vars.PAGES_BASE || '/tradebench/' }}
       # SPA deep links: Pages serves 404.html for unknown paths — the app boots and routes.
       - run: cp frontend/board-viewer/dist/index.html frontend/board-viewer/dist/404.html
       - uses: actions/upload-pages-artifact@v3
