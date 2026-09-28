@@ -22,11 +22,11 @@ out/
 *.jar
 !gradle/wrapper/gradle-wrapper.jar
 
-# --- node / frontend ---
+# --- node / frontend (scoped: bare patterns swallowed a Java package once) ---
 node_modules/
-dist/
+frontend/**/dist/
 .vite/
-coverage/
+frontend/**/coverage/
 
 # --- ide / os ---
 .idea/
