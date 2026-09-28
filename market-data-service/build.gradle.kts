@@ -14,8 +14,10 @@ java {
 }
 
 dependencies {
+    implementation(libs.jspecify)
     implementation(project(":core"))
     implementation(project(":ig-client"))
+    implementation(libs.jackson.databind)
 
     testImplementation(platform(libs.junit.bom))
     testImplementation(libs.junit.jupiter)
