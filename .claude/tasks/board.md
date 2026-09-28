@@ -84,9 +84,9 @@ nod N1–N4). **Working shape:** git worktree `.claude/worktrees/e2-docs-reader`
 
 | # | Ticket | Status |
 |---|--------|--------|
-| T1 | **Docs & board reader v0.** Vite/React/TS app at `frontend/board-viewer` (tech-notes §6 workspace shape): sidebar over `docs/` + the board, GFM, rendered mermaid, highlighted code, rewritten internal links, light/dark, reading-first typography; content via dev-server glob of the repo's markdown — no backend; doc edits hot-reload. **DoD:** the book, product overview, PRD, decisions and board all render pleasantly with working nav. | 🔶 (nod ruled 2026-09-28: N1–N4 all as recommended) |
+| T1 | **Docs & board reader v0.** Vite/React/TS app at `frontend/board-viewer` (tech-notes §6 workspace shape): sidebar over `docs/` + the board, GFM, rendered mermaid, highlighted code, rewritten internal links, light/dark, reading-first typography; content via dev-server glob of the repo's markdown — no backend; doc edits hot-reload. **DoD:** the book, product overview, PRD, decisions and board all render pleasantly with working nav. | 🔶 (nod ruled 2026-09-28: N1–N4 all as recommended; v0.2 reading chrome added on Alex's "spice it up": Inter/JetBrains Mono, breadcrumbs, scroll-spied ToC, prev/next, copy buttons) |
 | T2 | **Board read model.** Parse board + epic files into epic cards, status chips, done-history timeline; graceful raw-markdown fallback; parser mutation-verified on real board fixtures. **DoD:** the board page reads as a dashboard. | ⬜ |
-| T3 | **Build & CI lane.** Static build snapshotting content; `frontend/**`-keyed CI job; preview story (hosting decided later — staying a local tool is a fine outcome). **DoD:** one command yields the static site; CI green. | ⬜ |
+| T3 | **Build & CI lane.** Static build snapshotting content; `frontend/**`-keyed CI job; preview story (hosting decided later — now ruled: **GitHub Pages** (Alex, 2026-09-28). **DoD:** one command yields the static site; CI green. | 🔶 (pages.yml deploy + frontend-ci.yml PR lane authored; needs repo Settings → Pages → Source: GitHub Actions, then first main merge deploys) |
 
 ## E3 🧪 Indicator DSL v0 + backtest spine — DESIGN-GATED
 
@@ -121,6 +121,9 @@ captured/imported data to chew on (E1 + first Databento decisions).
 
 ## Waits / externals
 
+- CI pipeline stages design (PR lane / main lane / release lane; artifact naming, required
+  checks) — sketch proposed 2026-09-28; draft `docs/design/ci-pipeline.md` when E1-T7 or
+  E0-T4 planning starts.
 - E3 design gates: vocabulary catalogue v0 (E3-T1) → off-repo acceptance-anchor check (E3-T2).
 - Databento initial purchase scoping (≥2yr DAX+NASDAQ ticks — PRD §7) — needed by E3, not E1.
 - PRD open questions #7–#11 — none block E0/E1. (#6 and #10 resolved 2026-09-27; #5 = E3-T1;

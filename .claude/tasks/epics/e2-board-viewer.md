@@ -66,9 +66,12 @@ chips, the done-history as a timeline. Graceful fallback to raw markdown when pa
 meets something new. The parser is the prime unit-test target (real board fixtures;
 mutation-verified). **DoD:** the board page reads as a dashboard, not a rendered README.
 
-## T3 — Build & CI lane ⬜
+## T3 — Build & CI lane 🔶
 
 Static `npm run build` snapshotting content at build time; CI job keyed on `frontend/**`
-(tech-notes §6); local preview story. Deployment/hosting rides later rulings (it may just
-stay a local tool — that is a fine outcome). **DoD:** one command produces the static
+(tech-notes §6); local preview story. Hosting ruled by Alex 2026-09-28: **GitHub Pages**
+(public — same content as the public repo, no new exposure). Authored on-branch:
+`pages.yml` (main-push deploy: test → build with `VITE_BASE=/tradebench/` → 404.html SPA
+fallback → deploy-pages; one-off setup: Settings → Pages → Source "GitHub Actions") and
+`frontend-ci.yml` (PR lane, not yet a required check). **DoD:** one command produces the static
 site; CI builds it green.
