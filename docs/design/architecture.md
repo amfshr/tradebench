@@ -7,7 +7,7 @@
 > the system's shape (new module, new deployable, new boundary, changed dataflow). Rulings
 > trace to `docs/decisions.md`; deep design history to `docs/design-sessions/`.
 >
-> Status: v2, 2026-09-28 — reflects E1-T1..T3 (merged; T3 capture evidence pending).
+> Status: v2, 2026-09-28 — reflects E1-T1..T4 (all merged; live capture → Postgres).
 
 ## 1. Context — who and what Tradebench talks to
 

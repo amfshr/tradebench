@@ -80,7 +80,7 @@ consolidation, epoch-ms UTC); sealing-rule tests exact on the CONS_END boundary.
 **DoD anchor:** a live demo session captures a full DAX day of ticks + 1m bars locally.
 **In-ticket decisions:** tick field set (bid/ask/last per playbook §2.1) recorded in the DTO.
 
-## T4 — Persistence
+## T4 — Persistence ✅ (PR #5, 2026-09-28)
 
 **Goal:** captured data lands in Postgres through the real write path, schema born right.
 **Approach:** Flyway from V1: `instruments`, `ticks`, `bars_1m` (**user + source columns

@@ -12,9 +12,8 @@ the loop between idea and verdict*. Owner/admin: Alex (SWE); future users: his b
 
 **Status: building.** Requirements complete; the DSL's core semantics are ruled (D7–D9,
 design session 2026-09-27); the AI operating framework (E0) is in place. Epic 1 (the 24/7
-collection service) is the active build epic — T1 foundations, T2 IG session/REST core,
-and T3 streaming/capture are merged (T3's full-day capture evidence pending); next: T4
-persistence.
+collection service) is the active build epic — T1–T4 merged (foundations, IG client,
+streaming, Postgres persistence; live data flowing locally); next: T5 resilience belt.
 
 ## Read-first order
 
