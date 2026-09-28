@@ -26,10 +26,14 @@ them as evidence:
   `openPrice.{bid,ask,lastTraded}` structure, `lastTradedVolume`, the login response's
   non-essential fields, and the exact login/switch request body shapes.
 
-**Real-wire validation:** the gated demo smoke (`demoSmoke`, T2 DoD) exercises POST/PUT
-`/session` only. `/markets` and `/prices` parsing meets the real wire first via T6's heal
-path and verification tooling — **re-golden these fixtures from captured bytes at first
-live contact** and note the capture date here.
+**Real-wire validation:** the gated demo smoke (`demoSmoke`, T2 DoD) exercises the
+`/session` path. **Run clean against live demo 2026-09-28 (Alex):** login v2 response
+fields (`currentAccountId`, `accounts[]` with id/type/preferred, `lightstreamerEndpoint` —
+the authored endpoint value matched the real one exactly) and CST/X-SECURITY-TOKEN
+response headers all confirmed. Caveat: the profile's preferred account now equals the
+configured account, so the **account-switch path was not exercised** on the wire (it
+remains unit-tested only). `/markets` and `/prices` parsing meets the real wire first via
+T6's heal path — re-golden those fixtures from captured bytes then.
 
 All credentials/tokens in fixtures and tests are obvious fakes; account ids and the
 identifier reuse values the inherited playbook already publishes.

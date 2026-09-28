@@ -144,6 +144,41 @@ class IgRestClientTest {
     }
 
     @Test
+    void pricePointMissingBidOrAskFailsLoud() {
+        // bid/ask are the candle's substance; a point without them is refused, never
+        // nulled through (consistent with the no-guessing ruling — heal classifies failed).
+        String body = """
+                {"prices":[{"snapshotTimeUTC":"2026-09-25T14:57:00",
+                  "openPrice":{"bid":1.0},"closePrice":{"bid":1.0,"ask":2.0},
+                  "highPrice":{"bid":1.0,"ask":2.0},"lowPrice":{"bid":1.0,"ask":2.0},
+                  "lastTradedVolume":1}],
+                 "metadata":{"allowance":{"remainingAllowance":1,"totalAllowance":2,
+                  "allowanceExpiry":3}}}""";
+        transport.enqueue(FakeTransport.json(200, body));
+
+        IllegalStateException thrown = assertThrows(IllegalStateException.class,
+                () -> client.recentPrices(session, DAX_EPIC, Resolution.MINUTE, 1));
+
+        assertTrue(thrown.getMessage().contains("'ask'"),
+                "the refusal must name the missing field, got: " + thrown.getMessage());
+    }
+
+    @Test
+    void pagedPricesResponseFailsLoudInsteadOfTruncating() {
+        // trading-ig field data: the endpoint genuinely pages; a truncated window reported
+        // as success is the exact silent corruption the client exists to prevent.
+        String body = Wire.fixture("prices-minute.json")
+                .replace("\"totalPages\": 1", "\"totalPages\": 3");
+        transport.enqueue(FakeTransport.json(200, body));
+
+        IllegalStateException thrown = assertThrows(IllegalStateException.class,
+                () -> client.recentPrices(session, DAX_EPIC, Resolution.MINUTE, 3));
+
+        assertTrue(thrown.getMessage().contains("totalPages=3"),
+                "the refusal must name the paging, got: " + thrown.getMessage());
+    }
+
+    @Test
     void allowanceExhaustionIsRetryableWithTheCodePreserved() {
         transport.enqueue(FakeTransport.json(403,
                 "{\"errorCode\":\"error.public-api.exceeded-account-historical-data-allowance\"}"));

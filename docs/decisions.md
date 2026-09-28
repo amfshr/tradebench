@@ -135,3 +135,50 @@ amendments. Trivial/mechanical tickets may skip, saying so. **Why:** E1-T2 lande
 fully-formed and Alex's ruling is that "Claude proposes, Alex rules" applies to code design,
 not just product design — the say happens before the code exists, not in review after.
 (Framework change per G2.)
+
+## D14 — Null-safety: JSpecify, `@NullMarked` packages from birth — **Accepted** (2026-09-27)
+
+Every production package carries `@NullMarked` in its `package-info.java` from the day it
+is born: non-null is the default, `@Nullable` marks genuine domain absence, and
+"unspecified" third-party returns are normalised at the boundary. `org.jspecify:jspecify`
+rides as an `api` dependency. Tests stay unannotated. **Why:** JSpecify is the standard the
+ecosystem converged on; marking the default inverts the annotation burden onto the rare
+nullable spots where reader attention belongs — and the adoption pass immediately proved
+its worth by surfacing that `PricePoint.bid/ask` were silently nullable (fixed fail-loud,
+consistent with the no-guessing ruling). Convention detail: `docs/design/tech-notes.md` §3.
+
+## D15 — Aggregation ruling: healed 1m is the canonical base; ticks are precision; own tick→1m is the oracle — **Accepted** (2026-09-28, Alex)
+
+(a) **Every derived timeframe (10m, 1h, …) aggregates from the healed sealed-1m record** in
+one shared implementation — completeness beats fineness for chart/backtest series, and only
+the 1m record is healable (ticks are unrecoverable from IG REST by provider design).
+(b) **Ticks remain the finest stored truth** — tick-precise triggers (the ARMED pattern),
+the forming bar's final partial minute, research — the precision path, never the
+completeness path. (c) **Own tick→1m aggregation runs continuously as a verification
+oracle** against IG's streamed 1m (PRD §7's verification job, the prototype's oracle
+pattern) — a data-quality tripwire that also exposes silently-degraded tick streams; never
+the record. (d) **Derivation rule pinned for oracle compatibility:** per-field mid is
+computed at 1m and higher timeframes aggregate the 1m *mid* series — aggregating bid/ask
+upward and then midding yields different highs/lows whenever the bid-max and ask-max land
+in different minutes, which would break T8's shadow-diff against the prototype's proven
+formula. Bid+ask OHLC is what is *stored* at 1m (T3 Q1 ruling), so nothing is destroyed
+and other derivations stay possible later, clearly labelled.
+
+## D16 — Secrets & config: env-only apps, env-file injection, one key per service — **Accepted** (2026-09-28)
+
+Apps read plain environment variables only; injectors vary by context (local `.env` +
+loader script/direnv; deployed `/etc/tradebench/<service>.env` 0600 via compose
+`env_file:`; CI carries no broker secrets ever; optional 1Password `op run` locally).
+`TRADEBENCH_IG_ENV=demo|live` pins an instance and selects the `IG_DEMO_*`/`IG_LIVE_*`
+credential set so environment and credentials can never mix — and it is deliberately
+independent of the application's own staging/prod axis (pairings are convention, explicit
+per instance). **Corrected same day (Alex):** IG issues ONE key per account (playbook §6
+empirical; the per-service-keys draft followed the scraped reference and is retracted) —
+all processes share the account key, isolated by the login stagger, per-service
+single-instance guards, and connection-count discipline.
+Multi-user era: platform users' broker credentials are data (app-encrypted DB columns,
+master key from env), never env-file entries. Full design:
+`docs/design/secrets-and-config.md`. **Why:** the injector is the only part that varies
+across the platform's growth (more services, staging/prod, other users) — freezing the
+app-side contract as "plain env" makes every later move mechanical; the playbook's leak
+scars (§1.7) drive the tiny-radioactive-file shape and the never-in-CI rule.

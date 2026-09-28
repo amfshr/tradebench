@@ -54,7 +54,17 @@ taxonomy); one env-gated integration smoke: log into demo, print account + LS en
 excluded from CI by default.
 **In-ticket decisions:** none expected to escalate; endpoint DTO shapes settle here.
 
-## T3 — Streaming: ticks + sealed 1m bars
+## T3 — Streaming: ticks + sealed 1m bars 🔶
+
+*(Design nod ruled by Alex 2026-09-28: bar domain = bid+ask OHLC stored, mid derived
+per-field at 1m then aggregated upward — D15; tick = (epic, instant, bid, ask), DLG_FLAG
+routed to state machinery not per-tick storage; core.time SPI born now;
+core.events revised same-era (Alex 2026-09-28): the event-stream SPI is PARKED to E3's
+engine design session (idea doc §8: pull vs push, tick/bar tie-break, seek/stepBack,
+forming bars) — nothing consumed the T3 placeholder and its push shape contradicted the
+idea doc's pull leaning; library hands parsed DTOs to a caller-supplied consumer, the service owns
+the queues; DoD vehicle = env-gated JSONL capture runner, no Spring yet; Lightstreamer
+`ls-javase-client:5.3.3`.)*
 
 **Goal:** live DAX ticks + sealed 1m bars flowing through our own transport seam.
 **Approach:** wrap `com.lightstreamer:ls-javase-client` (5.2.x — official, maintained;
@@ -103,6 +113,10 @@ suspend — **each mutation-verified** (per DoD); boundary tests exact on escala
 thresholds.
 **In-ticket decisions:** escalation ladder timings (propose from playbook §3, record in
 config, not code).
+**Post-sweep refinement (2026-09-28, trading-ig comparison):** the REST pacer's budget is
+discovered at service startup from `GET /operations/application` (minus headroom) or
+config-injected — field data shows demo keys enforce 10/min, not the published 30; never
+assume the constant.
 
 ## T6 — Daily completeness + archive + digest (D6)
 
@@ -125,6 +139,9 @@ digest-suppression failure-mode test; Parquet golden file for the day-export con
 **In-ticket decisions (named on the board):** object store — **R2 vs B2**; also: email
 transport (SMTP vs API service) and Parquet writer lib. Settle all three in-ticket, log any
 that grow durable consequences.
+**Post-sweep refinement (2026-09-28):** `exceeded-account-historical-data-allowance` resets
+*weekly* — the heal treats it as budget-exhausted (plan via the parsed `Allowance` metadata
+before firing), never as a backoff-and-retry error.
 
 ## T7 — Deploy
 

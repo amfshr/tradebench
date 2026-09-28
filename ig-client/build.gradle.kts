@@ -15,7 +15,9 @@ java {
 }
 
 dependencies {
+    api(libs.jspecify)
     implementation(libs.jackson.databind)
+    implementation(libs.lightstreamer.client)
 
     testImplementation(platform(libs.junit.bom))
     testImplementation(libs.junit.jupiter)
@@ -38,5 +40,20 @@ tasks.register<Test>("demoSmoke") {
     classpath = sourceSets.test.get().runtimeClasspath
     useJUnitPlatform {
         includeTags("ig-demo")
+    }
+    // A smoke must never pass vacuously (P9): without the gate the JUnit condition would
+    // silently skip the test and a green build would prove nothing — refuse instead.
+    doFirst {
+        if (System.getenv("IG_SMOKE") != "1") {
+            throw GradleException(
+                "demoSmoke needs IG_SMOKE=1 (plus IG_DEMO_IDENTIFIER/PASSWORD/API_KEY/"
+                        + "ACCOUNT_ID in the environment) — refusing a vacuous green run.")
+        }
+    }
+    // A smoke re-runs every invocation — never UP-TO-DATE.
+    outputs.upToDateWhen { false }
+    testLogging {
+        events("passed", "skipped", "failed")
+        showStandardStreams = true
     }
 }

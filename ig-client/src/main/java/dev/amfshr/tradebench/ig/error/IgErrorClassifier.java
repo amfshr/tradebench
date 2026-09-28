@@ -3,6 +3,8 @@ package dev.amfshr.tradebench.ig.error;
 import java.util.List;
 import java.util.Locale;
 
+import org.jspecify.annotations.Nullable;
+
 /**
  * Classifies IG error codes into the §1.6 taxonomy. Matching is case-insensitive by
  * family/substring because IG varies suffixes by field (e.g. {@code validation.pattern.
@@ -22,12 +24,13 @@ public final class IgErrorClassifier {
             "preferred.account.not.set",
             "error.security.account-suspended",
             "error.switch.invalid-accountid",
-            "failure.missing.credentials");
+            "failure.missing.credentials",
+            "failure.kyc.required");
 
     private IgErrorClassifier() {
     }
 
-    public static IgErrorClass classify(String errorCode) {
+    public static IgErrorClass classify(@Nullable String errorCode) {
         if (errorCode == null || errorCode.isBlank()) {
             return IgErrorClass.RETRYABLE;
         }

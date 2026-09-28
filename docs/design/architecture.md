@@ -39,7 +39,7 @@ schema/API from day one (the platform runs as `default-user` until login lands, 
 ```mermaid
 flowchart TB
     subgraph libs [Library jars — no framework, no deploy of their own]
-        CORE["core\ndomain types + clock/event-source SPI\n(walking skeleton today; grows T3/T4)"]
+        CORE["core\ndomain types + clock SPI\n(event-stream SPI parked to E3)"]
         IGC["ig-client\nIG REST session/pricing (T2 ✅)\n+ Lightstreamer wrapper (T3)"]
     end
     subgraph apps [Deployable apps]
@@ -88,12 +88,22 @@ needs it to stay inside IG's rules; *policy* (backoff ladders, retry ceilings, c
 breaking) lives in the consuming service — T5's supervisor is the domain-tuned circuit
 breaker, and generic breakers compose as `HttpTransport` decorators without library changes.
 
-### 3.2 `core` (state: walking skeleton; grows with T3/T4)
+### 3.2 `core` (state: domain + time SPI live; event-stream SPI parked to E3)
 
-Planned seats (build plan §4): `core.domain` — `Bar`/`Tick` value types on `BigDecimal`,
-instrument identity, trading calendar; `core.time` — Clock SPI (monotonic + wall,
-injectable); `core.events` — EventSource SPI (ticks/bars as one ordered stream — the seam
-live/replay/fast-forward all implement; "one engine, many clocks").
+Live: `core.domain` — sealed `MarketEvent` (`Tick` | `Bar1m`), bid+ask OHLC with the
+per-field `mid()` (D15d), `dataTime` = causality stamp (D38); `core.time` — Clock SPI
+(monotonic + wall, injectable) + `SystemClock`. Parked (Alex, 2026-09-28): the
+event-stream SPI — designed at the E3 engine session against
+`docs/inherited/ideas/event-source-and-clock-model.md` §8 (pull vs push, tick/bar
+tie-break, seek/stepBack, forming bars, series-store interplay); T3's push placeholder had
+zero consumers and contradicted the idea doc's pull leaning.
+
+**Event model — three consumer shapes, no conflict:** the *engine feeder* is one
+dataTime-ordered stream of mixed events so tick/bar interleaving and tie-breaks are
+defined once, identically live and in replay (idea doc §7 parity — E3-era); *readers*
+(DSL, indicators, charts) never see a stream — they read the always-current, typed,
+by-time series store (Layer 1, `step ≡ seek`); *transport* splits by criticality (bars
+unbounded and sacred, ticks shed-oldest and counted — `CaptureQueues`, live today).
 
 ### 3.3 `market-data-service` (state: walking skeleton; the E1 flesh)
 
@@ -180,3 +190,5 @@ duty as the backend.
 - **Fail closed, fail loud** (P9): missing config names the key and stops; ambiguous wire
   data is refused, never guessed; quiet is healthy, silence where noise is expected is an
   alarm.
+- **Null-safety**: JSpecify `@NullMarked` packages from birth; `@Nullable` = genuine domain
+  absence, never a substitute for validation (D14, tech-notes §3).

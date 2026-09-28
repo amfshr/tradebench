@@ -1,7 +1,11 @@
 // The deployable collection-service app (Spring Boot arrives with E1-T2/T3).
 // Apps depend on libraries, never sideways between apps (phase-1 build plan §2).
 plugins {
-    java
+    application
+}
+
+application {
+    mainClass = "dev.amfshr.tradebench.marketdata.capture.CaptureRunner"
 }
 
 group = "dev.amfshr.tradebench"
@@ -14,8 +18,10 @@ java {
 }
 
 dependencies {
+    implementation(libs.jspecify)
     implementation(project(":core"))
     implementation(project(":ig-client"))
+    implementation(libs.jackson.databind)
 
     testImplementation(platform(libs.junit.bom))
     testImplementation(libs.junit.jupiter)
