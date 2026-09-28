@@ -12,7 +12,8 @@ services:
       POSTGRES_USER: ${TRADEBENCH_DB_USER:?set TRADEBENCH_DB_USER in .env}
       POSTGRES_PASSWORD: ${TRADEBENCH_DB_PASSWORD:?set TRADEBENCH_DB_PASSWORD in .env}
     ports:
-      - "${TRADEBENCH_DB_PORT:-5435}:5432"
+      # Loopback-only: the dev DB must never be reachable from off this machine.
+      - "127.0.0.1:${TRADEBENCH_DB_PORT:-5435}:5432"
     volumes:
       - pg-data:/var/lib/postgresql/data
     healthcheck:
