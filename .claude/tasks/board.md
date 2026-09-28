@@ -17,9 +17,9 @@ tickets until their own planning sessions.
 ① *E1-T3 streaming* (Lightstreamer ticks + sealed 1m bars — D13 design nod first) and/or
 *E1-T4 persistence* (Flyway schema — can run in parallel with T3 per the epic plan).
 ② *Run the demo smoke* — `IG_SMOKE=1 ./gradlew :ig-client:demoSmoke` with IG_DEMO_* set
-(Alex only; first real-wire contact for T2's session core). ③ *E3-T1 vocabulary catalogue
-v0* — Claude drafts to `docs/design/`, Alex rules line by line. ④ *E0-T4 guardrail
-enforcement* — CI exists; GitGuardian already runs (fold in). ⑤ *E2 planning / page
+(Alex only; first real-wire contact for T2's session core). ② *E3-T1 vocabulary catalogue
+v0* — Claude drafts to `docs/design/`, Alex rules line by line. ③ *E0-T4 guardrail
+enforcement* — CI exists; GitGuardian already runs (fold in). ④ *E2 planning / page
 designs*. Nothing else blocks: Databento scoping and PRD open Qs #7/#11 are E3-era.
 
 ---
@@ -60,7 +60,7 @@ CHART:1MINUTE sealed bars only) · engineering playbook §1–§4.
 |---|--------|--------|
 | T1 | **Foundations.** Gradle multi-module skeleton (`ig-client`, `market-data-service`, shared `core`; `frontend/` seat reserved, empty), CI on PR (build + test), `.editorconfig`, README badge. Enable branch protection on `main` once the CI check exists (required check; admin bypass stays available for docs-only pushes). **DoD:** green CI on a walking-skeleton test in each module; protection active. | ✅ 2026-09-27 (PR #1) |
 | T2 | **`ig-client`: session + REST core behind the provider port.** REST login/refresh (demo + live envs), typed config (no code defaults; secrets via env beside config — never committed), request pacing guard (IG session rate limits are real — playbook + engineering playbook §4.6), typed errors. **DoD:** unit suite on fakes; one integration-gated smoke that logs into demo. | ✅ 2026-09-27 (PR #2; smoke run clean vs live demo 2026-09-28 — switch path unexercised, profile prefers the configured account) |
-| T3 | **Streaming: ticks + sealed 1m bars.** Lightstreamer Java SDK: PRICE (ticks) + CHART:1MINUTE (accept `CONS_END=1` only) per market; cheap-work-only on callback threads, everything queued to one consumer; per-market subscriptions (identity-vs-addressing per triage D16). **DoD:** a live demo session captures a full DAX day of ticks + 1m bars locally. | 🔶 code merged (PR #4); pipeline proven live Sunday (500+ ticks, 4 sealed bars, 0 dropped/malformed); DoD = Monday's full-session capture |
+| T3 | **Streaming: ticks + sealed 1m bars.** Lightstreamer Java SDK: PRICE (ticks) + CHART:1MINUTE (accept `CONS_END=1` only) per market; cheap-work-only on callback threads, everything queued to one consumer; per-market subscriptions (identity-vs-addressing per triage D16). **DoD:** a live demo session captures a full DAX day of ticks + 1m bars locally. | ✅ 2026-09-28 (PR #4; Alex's ruling: Sunday's live capture — 500+ ticks, 4 sealed bars, 0 dropped/malformed — suffices; the multi-day local soak moves to T7's pre-cloud runway) |
 | T4 | **Persistence.** Flyway from birth: `instruments`, `ticks`, `bars_1m` (user + source columns from day one), `service_events`, `job_runs`; least-privilege roles (triage D22); testcontainers suite; generated schema render + CI drift gate (triage D23). **DoD:** captured data lands via the real write path; drift gate green. | ⬜ |
 | T5 | **Resilience belt.** Reconnect stack; staleness watchdog on injectable clocks — should-be-ticking derived from the stream itself, monotonic/awake vs wall time split, escalation ladder (triage D25); gap detection writing gap rows; structured `service_events` + quiet-is-healthy warnings stream. **DoD:** scripted failure scenarios (dead socket, silent-while-connected, host suspend) pass on fakes — each test mutation-verified. | ⬜ |
 | T6 | **Daily completeness + archive + digest (decisions D6).** `@Scheduled` end-of-day job: 1m-bar REST heal (window-clipped, paced, allowance-aware; outcomes classified healed / tickless-at-source / failed — ticks are stream-only, the job never claims otherwise), day's Parquet export to object storage (pick R2 vs B2 in-ticket), digest email (counts, gaps, heal outcomes, archive path). Audited `job_runs` row every run, clean or not. **DoD:** staging produces archive + digest end-to-end; a suppressed digest is detectable (absence = alarm documented in the runbook). | ⬜ |
@@ -128,6 +128,12 @@ captured/imported data to chew on (E1 + first Databento decisions).
   green on mutation-verified walking skeletons, branch protection active (required check
   `build`, admin bypass for docs-only). First `/start-ticket` + `doctrine-reviewer` run in
   anger. Foundation choices logged as D12. Evidence: PR #1 (merged).
+- **2026-09-28 — E1-T3 Streaming + capture pipeline** ✅: core domain/time SPIs (D15 mid
+  discipline, D38 dataTime), StreamTransport seam + Lightstreamer wrapper (capability-split
+  subscriptions), capture queues/pump/JSONL runner with honest heartbeat; 30 mutations
+  killed; doctrine-review F1–F5 fixed; trading-ig sweep adoptions; D14/D15/D16 landed
+  en route; proven against live Sunday data (500+ ticks, 4 bars, clean counters). Evidence:
+  PR #4 (merged) + capture JSONL. Event-stream SPI parked to E3 (Alex's ruling).
 - **2026-09-27 — E1-T2 ig-client session + REST core** ✅: §1.6 taxonomy, login→switch→token
   re-read, validate-before-relogin + 61s stagger, sliding-window pacer in the library, REST
   v3 markets/prices keyed on snapshotTimeUTC (fail-loud, never guess — Alex's ruling: client

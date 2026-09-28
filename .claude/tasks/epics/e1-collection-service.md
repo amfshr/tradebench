@@ -54,7 +54,7 @@ taxonomy); one env-gated integration smoke: log into demo, print account + LS en
 excluded from CI by default.
 **In-ticket decisions:** none expected to escalate; endpoint DTO shapes settle here.
 
-## T3 — Streaming: ticks + sealed 1m bars 🔶 (code merged PR #4, 2026-09-28; DoD = full-session capture)
+## T3 — Streaming: ticks + sealed 1m bars ✅ (PR #4, 2026-09-28; live-proven Sunday, Alex's ruling)
 
 *(Design nod ruled by Alex 2026-09-28: bar domain = bid+ask OHLC stored, mid derived
 per-field at 1m then aggregated upward — D15; tick = (epic, instant, bid, ask), DLG_FLAG
@@ -146,6 +146,9 @@ before firing), never as a backoff-and-retry error.
 ## T7 — Deploy
 
 **Goal:** staging + prod, promoted by release tag; runs unattended.
+**Pre-cloud runway (Alex, 2026-09-28):** before any cloud deploy, the deployable stack
+runs a multi-day soak on Alex's Mac — the confidence gate T3's single-day capture no
+longer carries.
 **Approach:** Dockerfile (jib or buildpacks — pick in-ticket) + `docker compose`
 (service + `postgres:16` + nightly `pg_dump` → object storage); separate DBs per env;
 secrets injected via env files on the box, never committed; outbound-only network posture
