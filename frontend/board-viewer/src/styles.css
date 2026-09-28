@@ -21,7 +21,7 @@
 }
 
 @media (prefers-color-scheme: dark) {
-  :root {
+  :root:not([data-theme='light']) {
     --bg: #0d1117;
     --bg-raised: #151b23;
     --fg: #e6edf3;
@@ -37,6 +37,24 @@
     --hl-name: #d2a8ff;
     --hl-number: #79c0ff;
   }
+}
+
+/* Explicit dark choice — same palette as the media block (CSS has no mixins). */
+:root[data-theme='dark'] {
+  --bg: #0d1117;
+  --bg-raised: #151b23;
+  --fg: #e6edf3;
+  --fg-muted: #9198a1;
+  --accent: #4ed4a4;
+  --accent-soft: #12261e;
+  --border: #30363d;
+  --code-bg: #161b22;
+  --code-fg: #e6edf3;
+  --hl-keyword: #ff7b72;
+  --hl-string: #a5d6ff;
+  --hl-comment: #8b949e;
+  --hl-name: #d2a8ff;
+  --hl-number: #79c0ff;
 }
 
 * {
@@ -103,12 +121,36 @@ body {
 
 /* ---- sidebar ---- */
 
+.sidebar-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.5rem;
+}
+
 .sidebar-title {
   display: block;
   font-size: 1.15rem;
   font-weight: 700;
   color: var(--fg);
   text-decoration: none;
+}
+
+.theme-toggle {
+  font-family: var(--font-mono);
+  font-size: 0.7rem;
+  color: var(--fg-muted);
+  background: none;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 0.2rem 0.5rem;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.theme-toggle:hover {
+  color: var(--accent);
+  border-color: var(--accent);
 }
 
 .sidebar-subtitle {
@@ -319,6 +361,33 @@ body {
   margin: 1.4em 0;
   overflow-x: auto;
   text-align: center;
+  cursor: zoom-in;
+}
+
+.lightbox {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  background: color-mix(in srgb, var(--bg) 94%, transparent);
+  display: grid;
+  place-items: center;
+  align-content: center;
+  gap: 0.75rem;
+  overflow: auto;
+  padding: 2rem;
+  cursor: zoom-out;
+}
+
+.lightbox-inner svg {
+  max-width: none !important;
+  width: min(1500px, 92vw);
+  height: auto;
+}
+
+.lightbox-hint {
+  color: var(--fg-muted);
+  font-size: 0.8rem;
+  margin: 0;
 }
 
 .mermaid-diagram svg {

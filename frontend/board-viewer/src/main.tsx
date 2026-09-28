@@ -6,7 +6,10 @@ import '@fontsource-variable/inter';
 import '@fontsource-variable/jetbrains-mono';
 
 import { App } from './App';
+import { initTheme } from './theme';
 import './styles.css';
+
+initTheme();
 
 const root = document.getElementById('root');
 if (!root) {
