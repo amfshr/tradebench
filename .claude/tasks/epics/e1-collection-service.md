@@ -54,7 +54,14 @@ taxonomy); one env-gated integration smoke: log into demo, print account + LS en
 excluded from CI by default.
 **In-ticket decisions:** none expected to escalate; endpoint DTO shapes settle here.
 
-## T3 — Streaming: ticks + sealed 1m bars
+## T3 — Streaming: ticks + sealed 1m bars 🔶
+
+*(Design nod ruled by Alex 2026-09-28: bar domain = bid+ask OHLC stored, mid derived
+per-field at 1m then aggregated upward — D15; tick = (epic, instant, bid, ask), DLG_FLAG
+routed to state machinery not per-tick storage; core.time + core.events SPIs born now with
+live impls only; library hands parsed DTOs to a caller-supplied consumer, the service owns
+the queues; DoD vehicle = env-gated JSONL capture runner, no Spring yet; Lightstreamer
+`ls-javase-client:5.3.3`.)*
 
 **Goal:** live DAX ticks + sealed 1m bars flowing through our own transport seam.
 **Approach:** wrap `com.lightstreamer:ls-javase-client` (5.2.x — official, maintained;

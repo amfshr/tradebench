@@ -146,3 +146,20 @@ ecosystem converged on; marking the default inverts the annotation burden onto t
 nullable spots where reader attention belongs — and the adoption pass immediately proved
 its worth by surfacing that `PricePoint.bid/ask` were silently nullable (fixed fail-loud,
 consistent with the no-guessing ruling). Convention detail: `docs/design/tech-notes.md` §3.
+
+## D15 — Aggregation ruling: healed 1m is the canonical base; ticks are precision; own tick→1m is the oracle — **Accepted** (2026-09-28, Alex)
+
+(a) **Every derived timeframe (10m, 1h, …) aggregates from the healed sealed-1m record** in
+one shared implementation — completeness beats fineness for chart/backtest series, and only
+the 1m record is healable (ticks are unrecoverable from IG REST by provider design).
+(b) **Ticks remain the finest stored truth** — tick-precise triggers (the ARMED pattern),
+the forming bar's final partial minute, research — the precision path, never the
+completeness path. (c) **Own tick→1m aggregation runs continuously as a verification
+oracle** against IG's streamed 1m (PRD §7's verification job, the prototype's oracle
+pattern) — a data-quality tripwire that also exposes silently-degraded tick streams; never
+the record. (d) **Derivation rule pinned for oracle compatibility:** per-field mid is
+computed at 1m and higher timeframes aggregate the 1m *mid* series — aggregating bid/ask
+upward and then midding yields different highs/lows whenever the bid-max and ask-max land
+in different minutes, which would break T8's shadow-diff against the prototype's proven
+formula. Bid+ask OHLC is what is *stored* at 1m (T3 Q1 ruling), so nothing is destroyed
+and other derivations stay possible later, clearly labelled.

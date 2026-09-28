@@ -15,8 +15,10 @@ class WalkingSkeletonTest {
 
     @Test
     void seesLibraryDependenciesOnTheClasspath() {
-        // Cross-module wiring: one real ig-client type, one core type (still a skeleton).
+        // Cross-module wiring proven against one real type from each library module.
         assertEquals("https://demo-api.ig.com/gateway/deal", IgEnvironment.DEMO.baseUrl());
-        assertEquals("core", dev.amfshr.tradebench.core.WalkingSkeleton.moduleName());
+        assertEquals("core-check", new dev.amfshr.tradebench.core.domain.Tick(
+                "core-check", java.time.Instant.EPOCH, java.math.BigDecimal.ONE,
+                java.math.BigDecimal.TWO).epic());
     }
 }
