@@ -110,15 +110,24 @@ export function MarkdownPage() {
   const route = normalizeRoute(pathname);
   const doc = docByRoute.get(route);
   const [markdown, setMarkdown] = useState<string>();
+  const [loadError, setLoadError] = useState<string>();
 
   useEffect(() => {
     setMarkdown(undefined);
+    setLoadError(undefined);
     let live = true;
-    doc?.load().then((text) => {
-      if (live) {
-        setMarkdown(text);
-      }
-    });
+    doc
+      ?.load()
+      .then((text) => {
+        if (live) {
+          setMarkdown(text);
+        }
+      })
+      .catch((e: unknown) => {
+        if (live) {
+          setLoadError(String(e));
+        }
+      });
     return () => {
       live = false;
     };
@@ -143,6 +152,17 @@ export function MarkdownPage() {
         <h1>Not found</h1>
         <p>
           No document at <code>{route}</code>. Start from the <Link to="/docs">docs map</Link>.
+        </p>
+      </article>
+    );
+  }
+  if (loadError !== undefined) {
+    return (
+      <article className="page">
+        <h1>Failed to load</h1>
+        <p>
+          <code>{doc.repoPath}</code> did not load — a stale deploy or dropped connection is
+          the usual cause. Reload the page; if it persists: <code>{loadError}</code>
         </p>
       </article>
     );

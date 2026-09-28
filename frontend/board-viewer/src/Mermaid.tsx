@@ -21,22 +21,29 @@ export function Mermaid({ chart }: { chart: string }) {
 
   useEffect(() => {
     let live = true;
-    import('mermaid').then(async ({ default: mermaid }) => {
-      mermaid.initialize({
-        startOnLoad: false,
-        theme: effectiveTheme() === 'dark' ? 'dark' : 'default',
-      });
-      try {
-        const rendered = await mermaid.render(`mmd${id}${themeTick}`, chart);
-        if (live) {
-          setSvg(rendered.svg);
+    import('mermaid')
+      .then(async ({ default: mermaid }) => {
+        mermaid.initialize({
+          startOnLoad: false,
+          theme: effectiveTheme() === 'dark' ? 'dark' : 'default',
+        });
+        try {
+          const rendered = await mermaid.render(`mmd${id}${themeTick}`, chart);
+          if (live) {
+            setSvg(rendered.svg);
+          }
+        } catch (e) {
+          if (live) {
+            setError(String(e));
+          }
         }
-      } catch (e) {
+      })
+      .catch((e: unknown) => {
+        // A failed chunk load (stale deploy, offline) must not hang on "rendering…".
         if (live) {
           setError(String(e));
         }
-      }
-    });
+      });
     return () => {
       live = false;
     };

@@ -2,9 +2,7 @@ import { Fragment } from 'react';
 import { Link } from 'react-router-dom';
 
 import { repoPathExists } from './content';
-import { routeFor } from './links';
-
-const GITHUB_BLOB = 'https://github.com/amfshr/tradebench/blob/main/';
+import { GITHUB_BLOB, routeFor } from './links';
 
 /** Breadcrumbs from the repo path (directories link where a README gives them a page). */
 export function Topbar({ repoPath }: { repoPath: string }) {

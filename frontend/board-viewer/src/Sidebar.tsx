@@ -40,6 +40,9 @@ export function Sidebar() {
       {tree.map((group) => {
         const active = group.items.some((i) => i.route === current);
         return (
+          // key includes `active` to force a remount when the route enters/leaves the
+          // group — <details open> is only an initial state, so this is how the active
+          // group re-opens on navigation. Accepted cost: a manual toggle resets then.
           <details key={`${group.label}:${active}`} open={active || OPEN_BY_DEFAULT.has(group.label)}>
             <summary>{group.label}</summary>
             <ul>

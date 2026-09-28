@@ -9,7 +9,7 @@ export type ResolvedLink =
   | { kind: 'anchor'; to: string }
   | { kind: 'external'; href: string };
 
-const GITHUB_BLOB = 'https://github.com/amfshr/tradebench/blob/main/';
+export const GITHUB_BLOB = 'https://github.com/amfshr/tradebench/blob/main/';
 
 /** Repo path → app route. README.md collapses onto its directory; board paths get /board. */
 export function routeFor(repoPath: string): string {
@@ -20,9 +20,7 @@ export function routeFor(repoPath: string): string {
   if (epic) {
     return `/board/epics/${epic[1]}`;
   }
-  const withoutMd = repoPath.replace(/\.md$/, '');
-  const collapsed = withoutMd.replace(/\/README$/, '');
-  return `/${collapsed === 'README' ? 'docs' : collapsed}`;
+  return `/${repoPath.replace(/\.md$/, '').replace(/\/README$/, '')}`;
 }
 
 /** Resolve `.` and `..` against the directory of `fromRepoPath`. */

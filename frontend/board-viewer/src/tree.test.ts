@@ -14,6 +14,8 @@ describe('normalizeRoute', () => {
 describe('buildTree', () => {
   const paths = [
     '.claude/tasks/epics/e1-collection-service.md',
+    // Sorts BEFORE board.md: proves the board leads by rule, not by alphabet (review F1).
+    '.claude/tasks/00-inbox.md',
     '.claude/tasks/board.md',
     'docs/README.md',
     'docs/book/10-imaginary-late-chapter.md',
@@ -52,10 +54,11 @@ describe('buildTree', () => {
     ]);
   });
 
-  test('the board leads its group; epics nest under it with their directory label', () => {
+  test('the board leads its group even when another file sorts before it', () => {
     const board = tree.find((g) => g.label === 'Board');
     expect(board?.items).toEqual([
       { route: '/board', label: 'Board' },
+      { route: '/.claude/tasks/00-inbox', label: '0 · Inbox' },
       { route: '/board/epics/e1-collection-service', label: 'epics/E1 collection service' },
     ]);
   });
