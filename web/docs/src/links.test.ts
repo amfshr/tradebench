@@ -24,8 +24,8 @@ describe('routeFor', () => {
 
   test('the board and epics get the /board namespace', () => {
     expect(routeFor('.claude/tasks/board.md')).toBe('/board');
-    expect(routeFor('.claude/tasks/epics/e2-board-viewer.md')).toBe(
-      '/board/epics/e2-board-viewer',
+    expect(routeFor('.claude/tasks/epics/e2-docs-site.md')).toBe(
+      '/board/epics/e2-docs-site',
     );
   });
 });

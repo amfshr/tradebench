@@ -111,12 +111,15 @@ versions; wrapper pins Gradle; toolchain pins Java.
 
 ## 6. Frontend — reserved (provisional shape agreed 2026-09-28)
 
-Full conventions (component architecture, state model, build/CI lane) get written with E2
-planning — Alex has ideas queued. **Provisional structure, confirmed in principle:**
-`frontend/` is a workspace root (own lockfile/toolchain; CI job keyed on `frontend/**`)
-containing **one product SPA** (`platform/` — PRD sub-platforms as feature folders/routes,
-never micro-frontends: P7 applies to JS too) and the **E2 board viewer as a separate tiny
-app** (`board-viewer/` — dev tool, different stakes/lifecycle; keeps warm-up choices from
-prematurely binding the product app). `shared/` is born only when both apps prove a need.
+Structure ruled 2026-09-28 (D18, supersedes the provisional `frontend/` naming):
+**`web/` is the workspace root** (own lockfile/toolchain; CI job keyed on `web/**`),
+its apps named for the domains they serve: **`web/docs/`** — the one docs site, live at
+`docs.tradebench.amfshr.dev` (all static documentation: product, book, architecture,
+decisions, the board section, later DSL + API references — one site, never a second until
+something real forces it) — and **`web/platform/`** (seat) — the product SPA at
+`tradebench.amfshr.dev` (PRD sub-platforms as feature folders/routes, never
+micro-frontends: P7 applies to JS too). `shared/` is born only when both apps prove a
+need. The pleasing symmetry is deliberate: `/docs` is the words, `web/docs` the site that
+renders them.
 Docs split by altitude: frontend design truth in `docs/design/`, component-level docs with
 the code.

@@ -19,7 +19,7 @@ run a strategy over years of data and learn it doesn't work *before* caring abou
 - **Work:** [`.claude/tasks/board.md`](.claude/tasks/board.md) — the board (single source of
   truth for epics/tickets).
 
-**Stack:** Java 21+ / Spring Boot services · React/TypeScript frontend (this monorepo) ·
+**Stack:** Java 21+ / Spring Boot services · React/TypeScript web apps in `web/` (this monorepo) ·
 PostgreSQL · Redis Streams (provisional) · Docker · staging + prod, promoted by release tag.
 
 **Status:** building. Epic 1 — the 24/7 market-data collection service — is in progress

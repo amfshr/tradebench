@@ -1,6 +1,9 @@
-# E2 🧰 Board viewer web app — ticket plans
+# E2 🧰 The docs site — ticket plans
 
-**Mission:** the human read model. Markdown stays the write model (agents and Alex edit
+**Mission:** the human read model — and the platform's ONE docs site (D18): `web/docs`,
+served at `docs.tradebench.amfshr.dev`, housing all static documentation (product, book,
+architecture, decisions, the board section; later the DSL reference and REST API/
+integration docs). Markdown stays the write model (agents and Alex edit
 files; git stays the history); this small React/TS app renders the board *and* the docs
 tree — the product overview, the book, design specs — as pleasant pages (D11; scope widened
 2026-09-28 to cover `docs/` as Alex's "online book of pages"). It is also the frontend
@@ -29,7 +32,7 @@ working internal links, light/dark, typography that makes the book a pleasure.
 
 - **N1 — Toolchain & workspace.** Vite + React 19 + TypeScript (strict) on Node LTS;
   npm (no pnpm/yarn — fewest moving parts). Born as tech-notes §6's shape from day one:
-  `frontend/` = npm-workspaces root, `frontend/board-viewer/` = this app; `platform/`
+  `web/` = npm-workspaces root, `web/docs/` = this app (named for its subdomain — D18); `platform/`
   and `shared/` are **not** created until they earn existence. *Nod: rec (Alex, 2026-09-28)*
 - **N2 — Content pipeline: no backend.** The dev server *is* the file access:
   `import.meta.glob` over the repo's `docs/**/*.md`, `*.md` roots, and

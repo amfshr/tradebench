@@ -22,7 +22,7 @@ out/
 *.jar
 !gradle/wrapper/gradle-wrapper.jar
 
-# --- node / frontend ---
+# --- node / web ---
 node_modules/
 dist/
 .vite/

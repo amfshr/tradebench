@@ -200,3 +200,14 @@ service's alone, and everything that isn't the shared data product integrates vi
 that protection where it matters (operational state) while admitting honestly that the
 capture record IS the platform's shared asset, and treating its schema as an API with a
 CI-enforced contract is stronger than pretending consumers won't need it.
+
+## D18 — Web naming: one docs site; `web/` workspace; apps named for their domains — **Accepted** (2026-09-28, Alex)
+
+All static documentation is ONE site — `web/docs`, served at `docs.tradebench.amfshr.dev`
+(public; the Cloudflare-gated platform SPA at `tradebench.amfshr.dev` links to it): product
+docs, the book, architecture, decisions, the board section, and later the DSL reference and
+REST API/integration docs. No second docs site until something real forces it (P7). The
+workspace root is `web/` (supersedes `frontend/` — D3's monorepo ruling unchanged), and web
+apps are named for the subdomain they serve: `web/docs` live, `web/platform` seat reserved.
+**Why:** one static build, one deploy, one place to look; dir↔domain symmetry keeps naming
+honest; "frontend" names a layer, `web/` names the artifact family.
