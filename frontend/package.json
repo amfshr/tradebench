@@ -1,0 +1,7 @@
+{
+  "name": "tradebench-frontend",
+  "private": true,
+  "workspaces": [
+    "board-viewer"
+  ]
+}
