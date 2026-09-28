@@ -183,7 +183,7 @@ across the platform's growth (more services, staging/prod, other users) — free
 app-side contract as "plain env" makes every later move mechanical; the playbook's leak
 scars (§1.7) drive the tiny-radioactive-file shape and the never-in-CI rule.
 
-## D17 — Database topology: one instance per environment, one database per service; the market-data DB is a published read-only data product — **Accepted** (2026-09-29)
+## D17 — Database topology: one instance per environment, one database per service; the market-data DB is a published read-only data product — **Accepted** (2026-09-28)
 
 One Postgres **instance** per environment (compose-managed: local dev, the Mac soak,
 staging, prod on-box — never RDS-per-service; £20/mo NFR). Inside it, **one database per

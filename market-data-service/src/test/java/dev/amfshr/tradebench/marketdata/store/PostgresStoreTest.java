@@ -84,12 +84,12 @@ class PostgresStoreTest extends PostgresTestBase {
     @Test
     void tickBatchAutoFlushesExactlyAtTheLimit() throws SQLException {
         for (int i = 0; i < PostgresStore.TICK_BATCH_LIMIT - 1; i++) {
-            sink.write(tick(DAX, "2026-09-29T07:00:0" + (i % 10) + "." + (100000 + i) + "Z",
+            sink.write(tick(DAX, "2026-09-28T07:00:0" + (i % 10) + "." + (100000 + i) + "Z",
                     "1." + i, "2.0"));
         }
         assertEquals(0, count("ticks"), "one below the limit: still batched");
 
-        sink.write(tick(DAX, "2026-09-29T07:59:59Z", "9.9", "9.99"));
+        sink.write(tick(DAX, "2026-09-28T07:59:59Z", "9.9", "9.99"));
 
         assertEquals(PostgresStore.TICK_BATCH_LIMIT, count("ticks"),
                 "the limit-th write must flush — under a busy stream this is the ONLY"
@@ -98,7 +98,7 @@ class PostgresStoreTest extends PostgresTestBase {
 
     @Test
     void ticksLandOnFlushWithExactScalePreserved() throws SQLException {
-        sink.write(tick(DAX, "2026-09-29T07:00:01.250Z", "24510.5", "24511.70"));
+        sink.write(tick(DAX, "2026-09-28T07:00:01.250Z", "24510.5", "24511.70"));
         assertEquals(0, count("ticks"), "ticks batch until flush — best-effort by design");
 
         sink.flush();
@@ -115,8 +115,8 @@ class PostgresStoreTest extends PostgresTestBase {
 
     @Test
     void exactDuplicateTickDropsIdempotently() throws SQLException {
-        sink.write(tick(DAX, "2026-09-29T07:00:01.250Z", "24510.5", "24511.7"));
-        sink.write(tick(DAX, "2026-09-29T07:00:01.250Z", "24510.5", "24511.7"));
+        sink.write(tick(DAX, "2026-09-28T07:00:01.250Z", "24510.5", "24511.7"));
+        sink.write(tick(DAX, "2026-09-28T07:00:01.250Z", "24510.5", "24511.7"));
         sink.flush();
 
         assertEquals(1, count("ticks"), "redelivery/re-import must not double rows");
@@ -124,8 +124,8 @@ class PostgresStoreTest extends PostgresTestBase {
 
     @Test
     void sameMillisecondDifferentPricesBothSurvive() throws SQLException {
-        sink.write(tick(DAX, "2026-09-29T07:00:01.250Z", "24510.5", "24511.7"));
-        sink.write(tick(DAX, "2026-09-29T07:00:01.250Z", "24511.0", "24512.2"));
+        sink.write(tick(DAX, "2026-09-28T07:00:01.250Z", "24510.5", "24511.7"));
+        sink.write(tick(DAX, "2026-09-28T07:00:01.250Z", "24511.0", "24512.2"));
         sink.flush();
 
         assertEquals(2, count("ticks"), "finest truth: same-ms distinct ticks are real");
@@ -133,11 +133,11 @@ class PostgresStoreTest extends PostgresTestBase {
 
     @Test
     void barUpsertIsIdempotentAndHealOverwrites() throws SQLException {
-        sink.write(bar("2026-09-29T07:00:00Z", "24512.0", 321L));
-        sink.write(bar("2026-09-29T07:00:00Z", "24512.0", 321L));
+        sink.write(bar("2026-09-28T07:00:00Z", "24512.0", 321L));
+        sink.write(bar("2026-09-28T07:00:00Z", "24512.0", 321L));
         assertEquals(1, count("bars_1m"), "sealed-bar redelivery re-applies, never doubles");
 
-        sink.write(bar("2026-09-29T07:00:00Z", "24512.5", 400L));
+        sink.write(bar("2026-09-28T07:00:00Z", "24512.5", 400L));
         try (Connection c = database.dataSource().getConnection();
                 Statement s = c.createStatement();
                 ResultSet r = s.executeQuery("SELECT bid_c, ltv FROM bars_1m")) {
@@ -151,7 +151,7 @@ class PostgresStoreTest extends PostgresTestBase {
     @Test
     void stateChangeLandsAsServiceEvent() throws SQLException {
         sink.write(new Buffers.StateChange(DAX,
-                Instant.parse("2026-09-29T16:30:00Z"), "CLOSED"));
+                Instant.parse("2026-09-28T16:30:00Z"), "CLOSED"));
 
         try (Connection c = database.dataSource().getConnection();
                 Statement s = c.createStatement();
@@ -168,9 +168,9 @@ class PostgresStoreTest extends PostgresTestBase {
     // optimisation with no observable row effect, so no mutation can kill this via rows.
     @Test
     void instrumentRegistersOnceHoweverManyRows() throws SQLException {
-        sink.write(tick(DAX, "2026-09-29T07:00:01Z", "1.0", "2.0"));
-        sink.write(tick(DAX, "2026-09-29T07:00:02Z", "1.0", "2.0"));
-        sink.write(bar("2026-09-29T07:00:00Z", "24512.0", null));
+        sink.write(tick(DAX, "2026-09-28T07:00:01Z", "1.0", "2.0"));
+        sink.write(tick(DAX, "2026-09-28T07:00:02Z", "1.0", "2.0"));
+        sink.write(bar("2026-09-28T07:00:00Z", "24512.0", null));
         sink.flush();
 
         assertEquals(1, count("instruments"));

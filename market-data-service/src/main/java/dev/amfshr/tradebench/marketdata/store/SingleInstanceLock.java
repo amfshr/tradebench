@@ -9,7 +9,7 @@ import java.sql.SQLException;
  * Advisory single-instance guard (playbook §7), taken BEFORE any IG contact: a double
  * launch would add a Lightstreamer connection on the account's shared key. Held on a
  * DEDICATED (non-pooled) session — a pooled connection would return to Hikari on close
- * still holding the session-level lock (doctrine-review finding, 2026-09-29); closing the
+ * still holding the session-level lock (doctrine-review finding, 2026-09-28); closing the
  * raw session is what releases it, and it also releases automatically if the process dies.
  */
 public final class SingleInstanceLock implements AutoCloseable {

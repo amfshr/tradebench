@@ -1,5 +1,5 @@
 -- Tradebench capture schema V1 (E1-T4). User + data-source are first-class dimensions on
--- every fact row from day one (PRD §2/§7); rulings in the T4 design nod (2026-09-29).
+-- every fact row from day one (PRD §2/§7); rulings in the T4 design nod (2026-09-28).
 
 CREATE TABLE users (
     id   smallint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,

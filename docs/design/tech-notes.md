@@ -43,7 +43,7 @@
 - **Comments are lean** (Alex's ruling, 2026-09-28): javadoc for public contracts,
   one-liners preferred; inline comments only for invisible constraints (doctrine that the
   code cannot show); no narration of what the next line does.
-- **Package taxonomy is function-named, never layer-named** (Alex, 2026-09-29 —
+- **Package taxonomy is function-named, never layer-named** (Alex, 2026-09-28 —
   market-data-service: `app` / `ingest` / `store`, with `supervise` / `coverage` / `eod`
   seats reserved); **a class never repeats its package name as a redundant prefix**
   (`ingest.Buffers`, not `ingest.IngestBuffers`; role *suffixes* like `store.PostgresStore`
@@ -92,7 +92,7 @@ Rules of thumb:
   playbook-anchored vs authored vs corroborated, re-goldened at first live contact.
 - External API knowledge lives in `docs/reference/` (e.g. the scraped IG reference), never
   only in code comments.
-- **SQL naming** (Alex, 2026-09-29): snake_case, plural table names; **every timestamp
+- **SQL naming** (Alex, 2026-09-28): snake_case, plural table names; **every timestamp
   column carries the `_utc` suffix** and is `timestamptz` (`ts_utc`, `start_utc`,
   `at_utc`, `started_utc`); databases are service-named inside the platform-named instance
   (`tradebench-postgres` → `market_data`, D17); Tradebench's local Postgres port is 5435

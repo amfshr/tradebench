@@ -112,7 +112,7 @@ defined once, identically live and in replay (idea doc §7 parity — E3-era); *
 by-time series store (Layer 1, `step ≡ seek`); *transport* splits by criticality (bars
 unbounded and sacred, ticks shed-oldest and counted — `ingest.Buffers`, live today).
 
-### 3.3 `market-data-service` (state: capture live; app/ingest/store shape per Alex's 2026-09-29 restructure)
+### 3.3 `market-data-service` (state: capture live; app/ingest/store shape per Alex's 2026-09-28 restructure)
 
 The pipeline (T3→T6), with the **anti-corruption boundary** at its entry: an adapter maps
 IG-shaped DTOs to `core` domain types, stamping **user + source** exactly once — nothing

@@ -92,7 +92,7 @@ Generated schema render + CI drift gate (triage D23).
 **Tests:** Testcontainers suite through the real path; idempotency test = same batch twice,
 one row set; drift gate red on an uncommitted schema change (mutation-verify the gate
 itself).
-**Design nod ruled (Alex, 2026-09-29):** capture rows belong to `default-user` (platform
+**Design nod ruled (Alex, 2026-09-28):** capture rows belong to `default-user` (platform
 tier formalised at E4) · tick key = surrogate PK + UNIQUE(user,source,instrument,ts,bid,ask)
 ON CONFLICT DO NOTHING (exact dupes drop; same-ms distinct prices both survive —
 finest-truth) · `instruments` FK table, not inline epics · plain JDBC + HikariCP + Flyway,
@@ -144,6 +144,10 @@ digest-suppression failure-mode test; Parquet golden file for the day-export con
 **In-ticket decisions (named on the board):** object store — **R2 vs B2**; also: email
 transport (SMTP vs API service) and Parquet writer lib. Settle all three in-ticket, log any
 that grow durable consequences.
+**Design item queued for this ticket's nod (Alex, 2026-09-28):** the schema/role story —
+named schema vs Postgres `public` (currently `public`; likely: dedicated schema +
+`search_path`, `public` revoked), owner-vs-app role split (D22, with the T7 ops script),
+and DataGrip/read-only role for humans. Decide when Spring lands, migrate via Flyway.
 **Post-sweep refinement (2026-09-28):** `exceeded-account-historical-data-allowance` resets
 *weekly* — the heal treats it as budget-exhausted (plan via the parsed `Allowance` metadata
 before firing), never as a backoff-and-retry error.
