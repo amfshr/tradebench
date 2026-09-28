@@ -1,4 +1,4 @@
-package dev.amfshr.tradebench.marketdata.capture;
+package dev.amfshr.tradebench.marketdata.app;
 
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -25,31 +25,72 @@ import dev.amfshr.tradebench.ig.stream.IgStreamSession;
 import dev.amfshr.tradebench.ig.stream.LightstreamerTransport;
 import dev.amfshr.tradebench.ig.stream.StreamTransport;
 import dev.amfshr.tradebench.ig.time.Sleeper;
+import dev.amfshr.tradebench.marketdata.store.Database;
+import dev.amfshr.tradebench.marketdata.store.PostgresStore;
+import dev.amfshr.tradebench.marketdata.store.SingleInstanceLock;
+
+import org.jspecify.annotations.Nullable;
+import dev.amfshr.tradebench.marketdata.store.JsonlStore;
+import dev.amfshr.tradebench.marketdata.store.CaptureStore;
+import dev.amfshr.tradebench.marketdata.ingest.Pump;
+import dev.amfshr.tradebench.marketdata.ingest.Buffers;
 
 /**
- * T3's DoD vehicle: stream a demo session's ticks + sealed 1m bars to a local JSONL file.
- * Plain env-configured main — Spring earns its way in at T6. Runs until Ctrl-C; the day's
- * file is the capture evidence, and T4 swaps {@link JsonlSink} for the database writer.
+ * The capture entrypoint: session → stream → queues → sink, until Ctrl-C. Plain
+ * env-configured main — Spring earns its way in at T6. TRADEBENCH_SINK picks jsonl (T3's
+ * evidence files) or db (T4's real write path: Flyway-migrated Postgres behind the
+ * single-instance advisory lock, taken BEFORE any IG contact).
  */
-public final class CaptureRunner {
+public final class Main {
 
     private static final String USER = "default-user";
     private static final Duration HEARTBEAT = Duration.ofSeconds(60);
 
-    private CaptureRunner() {
+    private Main() {
     }
 
     public static void main(String[] args) throws Exception {
         Map<String, String> env = System.getenv();
         String instance = required(env, "TRADEBENCH_INSTANCE");
-        Path captureDir = Path.of(required(env, "TRADEBENCH_CAPTURE_DIR"));
         List<String> epics = Arrays.stream(required(env, "TRADEBENCH_EPICS").split(","))
                 .map(String::strip).filter(s -> !s.isEmpty()).toList();
         IgEnvironment igEnv = igEnvironment(required(env, "TRADEBENCH_IG_ENV"));
         String source = "ig-stream-" + igEnv.name().toLowerCase(java.util.Locale.ROOT);
+        String sinkKind = required(env, "TRADEBENCH_SINK").strip().toLowerCase(java.util.Locale.ROOT);
         IgCredentials credentials = IgCredentials.fromEnv(env, igEnv);
 
         SystemClock clock = new SystemClock();
+        Instant started = clock.wallInstant();
+
+        Database database = null;
+        SingleInstanceLock lock = null;
+        CaptureStore sink;
+        switch (sinkKind) {
+            case "jsonl" -> {
+                Path captureDir = Path.of(required(env, "TRADEBENCH_CAPTURE_DIR"));
+                Files.createDirectories(captureDir);
+                Path file = captureDir.resolve("capture-" + DateTimeFormatter.ISO_INSTANT
+                        .format(started.truncatedTo(ChronoUnit.SECONDS)).replace(":", "")
+                        + ".jsonl");
+                JsonlStore jsonl =
+                        new JsonlStore(Files.newBufferedWriter(file, StandardCharsets.UTF_8));
+                jsonl.writeMeta(USER, source, instance, epics, started);
+                sink = jsonl;
+                log(instance, "capturing to " + file.toAbsolutePath());
+            }
+            case "db" -> {
+                String dbUrl = required(env, "TRADEBENCH_DB_URL");
+                database = Database.connect(dbUrl, required(env, "TRADEBENCH_DB_USER"),
+                        required(env, "TRADEBENCH_DB_PASSWORD"));
+                lock = SingleInstanceLock.acquire(database);
+                sink = new PostgresStore(database.dataSource(), USER, source, instance);
+                log(instance, "capturing to " + dbUrl + " (migrated; advisory lock held)");
+            }
+            default -> throw new IgFatalConfigException(
+                    "TRADEBENCH_SINK must be 'jsonl' or 'db', got '" + sinkKind + "'");
+        }
+        Database db = database;
+        SingleInstanceLock instanceLock = lock;
         IgSessionManager sessions = new IgSessionManager(new JdkHttpTransport(),
                 igEnv, credentials,
                 new RequestPacer(RequestPacer.ACCOUNT_NON_TRADING_PER_MINUTE,
@@ -59,16 +100,8 @@ public final class CaptureRunner {
         log(instance, igEnv + " session on " + session.activeAccountId() + " via "
                 + session.lightstreamerEndpoint());
 
-        Instant started = clock.wallInstant();
-        Files.createDirectories(captureDir);
-        Path file = captureDir.resolve("capture-" + DateTimeFormatter.ISO_INSTANT
-                .format(started.truncatedTo(ChronoUnit.SECONDS)).replace(":", "") + ".jsonl");
-        JsonlSink sink = new JsonlSink(Files.newBufferedWriter(file, StandardCharsets.UTF_8));
-        sink.writeMeta(USER, source, instance, epics, started);
-        log(instance, "capturing to " + file.toAbsolutePath());
-
-        CaptureQueues queues = new CaptureQueues(CaptureQueues.DEFAULT_TICK_CAPACITY);
-        CapturePump pump = new CapturePump(queues, sink, Sleeper.SYSTEM);
+        Buffers queues = new Buffers(Buffers.DEFAULT_TICK_CAPACITY);
+        Pump pump = new Pump(queues, sink, Sleeper.SYSTEM);
         Thread pumpThread = new Thread(pump, "capture-pump");
 
         IgStreamSession stream = new IgStreamClient(new LightstreamerTransport())
@@ -107,6 +140,8 @@ public final class CaptureRunner {
                 } catch (RuntimeException e) {
                     log(instance, "sink close failed: " + e);
                 }
+                closeQuietly(instance, instanceLock);
+                closeQuietly(instance, db);
             } else {
                 log(instance, "pump did not stop within 5s — leaving sink open to avoid a"
                         + " close/write race; file may miss its tail");
@@ -139,10 +174,21 @@ public final class CaptureRunner {
         };
     }
 
-    private static String summary(CaptureQueues queues, CapturePump pump) {
+    private static String summary(Buffers queues, Pump pump) {
         return "ticks=" + queues.tickCount() + " bars=" + queues.barCount()
                 + " written=" + pump.writtenCount()
                 + " dropped=" + queues.droppedTicks() + " malformed=" + queues.malformedUpdates();
+    }
+
+    private static void closeQuietly(String instance, @Nullable AutoCloseable closeable) {
+        if (closeable == null) {
+            return;
+        }
+        try {
+            closeable.close();
+        } catch (Exception e) {
+            log(instance, "close failed: " + e);
+        }
     }
 
     private static IgEnvironment igEnvironment(String value) {

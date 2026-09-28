@@ -1,4 +1,4 @@
-package dev.amfshr.tradebench.marketdata.capture;
+package dev.amfshr.tradebench.marketdata.ingest;
 
 import dev.amfshr.tradebench.core.domain.Bar1m;
 import dev.amfshr.tradebench.core.domain.OhlcPrices;

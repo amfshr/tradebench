@@ -43,6 +43,12 @@
 - **Comments are lean** (Alex's ruling, 2026-09-28): javadoc for public contracts,
   one-liners preferred; inline comments only for invisible constraints (doctrine that the
   code cannot show); no narration of what the next line does.
+- **Package taxonomy is function-named, never layer-named** (Alex, 2026-09-28 —
+  market-data-service: `app` / `ingest` / `store`, with `supervise` / `coverage` / `eod`
+  seats reserved); **a class never repeats its package name as a redundant prefix**
+  (`ingest.Buffers`, not `ingest.IngestBuffers`; role *suffixes* like `store.PostgresStore`
+  are fine); stores are named role-with-technology (`PostgresStore`, `JsonlStore` — the
+  `JdkHttpTransport` pattern).
 - **Nesting rule:** nest types that form one contract with no independent life (the
   `StreamTransport` seam family — JDK precedent: `Flow`, `Map.Entry`); top-level for anything
   callers hold in its own right (`IgStreamSession`). Private impl/test helpers nest freely;
@@ -86,6 +92,14 @@ Rules of thumb:
   playbook-anchored vs authored vs corroborated, re-goldened at first live contact.
 - External API knowledge lives in `docs/reference/` (e.g. the scraped IG reference), never
   only in code comments.
+- **SQL naming** (Alex, 2026-09-28): snake_case, plural table names; **every timestamp
+  column carries the `_utc` suffix** and is `timestamptz` (`ts_utc`, `start_utc`,
+  `at_utc`, `started_utc`); databases are service-named inside the platform-named instance
+  (`tradebench-postgres` → `market_data`, D17); Tradebench's local Postgres port is 5435
+  (5432–5434 are other projects on Alex's machine).
+- **Wire vs domain naming:** wire DTOs are named by wire concept (`TickUpdate`,
+  `PriceCandle`); the plain nouns (`Tick`, `Bar1m`) belong to the domain. Compact wire
+  keys (`ltv`) are fine when the Java name spells it out.
 
 ## 5. Dependency policy
 

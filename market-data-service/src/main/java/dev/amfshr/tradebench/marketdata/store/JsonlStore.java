@@ -1,4 +1,4 @@
-package dev.amfshr.tradebench.marketdata.capture;
+package dev.amfshr.tradebench.marketdata.store;
 
 import java.io.IOException;
 import java.io.UncheckedIOException;
@@ -12,14 +12,15 @@ import com.fasterxml.jackson.databind.node.ObjectNode;
 import dev.amfshr.tradebench.core.domain.Bar1m;
 import dev.amfshr.tradebench.core.domain.OhlcPrices;
 import dev.amfshr.tradebench.core.domain.Tick;
+import dev.amfshr.tradebench.marketdata.ingest.Buffers;
 
 /** One JSON object per line; BigDecimals serialize with their exact wire scale (D36). */
-public final class JsonlSink implements CaptureSink {
+public final class JsonlStore implements CaptureStore {
 
     private final Writer writer;
     private final ObjectMapper mapper = new ObjectMapper();
 
-    public JsonlSink(Writer writer) {
+    public JsonlStore(Writer writer) {
         this.writer = writer;
     }
 
@@ -62,7 +63,7 @@ public final class JsonlSink implements CaptureSink {
     }
 
     @Override
-    public void write(CaptureQueues.StateChange stateChange) {
+    public void write(Buffers.StateChange stateChange) {
         writeLine(mapper.createObjectNode()
                 .put("kind", "state")
                 .put("epic", stateChange.epic())

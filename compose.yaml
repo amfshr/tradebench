@@ -1,0 +1,26 @@
+# The one compose file — dev today, the T7 deploy stack tomorrow (build plan §6: "the
+# deliverable is a compose stack"; the service container joins here at T7). Interpolated
+# values come from .env at repo root (compose reads it natively; only referenced vars).
+name: tradebench
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: tradebench-postgres
+    environment:
+      POSTGRES_DB: market_data
+      POSTGRES_USER: ${TRADEBENCH_DB_USER:?set TRADEBENCH_DB_USER in .env}
+      POSTGRES_PASSWORD: ${TRADEBENCH_DB_PASSWORD:?set TRADEBENCH_DB_PASSWORD in .env}
+    ports:
+      # Loopback-only: the dev DB must never be reachable from off this machine.
+      - "127.0.0.1:${TRADEBENCH_DB_PORT:-5435}:5432"
+    volumes:
+      - pg-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d market_data"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+volumes:
+  pg-data:

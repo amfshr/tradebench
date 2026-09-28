@@ -68,6 +68,13 @@ epics: `indicator-lib`, `strategy-dsl`, `engine`, `execution-oms`, `ig-simulator
 `pg_dump` → object storage) on a small cloud box; staging + prod with separate DBs, promoted
 by release tag; outbound-only network (IG + heartbeat); Linux containers only, never Windows.
 
+**Database topology (D17):** one Postgres *instance* per environment (the repo `compose.yaml`
+manages it — dev today, the same file becomes the T7 stack); one *database* per service
+(`market_data` now — cross-database queries are impossible in plain Postgres, so ownership
+is engine-enforced); the `market_data` DB doubles as a **published read-only data product**
+(schema = versioned contract, CI drift gate) for bulk consumers like the backtester, while
+all non-data-product integration goes via events (D4). Writes: owner only, always.
+
 ## 3. Components
 
 ### 3.1 `ig-client` (state: T2 merged — session + REST core)
@@ -103,9 +110,9 @@ dataTime-ordered stream of mixed events so tick/bar interleaving and tie-breaks 
 defined once, identically live and in replay (idea doc §7 parity — E3-era); *readers*
 (DSL, indicators, charts) never see a stream — they read the always-current, typed,
 by-time series store (Layer 1, `step ≡ seek`); *transport* splits by criticality (bars
-unbounded and sacred, ticks shed-oldest and counted — `CaptureQueues`, live today).
+unbounded and sacred, ticks shed-oldest and counted — `ingest.Buffers`, live today).
 
-### 3.3 `market-data-service` (state: T3 capture pipeline live — JSONL sink until T4)
+### 3.3 `market-data-service` (state: capture live; app/ingest/store shape per Alex's 2026-09-28 restructure)
 
 The pipeline (T3→T6), with the **anti-corruption boundary** at its entry: an adapter maps
 IG-shaped DTOs to `core` domain types, stamping **user + source** exactly once — nothing
@@ -196,7 +203,7 @@ duty as the backend.
   remains the sole writer of the capture record and, when the first second consumer
   exists, additionally publishes ticks/sealed-bars to Redis Streams under explicitly
   schema'd contracts; consumers follow the standing contract (at-least-once, idempotent by
-  key, ack-after-apply). The publisher is a `CaptureSink` fan-out — built when a real
+  key, ack-after-apply). The publisher is a `store.CaptureStore` fan-out — built when a real
   consumer arrives, not speculatively.
 - **The collection service needs no inbound at all** (outbound-only to IG + heartbeat) —
   its deploy posture is firewall-closed regardless of the edge story.

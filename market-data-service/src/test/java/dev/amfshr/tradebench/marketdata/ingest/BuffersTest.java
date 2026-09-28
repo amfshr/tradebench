@@ -1,4 +1,4 @@
-package dev.amfshr.tradebench.marketdata.capture;
+package dev.amfshr.tradebench.marketdata.ingest;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
@@ -10,7 +10,7 @@ import org.junit.jupiter.api.Test;
 
 import dev.amfshr.tradebench.ig.stream.TickUpdate;
 
-class CaptureQueuesTest {
+class BuffersTest {
 
     private static final String DAX = "IX.D.DAX.DAILY.IP";
 
@@ -21,7 +21,7 @@ class CaptureQueuesTest {
 
     @Test
     void ticksShedOldestAtCapacityAndCountTheLoss() {
-        CaptureQueues queues = new CaptureQueues(2);
+        Buffers queues = new Buffers(2);
 
         queues.onTick(tick(1, "DEAL"));
         queues.onTick(tick(2, "DEAL"));
@@ -37,16 +37,16 @@ class CaptureQueuesTest {
 
     @Test
     void dealFlagChangesAreRecordedOnceIncludingTheFirst() {
-        CaptureQueues queues = new CaptureQueues(10);
+        Buffers queues = new Buffers(10);
 
         queues.onTick(tick(1, "DEAL"));
         queues.onTick(tick(2, "DEAL"));
         queues.onTick(tick(3, "CLOSED"));
 
-        assertEquals(new CaptureQueues.StateChange(DAX, Instant.ofEpochSecond(1), "DEAL"),
+        assertEquals(new Buffers.StateChange(DAX, Instant.ofEpochSecond(1), "DEAL"),
                 queues.peekStateChangeNow());
         queues.removeStateChangeNow();
-        assertEquals(new CaptureQueues.StateChange(DAX, Instant.ofEpochSecond(3), "CLOSED"),
+        assertEquals(new Buffers.StateChange(DAX, Instant.ofEpochSecond(3), "CLOSED"),
                 queues.peekStateChangeNow());
         queues.removeStateChangeNow();
         assertNull(queues.peekStateChangeNow());
@@ -54,7 +54,7 @@ class CaptureQueuesTest {
 
     @Test
     void malformedUpdatesAreCounted() {
-        CaptureQueues queues = new CaptureQueues(10);
+        Buffers queues = new Buffers(10);
         queues.onMalformed("PRICE:X:Y");
         queues.onMalformed("PRICE:X:Y");
         assertEquals(2, queues.malformedUpdates());

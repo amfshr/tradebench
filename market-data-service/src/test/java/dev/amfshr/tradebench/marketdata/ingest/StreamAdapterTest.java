@@ -1,4 +1,4 @@
-package dev.amfshr.tradebench.marketdata.capture;
+package dev.amfshr.tradebench.marketdata.ingest;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 

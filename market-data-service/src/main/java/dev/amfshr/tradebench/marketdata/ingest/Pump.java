@@ -1,4 +1,4 @@
-package dev.amfshr.tradebench.marketdata.capture;
+package dev.amfshr.tradebench.marketdata.ingest;
 
 import java.time.Duration;
 import java.util.concurrent.atomic.AtomicLong;
@@ -8,6 +8,7 @@ import org.jspecify.annotations.Nullable;
 import dev.amfshr.tradebench.core.domain.Bar1m;
 import dev.amfshr.tradebench.core.domain.Tick;
 import dev.amfshr.tradebench.ig.time.Sleeper;
+import dev.amfshr.tradebench.marketdata.store.CaptureStore;
 
 /**
  * Single consumer: bars first (the backbone), then state changes, then ticks. Bars and
@@ -15,19 +16,19 @@ import dev.amfshr.tradebench.ig.time.Sleeper;
  * best-effort by design (shed-oldest queue). A sink failure stops the pump and is kept in
  * {@link #failure()} — never re-drained into a broken sink, never silent (P9).
  */
-public final class CapturePump implements Runnable {
+public final class Pump implements Runnable {
 
     private static final Duration IDLE_WAIT = Duration.ofMillis(250);
     private static final int TICK_BATCH = 5_000;
 
-    private final CaptureQueues queues;
-    private final CaptureSink sink;
+    private final Buffers queues;
+    private final CaptureStore sink;
     private final Sleeper sleeper;
     private final AtomicLong written = new AtomicLong();
     private volatile boolean running = true;
     private volatile @Nullable RuntimeException failure;
 
-    public CapturePump(CaptureQueues queues, CaptureSink sink, Sleeper sleeper) {
+    public Pump(Buffers queues, CaptureStore sink, Sleeper sleeper) {
         this.queues = queues;
         this.sink = sink;
         this.sleeper = sleeper;
@@ -42,7 +43,7 @@ public final class CapturePump implements Runnable {
             written.incrementAndGet();
             count++;
         }
-        CaptureQueues.StateChange state;
+        Buffers.StateChange state;
         while ((state = queues.peekStateChangeNow()) != null) {
             sink.write(state);
             queues.removeStateChangeNow();

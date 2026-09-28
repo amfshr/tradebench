@@ -9,7 +9,12 @@ if [[ ! -f .env ]]; then
 fi
 set -a; source .env; set +a
 prefix="IG_$(echo "${TRADEBENCH_IG_ENV:-}" | tr '[:lower:]' '[:upper:]')"
-for var in TRADEBENCH_IG_ENV TRADEBENCH_INSTANCE TRADEBENCH_CAPTURE_DIR TRADEBENCH_EPICS \
+case "${TRADEBENCH_SINK:-}" in
+  jsonl) sink_vars="TRADEBENCH_CAPTURE_DIR" ;;
+  db)    sink_vars="TRADEBENCH_DB_URL TRADEBENCH_DB_USER TRADEBENCH_DB_PASSWORD" ;;
+  *)     echo "TRADEBENCH_SINK must be 'jsonl' or 'db' in .env" >&2; exit 1 ;;
+esac
+for var in TRADEBENCH_IG_ENV TRADEBENCH_SINK TRADEBENCH_INSTANCE TRADEBENCH_EPICS $sink_vars \
            ${prefix}_IDENTIFIER ${prefix}_PASSWORD ${prefix}_API_KEY ${prefix}_ACCOUNT_ID; do
   [[ -n "${!var:-}" ]] || { echo "Missing $var in .env" >&2; exit 1; }
 done

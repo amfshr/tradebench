@@ -1,4 +1,4 @@
-package dev.amfshr.tradebench.marketdata.capture;
+package dev.amfshr.tradebench.marketdata.ingest;
 
 import java.time.Instant;
 import java.util.Queue;
@@ -21,7 +21,7 @@ import dev.amfshr.tradebench.ig.stream.TickUpdate;
  * ticks bounded shed-oldest (freshest wins; backpressure must never reach the socket).
  * Adapts to domain on the LS thread — record allocation is within the cheap-work budget.
  */
-public final class CaptureQueues implements StreamEvents {
+public final class Buffers implements StreamEvents {
 
     public static final int DEFAULT_TICK_CAPACITY = 100_000;
 
@@ -37,7 +37,7 @@ public final class CaptureQueues implements StreamEvents {
     private final AtomicLong tickCount = new AtomicLong();
     private final AtomicLong barCount = new AtomicLong();
 
-    public CaptureQueues(int tickCapacity) {
+    public Buffers(int tickCapacity) {
         this.ticks = new ArrayBlockingQueue<>(tickCapacity);
     }
 

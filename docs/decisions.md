@@ -182,3 +182,21 @@ master key from env), never env-file entries. Full design:
 across the platform's growth (more services, staging/prod, other users) — freezing the
 app-side contract as "plain env" makes every later move mechanical; the playbook's leak
 scars (§1.7) drive the tiny-radioactive-file shape and the never-in-CI rule.
+
+## D17 — Database topology: one instance per environment, one database per service; the market-data DB is a published read-only data product — **Accepted** (2026-09-28)
+
+One Postgres **instance** per environment (compose-managed: local dev, the Mac soak,
+staging, prod on-box — never RDS-per-service; £20/mo NFR). Inside it, **one database per
+service** (`market_data` now; the OMS gets its own later): plain Postgres cannot query
+across databases, so "never reach into another service's tables" is enforced by the
+engine, not discipline, and per-service credentials scope naturally (D22). **The
+exception that makes this a data platform:** the `market_data` database is additionally a
+**published data product** — its schema is a versioned contract (the drift gate already
+pins it), and other services may hold **read-only** credentials to it for bulk reads
+(backtester, charts) that would be absurd over an API; writes remain the collection
+service's alone, and everything that isn't the shared data product integrates via events
+(D4). One compose file grows from today's dev Postgres into the T7 deploy stack.
+**Why:** database-per-service orthodoxy exists to prevent shared-table coupling — we keep
+that protection where it matters (operational state) while admitting honestly that the
+capture record IS the platform's shared asset, and treating its schema as an API with a
+CI-enforced contract is stronger than pretending consumers won't need it.
