@@ -137,6 +137,28 @@ flowchart LR
 Startup takes the single-instance **advisory lock** before any IG contact (no persistence ⇒
 do not run). The DB is downstream of decisions, never upstream (golden rule 4).
 
+### 3.4 The app's trajectory — from capture runner to the stream-jobs service
+
+The env-configured runner is deliberately the **degenerate single-job case** of the PRD
+§5.1 product: users will configure *stream jobs* (provider · account · market · window ·
+desired timeframes), view and manage them over REST, and consume the data live and in
+backtests. Each element already has its seat:
+
+| Config-screen concept | Where it lands |
+|---|---|
+| `provider: ig` (later Databento) | the seam story — nothing above `StreamTransport`/`HttpTransport` knows IG; a second provider is a second adapter family writing to the same schema under its own `source` |
+| `account` | per-user broker credentials are *data* (D16 §4: encrypted rows, E8) — a job references a credential id, never embeds one |
+| `market`, `timeframes: [ticks, 1m, 10m]` | capture stays atoms (ticks + 1m, D15); a job's timeframe list records **desired outputs** — higher TFs derive from healed 1m, never stream separately |
+| `start/end time` | playbook §4.4 windows (market properties + job windows) — in-service windows are T5/T7-era plan |
+| jobs CRUD + status over REST | Spring lands T6; a `stream_jobs` table (user, provider, credential-ref, market, windows, outputs, status) then replaces "read env" in `app.Main` — the composition root spawns N subscription sets onto the *same* ingest→store pipeline |
+| multi-user attribution | physically present on every row since V1 (`user_id`, `source_id`) — jobs supply real values where the runner writes `default-user` |
+| serving live + backtests | D17: `market_data` is the published read product; D4 events when the first live consumer arrives |
+
+Nothing in E1's build closes a door on this; the door-openers (dimensions from V1,
+capability-split subscriptions, provider seams, composition-root `Main`) were chosen for
+it. The jobs model + REST surface is Market-Data-Manager-era work (E4 horizon, T6 gives
+it Spring); this section exists so the trajectory stays in view.
+
 ## 4. Key behaviours
 
 ### 4.1 Session bring-up (implemented, T2)
