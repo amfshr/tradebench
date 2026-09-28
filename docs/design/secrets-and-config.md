@@ -16,13 +16,17 @@
    (`IgEnvironment.envPrefix()` — already built). Flipping environments can never mix
    credentials with the wrong base URL, *by construction*. A deployed instance is pinned to
    exactly one environment by its env file.
-3. **One API key per service instance, never shared, never used by humans.** IG issues
-   multiple keys per account; one login + one LS connection per key is the topology that
-   stays inside IG's rules (reference §3). So: the collection service gets its own key, the
-   future OMS its own, ad-hoc smokes/CLIs use Alex's personal key — a human poking around
-   can never collide with a service's connection or trip the §1.2 login stagger against it.
-   Keys are *named* in the runbook (never their values): `capture-demo`, `capture-live`,
-   `oms-live`, `alex-dev`.
+3. **One key per account is IG's reality — isolation comes from discipline, not key
+   issuance.** *(Corrected 2026-09-28, Alex + playbook §6: IG issues ONE key per account;
+   an earlier draft claimed per-service keys from the scraped reference — the playbook's
+   empirical record wins.)* All services **and** humans on an account share its single key,
+   each holding their own session/connection (two concurrent LS connections on one demo key
+   are field-proven to work; IG's FAQ still warns against multiplying them). The
+   discipline that replaces key separation: the >60s login stagger between any two
+   processes (built into the client), the per-service single-instance guard (advisory
+   lock, T4), a minimal connection count — and no ad-hoc tooling against an account while
+   its service streams, or accept the shared-key risk knowingly. Runbook names keys per
+   account+environment (`demo-key`, `live-key`), listing every process that uses each.
 4. **Service identity ≠ user data.** Env files carry *service* credentials only. In the
    multi-user era (E8 login), platform users' broker credentials are **data**: entered via
    the UI, stored in Postgres encrypted at the application layer (AES-GCM), with the master
@@ -38,7 +42,7 @@
 | Context | Location | Loader | Notes |
 |---|---|---|---|
 | Local dev | `.env` at repo root (gitignored) | `scripts/run-capture.sh` (`set -a; source`), or direnv `.envrc` | `.env.example` documents names; single-quote values (`$` trap) |
-| Deployed service (T7+) | `/etc/tradebench/<service>.env`, root-owned `0600` | compose `env_file:` | one file per service instance; staging=demo file, prod=live file |
+| Deployed service (T7+) | `/etc/tradebench/<service>.env`, root-owned `0600` | compose `env_file:` | one file per service instance, each pinning its own IG env |
 | CI | **nothing** | — | no broker secrets in CI ever; integration-gated tests don't run there |
 | Multi-user era | encrypted DB columns | app decrypts with env-provided master key | E8; never env files |
 | Optional local upgrade | 1Password | `op run --env-file` injects at launch | same variable names; secrets never on disk |
@@ -54,14 +58,20 @@
 - Source attribution follows the environment automatically (`ig-stream-demo` /
   `ig-stream-live`) — captured data always knows which wire it came from (PRD §7).
 
-## Demo vs live, and Alex's live-key plan
+## Demo vs live is its own axis — never derived from the app's dev/staging/prod
 
-Capture ultimately wants the account that will trade (demo data quality differs — playbook
-§1.5; the build plan left "which account feeds cloud capture" open). The path: T3–T7 run
-demo (`capture-demo` key); once deployed and stable, prod capture moves to **its own live
-key** (`capture-live`) — created for the service, never Alex's personal key — and demo
-stays as staging's wire. Reliability of the live key is then observable in the service's
-own events/digest without any human usage muddying it.
+**`TRADEBENCH_IG_ENV` is deliberately independent of any application environment.** Each
+deployed instance pins its IG side explicitly in its own env file; app-staging↔IG-demo and
+app-prod↔IG-live are the *typical* pairings, but they are convention, not code — a staging
+instance may point at IG-live (e.g. shadow-diff verification) and a prod instance at
+IG-demo (e.g. first cautious deploy), and nothing in the platform assumes otherwise.
+
+**The capture path:** T3–T7 run against IG-demo (the demo account's key). Once deployed
+and stable, prod capture moves to the **live account's key** (capture wants the account
+that will trade — demo data quality differs, playbook §1.5). Since that key is the
+account's only one, its reliability is observable cleanly in the service's events/digest
+*provided* human ad-hoc use of the live key stays rare and outside market hours — a
+runbook rule, not a mechanism, until IG offers better.
 
 ## Lifecycle
 

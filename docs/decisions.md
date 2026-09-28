@@ -170,8 +170,12 @@ Apps read plain environment variables only; injectors vary by context (local `.e
 loader script/direnv; deployed `/etc/tradebench/<service>.env` 0600 via compose
 `env_file:`; CI carries no broker secrets ever; optional 1Password `op run` locally).
 `TRADEBENCH_IG_ENV=demo|live` pins an instance and selects the `IG_DEMO_*`/`IG_LIVE_*`
-credential set so environment and credentials can never mix. One IG API key per service
-instance, named in the runbook, never used interactively — humans use their own key.
+credential set so environment and credentials can never mix — and it is deliberately
+independent of the application's own staging/prod axis (pairings are convention, explicit
+per instance). **Corrected same day (Alex):** IG issues ONE key per account (playbook §6
+empirical; the per-service-keys draft followed the scraped reference and is retracted) —
+all processes share the account key, isolated by the login stagger, per-service
+single-instance guards, and connection-count discipline.
 Multi-user era: platform users' broker credentials are data (app-encrypted DB columns,
 master key from env), never env-file entries. Full design:
 `docs/design/secrets-and-config.md`. **Why:** the injector is the only part that varies

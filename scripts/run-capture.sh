@@ -12,4 +12,6 @@ for var in TRADEBENCH_IG_ENV TRADEBENCH_INSTANCE TRADEBENCH_CAPTURE_DIR TRADEBEN
            ${prefix}_IDENTIFIER ${prefix}_PASSWORD ${prefix}_API_KEY ${prefix}_ACCOUNT_ID; do
   [[ -n "${!var:-}" ]] || { echo "Missing $var in .env" >&2; exit 1; }
 done
-exec ./gradlew --console=plain -q :market-data-service:run
+extra=()
+[[ "${TRADEBENCH_DEBUG:-}" == "1" ]] && extra+=(--debug-jvm)
+exec ./gradlew --console=plain -q :market-data-service:run "${extra[@]}"
