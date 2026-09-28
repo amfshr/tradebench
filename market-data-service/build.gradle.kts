@@ -22,7 +22,12 @@ dependencies {
     implementation(project(":core"))
     implementation(project(":ig-client"))
     implementation(libs.jackson.databind)
+    implementation(libs.postgresql)
+    implementation(libs.hikaricp)
+    implementation(libs.flyway.core)
+    runtimeOnly(libs.flyway.postgresql)
 
+    testImplementation(libs.testcontainers.postgresql)
     testImplementation(platform(libs.junit.bom))
     testImplementation(libs.junit.jupiter)
     testRuntimeOnly(libs.junit.platform.launcher)

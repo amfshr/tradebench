@@ -68,6 +68,13 @@ epics: `indicator-lib`, `strategy-dsl`, `engine`, `execution-oms`, `ig-simulator
 `pg_dump` → object storage) on a small cloud box; staging + prod with separate DBs, promoted
 by release tag; outbound-only network (IG + heartbeat); Linux containers only, never Windows.
 
+**Database topology (D17):** one Postgres *instance* per environment (the repo `compose.yaml`
+manages it — dev today, the same file becomes the T7 stack); one *database* per service
+(`market_data` now — cross-database queries are impossible in plain Postgres, so ownership
+is engine-enforced); the `market_data` DB doubles as a **published read-only data product**
+(schema = versioned contract, CI drift gate) for bulk consumers like the backtester, while
+all non-data-product integration goes via events (D4). Writes: owner only, always.
+
 ## 3. Components
 
 ### 3.1 `ig-client` (state: T2 merged — session + REST core)

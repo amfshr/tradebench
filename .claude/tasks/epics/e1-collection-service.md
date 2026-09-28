@@ -92,6 +92,11 @@ Generated schema render + CI drift gate (triage D23).
 **Tests:** Testcontainers suite through the real path; idempotency test = same batch twice,
 one row set; drift gate red on an uncommitted schema change (mutation-verify the gate
 itself).
+**Design nod ruled (Alex, 2026-09-29):** capture rows belong to `default-user` (platform
+tier formalised at E4) · tick key = surrogate PK + UNIQUE(user,source,instrument,ts,bid,ask)
+ON CONFLICT DO NOTHING (exact dupes drop; same-ms distinct prices both survive —
+finest-truth) · `instruments` FK table, not inline epics · plain JDBC + HikariCP + Flyway,
+Spring waits for T6 · JSONL back-import deferred.
 **In-ticket decisions:** none — tick-lake *format* (PRD Q#4's open half) explicitly does NOT
 block: Postgres rows now, Parquet export is T6's job, revisit at scale.
 
