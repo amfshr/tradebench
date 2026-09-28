@@ -20,7 +20,7 @@ import org.jspecify.annotations.Nullable;
  * and storage use {@code startUtc}; only event ordering uses {@code dataTime}.
  */
 public record Bar1m(String epic, Instant startUtc, OhlcPrices bid, OhlcPrices ask,
-        @Nullable Long tickVolume) implements MarketEvent {
+        @Nullable Long lastTradedVolume) implements MarketEvent {
 
     private static final Duration ONE_MINUTE = Duration.ofMinutes(1);
     private static final BigDecimal TWO = BigDecimal.valueOf(2);

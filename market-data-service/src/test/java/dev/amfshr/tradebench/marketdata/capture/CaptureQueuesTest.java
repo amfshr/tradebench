@@ -44,10 +44,12 @@ class CaptureQueuesTest {
         queues.onTick(tick(3, "CLOSED"));
 
         assertEquals(new CaptureQueues.StateChange(DAX, Instant.ofEpochSecond(1), "DEAL"),
-                queues.pollStateChangeNow());
+                queues.peekStateChangeNow());
+        queues.removeStateChangeNow();
         assertEquals(new CaptureQueues.StateChange(DAX, Instant.ofEpochSecond(3), "CLOSED"),
-                queues.pollStateChangeNow());
-        assertNull(queues.pollStateChangeNow());
+                queues.peekStateChangeNow());
+        queues.removeStateChangeNow();
+        assertNull(queues.peekStateChangeNow());
     }
 
     @Test

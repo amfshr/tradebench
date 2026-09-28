@@ -55,8 +55,8 @@ public final class JsonlSink implements CaptureSink {
                 .put("startUtc", bar.startUtc().toString());
         putOhlc(node.putObject("bid"), bar.bid());
         putOhlc(node.putObject("ask"), bar.ask());
-        if (bar.tickVolume() != null) {
-            node.put("vol", bar.tickVolume());
+        if (bar.lastTradedVolume() != null) {
+            node.put("ltv", bar.lastTradedVolume());
         }
         writeLine(node);
     }

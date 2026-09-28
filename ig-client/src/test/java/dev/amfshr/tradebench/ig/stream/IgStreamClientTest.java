@@ -149,6 +149,19 @@ class IgStreamClientTest {
     }
 
     @Test
+    void candleWithoutConsEndAtAllIsMalformedNotSilent() {
+        // The merged view always carries CONS_END; its absence is schema drift or our own
+        // field-list regression — count it, or a dead CHART capture looks like quiet health.
+        Map<String, @Nullable String> fields = new HashMap<>();
+        fields.put("UTM", "1790348220000");
+
+        fake.updateListeners.get(1).onUpdate("CHART:" + DAX + ":1MINUTE", fields);
+
+        assertTrue(events.bars.isEmpty());
+        assertEquals(List.of("CHART:" + DAX + ":1MINUTE"), events.malformed);
+    }
+
+    @Test
     void sealedCandleMissingACornerIsMalformed() {
         Map<String, @Nullable String> fields = new HashMap<>();
         fields.put("CONS_END", "1");

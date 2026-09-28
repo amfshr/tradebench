@@ -1,11 +1,20 @@
 package dev.amfshr.tradebench.marketdata.capture;
 
 import java.time.Duration;
+import java.util.concurrent.atomic.AtomicLong;
+
+import org.jspecify.annotations.Nullable;
 
 import dev.amfshr.tradebench.core.domain.Bar1m;
 import dev.amfshr.tradebench.core.domain.Tick;
+import dev.amfshr.tradebench.ig.time.Sleeper;
 
-/** Single consumer thread: drains bars first (the backbone), then state changes, then ticks. */
+/**
+ * Single consumer: bars first (the backbone), then state changes, then ticks. Bars and
+ * state changes are removed only after a successful write (ack-after-apply); ticks are
+ * best-effort by design (shed-oldest queue). A sink failure stops the pump and is kept in
+ * {@link #failure()} — never re-drained into a broken sink, never silent (P9).
+ */
 public final class CapturePump implements Runnable {
 
     private static final Duration IDLE_WAIT = Duration.ofMillis(250);
@@ -13,54 +22,74 @@ public final class CapturePump implements Runnable {
 
     private final CaptureQueues queues;
     private final CaptureSink sink;
+    private final Sleeper sleeper;
+    private final AtomicLong written = new AtomicLong();
     private volatile boolean running = true;
+    private volatile @Nullable RuntimeException failure;
 
-    public CapturePump(CaptureQueues queues, CaptureSink sink) {
+    public CapturePump(CaptureQueues queues, CaptureSink sink, Sleeper sleeper) {
         this.queues = queues;
         this.sink = sink;
+        this.sleeper = sleeper;
     }
 
     int drainOnce() {
-        int written = 0;
+        int count = 0;
         Bar1m bar;
-        while ((bar = queues.pollBarNow()) != null) {
+        while ((bar = queues.peekBarNow()) != null) {
             sink.write(bar);
-            written++;
+            queues.removeBarNow();
+            written.incrementAndGet();
+            count++;
         }
         CaptureQueues.StateChange state;
-        while ((state = queues.pollStateChangeNow()) != null) {
+        while ((state = queues.peekStateChangeNow()) != null) {
             sink.write(state);
-            written++;
+            queues.removeStateChangeNow();
+            written.incrementAndGet();
+            count++;
         }
         Tick tick;
         for (int i = 0; i < TICK_BATCH && (tick = queues.pollTickNow()) != null; i++) {
             sink.write(tick);
-            written++;
+            written.incrementAndGet();
+            count++;
         }
-        return written;
+        return count;
+    }
+
+    void cycle() throws InterruptedException {
+        if (drainOnce() == 0) {
+            sink.flush();
+            sleeper.sleep(IDLE_WAIT);
+        }
     }
 
     @Override
     public void run() {
         try {
             while (running) {
-                if (drainOnce() == 0) {
-                    Bar1m waited = queues.awaitBar(IDLE_WAIT);
-                    if (waited != null) {
-                        sink.write(waited);
-                    }
-                    sink.flush();
-                }
+                cycle();
             }
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-        } finally {
             drainOnce();
             sink.flush();
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        } catch (RuntimeException e) {
+            failure = e;
         }
     }
 
     public void stop() {
         running = false;
+    }
+
+    /** Events actually written to the sink — the heartbeat's honest number. */
+    public long writtenCount() {
+        return written.get();
+    }
+
+    public @Nullable RuntimeException failure() {
+        return failure;
     }
 }

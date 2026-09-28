@@ -28,11 +28,6 @@ public final class StreamParsers {
         return new TickUpdate(epic, timestamp, bid, ask, dealFlag.strip());
     }
 
-    /** True when this CHART update is a completed candle (CONS_END=1) — else it is expected noise. */
-    public static boolean isSealed(Map<String, @Nullable String> fields) {
-        return "1".equals(fields.get("CONS_END"));
-    }
-
     public static @Nullable SealedBarUpdate parseSealedBar(String epic,
             Map<String, @Nullable String> fields) {
         Instant start = epochMs(fields.get("UTM"));

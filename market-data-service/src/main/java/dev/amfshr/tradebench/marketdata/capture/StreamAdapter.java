@@ -23,7 +23,7 @@ public final class StreamAdapter {
 
     public static Bar1m toDomain(SealedBarUpdate update) {
         return new Bar1m(update.epic(), update.startUtc(), toDomain(update.bid()),
-                toDomain(update.offer()), update.tickVolume());
+                toDomain(update.offer()), update.lastTradedVolume());
     }
 
     private static OhlcPrices toDomain(Ohlc ohlc) {

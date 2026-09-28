@@ -47,6 +47,20 @@ public final class LightstreamerTransport implements StreamTransport {
         return new LsConnection(client);
     }
 
+    static Map<String, @Nullable String> extractFields(ItemUpdate update,
+            SubscriptionSpec spec) {
+        Map<String, @Nullable String> fields = new HashMap<>();
+        for (String field : spec.fields()) {
+            fields.put(field, update.getValue(field));
+        }
+        return fields;
+    }
+
+    static String itemNameOf(ItemUpdate update, SubscriptionSpec spec) {
+        String name = update.getItemName();
+        return name != null ? name : spec.items().get(0);
+    }
+
     static Subscription toSubscription(SubscriptionSpec spec) {
         Subscription subscription = new Subscription(spec.mode(),
                 spec.items().toArray(String[]::new), spec.fields().toArray(String[]::new));
@@ -71,12 +85,7 @@ public final class LightstreamerTransport implements StreamTransport {
             subscription.addListener(new SubscriptionListener() {
                 @Override
                 public void onItemUpdate(ItemUpdate update) {
-                    Map<String, @Nullable String> fields = new HashMap<>();
-                    for (String field : spec.fields()) {
-                        fields.put(field, update.getValue(field));
-                    }
-                    String name = update.getItemName();
-                    updates.onUpdate(name != null ? name : spec.items().get(0), fields);
+                    updates.onUpdate(itemNameOf(update, spec), extractFields(update, spec));
                 }
 
                 @Override

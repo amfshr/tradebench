@@ -1,9 +1,7 @@
 package dev.amfshr.tradebench.ig.stream;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
-import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.math.BigDecimal;
 import java.time.Instant;
@@ -72,20 +70,6 @@ class StreamParsersTest {
     }
 
     @Test
-    void inProgressCandleIsExpectedNotSealed() {
-        Map<String, String> fields = sealedBarFields();
-        fields.put("CONS_END", "0");
-        assertFalse(StreamParsers.isSealed(fields));
-        fields.remove("CONS_END");
-        assertFalse(StreamParsers.isSealed(fields));
-    }
-
-    @Test
-    void sealedFlagIsRecognised() {
-        assertTrue(StreamParsers.isSealed(sealedBarFields()));
-    }
-
-    @Test
     void parsesASealedBarExactly() {
         SealedBarUpdate bar = StreamParsers.parseSealedBar(DAX, sealedBarFields());
 
@@ -102,7 +86,7 @@ class StreamParsersTest {
         Map<String, String> fields = sealedBarFields();
         fields.remove("LTV");
         SealedBarUpdate bar = StreamParsers.parseSealedBar(DAX, fields);
-        assertNull(bar.tickVolume());
+        assertNull(bar.lastTradedVolume());
     }
 
     @Test

@@ -67,7 +67,7 @@ public final class CaptureRunner {
         log(instance, "capturing to " + file.toAbsolutePath());
 
         CaptureQueues queues = new CaptureQueues(CaptureQueues.DEFAULT_TICK_CAPACITY);
-        CapturePump pump = new CapturePump(queues, sink);
+        CapturePump pump = new CapturePump(queues, sink, Sleeper.SYSTEM);
         Thread pumpThread = new Thread(pump, "capture-pump");
 
         IgStreamSession stream = new IgStreamClient(new LightstreamerTransport())
@@ -92,18 +92,33 @@ public final class CaptureRunner {
             log(instance, "shutting down");
             stream.close();
             pump.stop();
+            boolean pumpStopped = false;
             try {
-                pumpThread.join(Duration.ofSeconds(5));
+                pumpStopped = pumpThread.join(Duration.ofSeconds(5));
             } catch (InterruptedException e) {
                 Thread.currentThread().interrupt();
             }
-            sink.close();
-            log(instance, summary(queues));
+            if (pumpStopped) {
+                try {
+                    sink.close();
+                } catch (RuntimeException e) {
+                    log(instance, "sink close failed: " + e);
+                }
+            } else {
+                log(instance, "pump did not stop within 5s — leaving sink open to avoid a"
+                        + " close/write race; file may miss its tail");
+            }
+            log(instance, summary(queues, pump));
         }, "capture-shutdown"));
 
         while (true) {
             Sleeper.SYSTEM.sleep(HEARTBEAT);
-            log(instance, summary(queues));
+            if (!pumpThread.isAlive()) {
+                log(instance, "FATAL: capture pump died — capture is void from here"
+                        + (pump.failure() != null ? "; cause: " + pump.failure() : ""));
+                System.exit(1);
+            }
+            log(instance, summary(queues, pump));
         }
     }
 
@@ -121,8 +136,9 @@ public final class CaptureRunner {
         };
     }
 
-    private static String summary(CaptureQueues queues) {
+    private static String summary(CaptureQueues queues, CapturePump pump) {
         return "ticks=" + queues.tickCount() + " bars=" + queues.barCount()
+                + " written=" + pump.writtenCount()
                 + " dropped=" + queues.droppedTicks() + " malformed=" + queues.malformedUpdates();
     }
 

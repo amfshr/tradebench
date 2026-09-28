@@ -47,7 +47,12 @@ public final class IgStreamSession implements AutoCloseable {
         connection.subscribe(
                 new StreamTransport.SubscriptionSpec(MERGE, List.of(chartItem), CHART_FIELDS, null),
                 (item, fields) -> {
-                    if (!StreamParsers.isSealed(fields)) {
+                    String consEnd = fields.get("CONS_END");
+                    if (consEnd == null) {
+                        events.onMalformed(item);
+                        return;
+                    }
+                    if (!"1".equals(consEnd)) {
                         return;
                     }
                     SealedBarUpdate bar = StreamParsers.parseSealedBar(epic, fields);

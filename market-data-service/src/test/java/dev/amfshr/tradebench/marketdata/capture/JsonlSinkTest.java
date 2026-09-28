@@ -44,7 +44,7 @@ class JsonlSinkTest {
                 "bid":24510.5,"ask":24511.7}
                 {"kind":"bar","epic":"IX.D.DAX.DAILY.IP","startUtc":"2026-09-25T14:57:00Z",\
                 "bid":{"o":24510.5,"h":24514.8,"l":24508.3,"c":24512.0},\
-                "ask":{"o":24511.7,"h":24516.0,"l":24509.5,"c":24513.2},"vol":321}
+                "ask":{"o":24511.7,"h":24516.0,"l":24509.5,"c":24513.2},"ltv":321}
                 {"kind":"state","epic":"IX.D.DAX.DAILY.IP","utc":"2026-09-25T16:30:00Z",\
                 "dealFlag":"CLOSED"}
                 """, out.toString());

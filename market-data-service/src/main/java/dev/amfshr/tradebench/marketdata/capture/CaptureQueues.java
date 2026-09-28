@@ -1,13 +1,11 @@
 package dev.amfshr.tradebench.marketdata.capture;
 
-import java.time.Duration;
 import java.time.Instant;
 import java.util.Queue;
 import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.LinkedBlockingQueue;
-import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicLong;
 
 import org.jspecify.annotations.Nullable;
@@ -70,20 +68,24 @@ public final class CaptureQueues implements StreamEvents {
         malformedUpdates.incrementAndGet();
     }
 
-    public @Nullable Bar1m pollBarNow() {
-        return bars.poll();
+    public @Nullable Bar1m peekBarNow() {
+        return bars.peek();
     }
 
-    public @Nullable Bar1m awaitBar(Duration timeout) throws InterruptedException {
-        return bars.poll(timeout.toNanos(), TimeUnit.NANOSECONDS);
+    public void removeBarNow() {
+        bars.poll();
     }
 
     public @Nullable Tick pollTickNow() {
         return ticks.poll();
     }
 
-    public @Nullable StateChange pollStateChangeNow() {
-        return stateChanges.poll();
+    public @Nullable StateChange peekStateChangeNow() {
+        return stateChanges.peek();
+    }
+
+    public void removeStateChangeNow() {
+        stateChanges.poll();
     }
 
     public long droppedTicks() {
