@@ -30,22 +30,22 @@ working internal links, light/dark, typography that makes the book a pleasure.
 - **N1 — Toolchain & workspace.** Vite + React 19 + TypeScript (strict) on Node LTS;
   npm (no pnpm/yarn — fewest moving parts). Born as tech-notes §6's shape from day one:
   `frontend/` = npm-workspaces root, `frontend/board-viewer/` = this app; `platform/`
-  and `shared/` are **not** created until they earn existence. *Nod: (TBD)*
+  and `shared/` are **not** created until they earn existence. *Nod: rec (Alex, 2026-09-28)*
 - **N2 — Content pipeline: no backend.** The dev server *is* the file access:
   `import.meta.glob` over the repo's `docs/**/*.md`, `*.md` roots, and
   `.claude/tasks/**/*.md`, loaded raw (Vite `server.fs.allow` up to the repo root).
   Editing a doc hot-reloads the page — the write-model/read-model loop with zero
-  infrastructure. A static `build` snapshots the same content (T3). *Nod: (TBD)*
+  infrastructure. A static `build` snapshots the same content (T3). *Nod: rec (Alex, 2026-09-28)*
 - **N3 — Markdown pipeline.** `react-markdown` + `remark-gfm` (tables/strikethrough) +
   `rehype-slug`/autolink (anchor headings); mermaid fences rendered client-side by a
   lazy-loaded `mermaid` component; code fences via `rehype-highlight` (highlight.js —
   light, good-enough v0; shiki is a swap not a rewrite). Internal `*.md` links rewritten
-  to app routes so the book's prev/next nav just works. *Nod: (TBD)*
+  to app routes so the book's prev/next nav just works. *Nod: rec (Alex, 2026-09-28)*
 - **N4 — Styling & navigation.** Hand-rolled CSS with custom-property tokens,
   typography-first (system font stack + a measured reading column), light/dark via
   `prefers-color-scheme`; **no Tailwind or component library in v0** (reversible — a
   warm-up should show us the raw platform first). `react-router` with routes mirroring
-  file paths (`/docs/book/08-…`); sidebar tree derived from the glob. *Nod: (TBD)*
+  file paths (`/docs/book/08-…`); sidebar tree derived from the glob. *Nod: rec (Alex, 2026-09-28)*
 
 **Build order:** scaffold workspace + app → content glob & routing → markdown pipeline
 (GFM → links → highlight → mermaid last) → sidebar/nav → typography & dark mode pass.

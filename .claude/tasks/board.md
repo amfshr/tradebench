@@ -84,7 +84,7 @@ nod N1–N4). **Working shape:** git worktree `.claude/worktrees/e2-docs-reader`
 
 | # | Ticket | Status |
 |---|--------|--------|
-| T1 | **Docs & board reader v0.** Vite/React/TS app at `frontend/board-viewer` (tech-notes §6 workspace shape): sidebar over `docs/` + the board, GFM, rendered mermaid, highlighted code, rewritten internal links, light/dark, reading-first typography; content via dev-server glob of the repo's markdown — no backend; doc edits hot-reload. **DoD:** the book, product overview, PRD, decisions and board all render pleasantly with working nav. | 🔶 (nod N1–N4 proposed) |
+| T1 | **Docs & board reader v0.** Vite/React/TS app at `frontend/board-viewer` (tech-notes §6 workspace shape): sidebar over `docs/` + the board, GFM, rendered mermaid, highlighted code, rewritten internal links, light/dark, reading-first typography; content via dev-server glob of the repo's markdown — no backend; doc edits hot-reload. **DoD:** the book, product overview, PRD, decisions and board all render pleasantly with working nav. | 🔶 (nod ruled 2026-09-28: N1–N4 all as recommended) |
 | T2 | **Board read model.** Parse board + epic files into epic cards, status chips, done-history timeline; graceful raw-markdown fallback; parser mutation-verified on real board fixtures. **DoD:** the board page reads as a dashboard. | ⬜ |
 | T3 | **Build & CI lane.** Static build snapshotting content; `frontend/**`-keyed CI job; preview story (hosting decided later — staying a local tool is a fine outcome). **DoD:** one command yields the static site; CI green. | ⬜ |
 
