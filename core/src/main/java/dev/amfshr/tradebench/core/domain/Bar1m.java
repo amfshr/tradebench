@@ -11,6 +11,13 @@ import org.jspecify.annotations.Nullable;
  * builds from the healed 1m record, never from ticks. Bid and ask OHLC are stored
  * separately (the finest thing IG serves); {@link #mid()} is the derived per-field mid —
  * computed at 1m and aggregated upward, the oracle-compatible order of operations (D15d).
+ *
+ * <p><b>Two "whens", two jobs — don't mix them.</b> A bar's <em>identity</em> follows
+ * universal convention: it is named, stored, keyed, and charted by {@link #startUtc} —
+ * "the 10:39 bar" covers 10:39–10:40, here as everywhere. {@link #dataTime()} (= the seal
+ * instant, 10:40) is <em>not</em> a label: it is the causality stamp that orders the event
+ * stream, so no consumer sees a bar before live reality would have shown it (D38). Humans
+ * and storage use {@code startUtc}; only event ordering uses {@code dataTime}.
  */
 public record Bar1m(String epic, Instant startUtc, OhlcPrices bid, OhlcPrices ask,
         @Nullable Long tickVolume) implements MarketEvent {
