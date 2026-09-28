@@ -7,7 +7,7 @@
 > the system's shape (new module, new deployable, new boundary, changed dataflow). Rulings
 > trace to `docs/decisions.md`; deep design history to `docs/design-sessions/`.
 >
-> Status: v1, 2026-09-27 — reflects E1-T1 and E1-T2 (both merged).
+> Status: v2, 2026-09-28 — reflects E1-T1..T3 (merged; T3 capture evidence pending).
 
 ## 1. Context — who and what Tradebench talks to
 
@@ -80,7 +80,7 @@ by release tag; outbound-only network (IG + heartbeat); Linux containers only, n
 | `session` | `IgSessionManager`, `LoginRateGate`, `IgSession`, `IgTokens`, `IgAccount` | login → switch → token re-read (§1.1); validate-before-relogin (§1.2); 61s stagger on monotonic clock |
 | `rest` | `IgRestClient`, `RequestPacer`, price/market records | paced (30/min) REST v3: market details + dealing rules; prices last-N keyed on `snapshotTimeUTC` only, allowance parsed |
 | `time` | `Sleeper` | injectable sleep seam; monotonic time enters as `LongSupplier` |
-| *(T3)* | `ig.stream` | Lightstreamer wrapper: PRICE + CHART:1MINUTE (`CONS_END=1` only), cheap-parse-then-queue, status stream for the supervisor |
+| `stream` | **`StreamTransport`**, `LightstreamerTransport`, `IgStreamClient`, `IgStreamSession`, `StreamParsers`, DTOs | the stream seam (simulator seed) + LS impl; subscribePrice/subscribeChart1m as separate capabilities (pairing is service policy); pure never-throw parsers, sealed-only candles, malformed counted |
 
 **Resilience split (settled with Alex, 2026-09-27):** *IG-semantic mechanism* lives in this
 library (pacing, login stagger, taxonomy, dead-socket retry-once later) because every caller
@@ -105,7 +105,7 @@ defined once, identically live and in replay (idea doc §7 parity — E3-era); *
 by-time series store (Layer 1, `step ≡ seek`); *transport* splits by criticality (bars
 unbounded and sacred, ticks shed-oldest and counted — `CaptureQueues`, live today).
 
-### 3.3 `market-data-service` (state: walking skeleton; the E1 flesh)
+### 3.3 `market-data-service` (state: T3 capture pipeline live — JSONL sink until T4)
 
 The pipeline (T3→T6), with the **anti-corruption boundary** at its entry: an adapter maps
 IG-shaped DTOs to `core` domain types, stamping **user + source** exactly once — nothing

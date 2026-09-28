@@ -54,7 +54,7 @@ taxonomy); one env-gated integration smoke: log into demo, print account + LS en
 excluded from CI by default.
 **In-ticket decisions:** none expected to escalate; endpoint DTO shapes settle here.
 
-## T3 — Streaming: ticks + sealed 1m bars 🔶
+## T3 — Streaming: ticks + sealed 1m bars 🔶 (code merged PR #4, 2026-09-28; DoD = full-session capture)
 
 *(Design nod ruled by Alex 2026-09-28: bar domain = bid+ask OHLC stored, mid derived
 per-field at 1m then aggregated upward — D15; tick = (epic, instant, bid, ask), DLG_FLAG
