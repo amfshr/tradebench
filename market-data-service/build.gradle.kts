@@ -1,7 +1,11 @@
 // The deployable collection-service app (Spring Boot arrives with E1-T2/T3).
 // Apps depend on libraries, never sideways between apps (phase-1 build plan §2).
 plugins {
-    java
+    application
+}
+
+application {
+    mainClass = "dev.amfshr.tradebench.marketdata.capture.CaptureRunner"
 }
 
 group = "dev.amfshr.tradebench"
