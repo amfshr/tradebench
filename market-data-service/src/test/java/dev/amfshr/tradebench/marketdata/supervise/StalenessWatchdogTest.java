@@ -76,10 +76,17 @@ class StalenessWatchdogTest {
     }
 
     @Test
-    void closedAndSuspendFlagsStandTheWatchdogDown() {
+    void closedFlagStandsTheWatchdogDown() {
         dog.onDealFlag(DAX, "CLOSED");
         runTo(500);
         assertTrue(fired.isEmpty(), "weekends self-suppress — no calendar, no hours config");
+    }
+
+    @Test
+    void suspendFlagStandsTheWatchdogDown() {
+        dog.onDealFlag(DAX, "SUSPEND");
+        runTo(500);
+        assertTrue(fired.isEmpty(), "suspended markets are legitimately silent");
     }
 
     @Test
