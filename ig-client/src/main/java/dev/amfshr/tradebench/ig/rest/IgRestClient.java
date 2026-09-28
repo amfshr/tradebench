@@ -15,6 +15,7 @@ import java.util.Map;
 import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import org.jspecify.annotations.Nullable;
 
 import dev.amfshr.tradebench.ig.IgCredentials;
 import dev.amfshr.tradebench.ig.IgEnvironment;
@@ -128,12 +129,21 @@ public final class IgRestClient {
 
     private static PricePoint pricePoint(JsonNode node) {
         return new PricePoint(
-                decimalOrNull(node, "bid"),
-                decimalOrNull(node, "ask"),
+                requireDecimal(node, "bid"),
+                requireDecimal(node, "ask"),
                 decimalOrNull(node, "lastTraded"));
     }
 
-    private static BigDecimal decimalOrNull(JsonNode node, String field) {
+    /** bid/ask are the candle's substance — a point without them is refused, never guessed. */
+    private static BigDecimal requireDecimal(JsonNode node, String field) {
+        if (!node.hasNonNull(field)) {
+            throw new IllegalStateException("price point missing required field '" + field
+                    + "' — refusing a partial candle (the heal classifies this as failed)");
+        }
+        return node.get(field).decimalValue();
+    }
+
+    private static @Nullable BigDecimal decimalOrNull(JsonNode node, String field) {
         return node.hasNonNull(field) ? node.get(field).decimalValue() : null;
     }
 

@@ -135,3 +135,14 @@ amendments. Trivial/mechanical tickets may skip, saying so. **Why:** E1-T2 lande
 fully-formed and Alex's ruling is that "Claude proposes, Alex rules" applies to code design,
 not just product design — the say happens before the code exists, not in review after.
 (Framework change per G2.)
+
+## D14 — Null-safety: JSpecify, `@NullMarked` packages from birth — **Accepted** (2026-09-27)
+
+Every production package carries `@NullMarked` in its `package-info.java` from the day it
+is born: non-null is the default, `@Nullable` marks genuine domain absence, and
+"unspecified" third-party returns are normalised at the boundary. `org.jspecify:jspecify`
+rides as an `api` dependency. Tests stay unannotated. **Why:** JSpecify is the standard the
+ecosystem converged on; marking the default inverts the annotation burden onto the rare
+nullable spots where reader attention belongs — and the adoption pass immediately proved
+its worth by surfacing that `PricePoint.bid/ask` were silently nullable (fixed fail-loud,
+consistent with the no-guessing ruling). Convention detail: `docs/design/tech-notes.md` §3.

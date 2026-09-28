@@ -180,3 +180,5 @@ duty as the backend.
 - **Fail closed, fail loud** (P9): missing config names the key and stops; ambiguous wire
   data is refused, never guessed; quiet is healthy, silence where noise is expected is an
   alarm.
+- **Null-safety**: JSpecify `@NullMarked` packages from birth; `@Nullable` = genuine domain
+  absence, never a substitute for validation (D14, tech-notes §3).

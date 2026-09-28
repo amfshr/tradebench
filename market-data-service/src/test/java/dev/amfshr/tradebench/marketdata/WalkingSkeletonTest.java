@@ -2,9 +2,9 @@ package dev.amfshr.tradebench.marketdata;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
-import java.util.List;
-
 import org.junit.jupiter.api.Test;
+
+import dev.amfshr.tradebench.ig.IgEnvironment;
 
 class WalkingSkeletonTest {
 
@@ -14,7 +14,9 @@ class WalkingSkeletonTest {
     }
 
     @Test
-    void assemblesFromBothLibraryModules() {
-        assertEquals(List.of("core", "ig-client"), WalkingSkeleton.assembledFrom());
+    void seesLibraryDependenciesOnTheClasspath() {
+        // Cross-module wiring: one real ig-client type, one core type (still a skeleton).
+        assertEquals("https://demo-api.ig.com/gateway/deal", IgEnvironment.DEMO.baseUrl());
+        assertEquals("core", dev.amfshr.tradebench.core.WalkingSkeleton.moduleName());
     }
 }

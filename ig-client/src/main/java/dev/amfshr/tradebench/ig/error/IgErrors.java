@@ -4,6 +4,7 @@ import java.io.IOException;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import org.jspecify.annotations.Nullable;
 
 import dev.amfshr.tradebench.ig.http.HttpResult;
 
@@ -14,7 +15,7 @@ public final class IgErrors {
     }
 
     /** IG's {@code errorCode} body field, or null when the body has none / isn't JSON. */
-    public static String errorCode(ObjectMapper mapper, HttpResult result) {
+    public static @Nullable String errorCode(ObjectMapper mapper, HttpResult result) {
         try {
             JsonNode node = mapper.readTree(result.body());
             return node.hasNonNull("errorCode") ? node.get("errorCode").asText() : null;

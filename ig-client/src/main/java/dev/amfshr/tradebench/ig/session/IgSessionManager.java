@@ -9,6 +9,7 @@ import java.util.Map;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import org.jspecify.annotations.Nullable;
 
 import dev.amfshr.tradebench.ig.IgCredentials;
 import dev.amfshr.tradebench.ig.IgEnvironment;
@@ -48,7 +49,7 @@ public final class IgSessionManager {
     private final LoginRateGate loginGate;
     private final ObjectMapper mapper = new ObjectMapper();
 
-    private IgSession session;
+    private @Nullable IgSession session;
 
     public IgSessionManager(HttpTransport transport, IgEnvironment environment,
             IgCredentials credentials, RequestPacer pacer, LoginRateGate loginGate) {
