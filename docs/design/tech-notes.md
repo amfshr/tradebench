@@ -40,6 +40,9 @@
 - **Time**: injectable clocks everywhere; monotonic (`nanoTime`-shaped `LongSupplier`) vs
   wall time explicitly distinct; UTC in storage, zone conversions in code at check-time.
 - **Package-by-feature** inside modules (`ig.session`, `ig.rest`), not package-by-layer.
+- **Comments are lean** (Alex's ruling, 2026-09-28): javadoc for public contracts,
+  one-liners preferred; inline comments only for invisible constraints (doctrine that the
+  code cannot show); no narration of what the next line does.
 
 ## 3. Null-safety: JSpecify `@NullMarked` (D14)
 

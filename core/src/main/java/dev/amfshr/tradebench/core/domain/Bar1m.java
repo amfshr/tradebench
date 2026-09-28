@@ -35,12 +35,6 @@ public record Bar1m(String epic, Instant startUtc, OhlcPrices bid, OhlcPrices as
         return sealInstant();
     }
 
-    /**
-     * The per-field mid (mid of the opens, mid of the highs, …) — deliberately NOT a true
-     * mid-series high/low. This is THE 1m mid that higher timeframes aggregate (D15d);
-     * midding after aggregating bid/ask upward gives different highs/lows and would break
-     * the T8 shadow-diff against the prototype's proven formula.
-     */
     public OhlcPrices mid() {
         return new OhlcPrices(
                 midOf(bid.open(), ask.open()),
@@ -49,8 +43,10 @@ public record Bar1m(String epic, Instant startUtc, OhlcPrices bid, OhlcPrices as
                 midOf(bid.close(), ask.close()));
     }
 
+    // Bare divide is deliberate: /2 always terminates, and a rounding mode would let a
+    // future non-/2 edit round silently instead of failing loud (D36).
+    @SuppressWarnings("BigDecimalMethodWithoutRoundingCalled")
     private static BigDecimal midOf(BigDecimal bidValue, BigDecimal askValue) {
-        // Division by two always terminates in decimal — no rounding mode, stays exact.
         return bidValue.add(askValue).divide(TWO);
     }
 }
