@@ -58,8 +58,11 @@ excluded from CI by default.
 
 *(Design nod ruled by Alex 2026-09-28: bar domain = bid+ask OHLC stored, mid derived
 per-field at 1m then aggregated upward — D15; tick = (epic, instant, bid, ask), DLG_FLAG
-routed to state machinery not per-tick storage; core.time + core.events SPIs born now with
-live impls only; library hands parsed DTOs to a caller-supplied consumer, the service owns
+routed to state machinery not per-tick storage; core.time SPI born now;
+core.events revised same-era (Alex 2026-09-28): the event-stream SPI is PARKED to E3's
+engine design session (idea doc §8: pull vs push, tick/bar tie-break, seek/stepBack,
+forming bars) — nothing consumed the T3 placeholder and its push shape contradicted the
+idea doc's pull leaning; library hands parsed DTOs to a caller-supplied consumer, the service owns
 the queues; DoD vehicle = env-gated JSONL capture runner, no Spring yet; Lightstreamer
 `ls-javase-client:5.3.3`.)*
 
