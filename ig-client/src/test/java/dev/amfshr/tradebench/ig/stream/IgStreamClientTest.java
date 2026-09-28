@@ -24,9 +24,9 @@ class IgStreamClientTest {
 
     private FakeLs fake;
     private RecordingEvents events;
-    private IgStreamClient.IgStreamSession streamSession;
+    private IgStreamSession streamSession;
 
-    private static final class FakeLs implements LsTransport {
+    private static final class FakeLs implements StreamTransport {
         String serverAddress;
         String user;
         String password;
@@ -97,13 +97,13 @@ class IgStreamClientTest {
     @Test
     void subscribesThePriceChartPairExactly() {
         assertEquals(2, fake.specs.size());
-        LsTransport.SubscriptionSpec price = fake.specs.get(0);
+        StreamTransport.SubscriptionSpec price = fake.specs.get(0);
         assertEquals("MERGE", price.mode());
         assertEquals(List.of("PRICE:Z6CS3E:" + DAX), price.items());
         assertEquals(List.of("TIMESTAMP", "BIDPRICE1", "ASKPRICE1", "DLG_FLAG"), price.fields());
         assertEquals("Pricing", price.dataAdapter());
 
-        LsTransport.SubscriptionSpec chart = fake.specs.get(1);
+        StreamTransport.SubscriptionSpec chart = fake.specs.get(1);
         assertEquals("MERGE", chart.mode());
         assertEquals(List.of("CHART:" + DAX + ":1MINUTE"), chart.items());
         assertEquals(List.of("UTM", "CONS_END",
@@ -166,7 +166,7 @@ class IgStreamClientTest {
         assertTrue(fake.closed);
     }
 
-    private static final class NoopConnection implements LsTransport.ConnectionListener {
+    private static final class NoopConnection implements StreamTransport.ConnectionListener {
         @Override
         public void onStatusChange(String status) {
         }
@@ -176,7 +176,7 @@ class IgStreamClientTest {
         }
     }
 
-    private static final class NoopState implements LsTransport.StateListener {
+    private static final class NoopState implements StreamTransport.StateListener {
         @Override
         public void onSubscribed() {
         }

@@ -15,7 +15,7 @@ class LightstreamerTransportTest {
     @Test
     void mapsSpecToTheSdkSubscriptionExactly() {
         Subscription subscription = LightstreamerTransport.toSubscription(
-                new LsTransport.SubscriptionSpec("MERGE", List.of("PRICE:Z6CS3E:X"),
+                new StreamTransport.SubscriptionSpec("MERGE", List.of("PRICE:Z6CS3E:X"),
                         List.of("TIMESTAMP", "BIDPRICE1"), "Pricing"));
 
         assertEquals("MERGE", subscription.getMode());
@@ -27,7 +27,7 @@ class LightstreamerTransportTest {
     @Test
     void omittedAdapterStaysServerDefault() {
         Subscription subscription = LightstreamerTransport.toSubscription(
-                new LsTransport.SubscriptionSpec("MERGE", List.of("CHART:X:1MINUTE"),
+                new StreamTransport.SubscriptionSpec("MERGE", List.of("CHART:X:1MINUTE"),
                         List.of("UTM"), null));
 
         assertNull(subscription.getDataAdapter());

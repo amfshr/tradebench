@@ -43,6 +43,10 @@
 - **Comments are lean** (Alex's ruling, 2026-09-28): javadoc for public contracts,
   one-liners preferred; inline comments only for invisible constraints (doctrine that the
   code cannot show); no narration of what the next line does.
+- **Nesting rule:** nest types that form one contract with no independent life (the
+  `StreamTransport` seam family — JDK precedent: `Flow`, `Map.Entry`); top-level for anything
+  callers hold in its own right (`IgStreamSession`). Private impl/test helpers nest freely;
+  promote on second use.
 
 ## 3. Null-safety: JSpecify `@NullMarked` (D14)
 

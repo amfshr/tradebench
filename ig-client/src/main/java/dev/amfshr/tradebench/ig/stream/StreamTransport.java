@@ -6,7 +6,7 @@ import java.util.Map;
 import org.jspecify.annotations.Nullable;
 
 /** The Lightstreamer seam: everything above it tests on fakes (the simulator's seed). */
-public interface LsTransport {
+public interface StreamTransport {
 
     Connection connect(String serverAddress, String user, String password,
             ConnectionListener listener);

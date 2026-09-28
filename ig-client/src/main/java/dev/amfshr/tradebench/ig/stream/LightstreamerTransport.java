@@ -12,7 +12,7 @@ import com.lightstreamer.client.Subscription;
 import com.lightstreamer.client.SubscriptionListener;
 
 /** The real transport over the official LS SDK — the only class touching a socket here. */
-public final class LightstreamerTransport implements LsTransport {
+public final class LightstreamerTransport implements StreamTransport {
 
     @Override
     public Connection connect(String serverAddress, String user, String password,
