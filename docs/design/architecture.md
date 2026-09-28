@@ -179,7 +179,31 @@ stays the write model; the app renders the read model). Component/state/dataflow
 documentation gets its own section here when E2 planning cuts tickets — same keep-current
 duty as the backend.
 
-## 6. Cross-cutting rules
+## 6. Platform integration & security posture (agreed 2026-09-28)
+
+- **Edge identity, then tokens — credentials never travel.** Nothing platform-facing is
+  internet-reachable except through an identity-aware edge (Cloudflare Access or Tailscale;
+  PRD §9's edge-gating). The edge authenticates the user once; downstream apps receive a
+  **short-lived signed identity token** and verify signatures — no service ever sees or
+  forwards a password. Broker credentials never travel at all (D16 §4: encrypted DB data,
+  decrypted only inside the service that talks to the broker). Identity moves; secrets
+  stay put.
+- **Service-to-service trust ladder:** single-host compose → private Docker network (only
+  accepted apps, by construction, zero cert ceremony) → multi-host → Tailscale between
+  boxes → full mTLS only if something specifically demands certificates. Each rung is
+  adopted when its trigger arrives, never before (£20/mo + minimal-maintenance NFRs).
+- **Live data sharing = single writer + published events (D4).** The collection service
+  remains the sole writer of the capture record and, when the first second consumer
+  exists, additionally publishes ticks/sealed-bars to Redis Streams under explicitly
+  schema'd contracts; consumers follow the standing contract (at-least-once, idempotent by
+  key, ack-after-apply). The publisher is a `CaptureSink` fan-out — built when a real
+  consumer arrives, not speculatively.
+- **The collection service needs no inbound at all** (outbound-only to IG + heartbeat) —
+  its deploy posture is firewall-closed regardless of the edge story.
+- **Jobs:** operational jobs are in-service `@Scheduled` with audited `job_runs` rows (D6);
+  compute jobs (backtests) are E3-era job-runner work — deliberately no shared framework.
+
+## 7. Cross-cutting rules
 
 - **Injectable clocks everywhere**; monotonic (`nanoTime`-style) vs wall time explicitly
   split — the sleep/freeze discriminators depend on comparing them.
