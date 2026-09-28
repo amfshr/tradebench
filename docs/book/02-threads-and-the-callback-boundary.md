@@ -56,6 +56,19 @@ cheap-work budget) → `queue.offer` → **return**. Total: microseconds, no I/O
 can throw. Everything slow — JDBC, batching, flushing, file writes — lives on `capture-pump`,
 on the far side of the queues.
 
+```mermaid
+sequenceDiagram
+    participant LS as LS SDK thread
+    participant B as Buffers (the queues)
+    participant P as capture-pump thread
+    participant S as CaptureStore
+    LS->>B: parse → toDomain → offer (microseconds, never blocks)
+    Note over LS: returns immediately — the session never waits on us
+    P->>B: peekBarNow()
+    P->>S: write(bar) — JDBC, the slow part
+    P->>B: removeBarNow() — ack, strictly after apply
+```
+
 Two lifecycle behaviours in `app/Main.java` complete the picture:
 
 - **Pump death is fatal, loudly** (`Main.java:152-160`): the heartbeat checks

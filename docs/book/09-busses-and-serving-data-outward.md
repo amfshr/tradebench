@@ -66,19 +66,23 @@ distribution mechanism — it is the get-it-off-the-socket-durably mechanism,
 single-consumer by design. Distribution starts **after** durability, at the
 `CaptureStore` seam, as a composite store:
 
-```
-              ingest.Pump  (unchanged — queues, ordering, ack-after-apply intact)
-                   │
-             CaptureStore  ◀── the seam the tee slots into
-                   │
-        ┌──────────┴────────────┐
-        ▼                       ▼
-  PostgresStore           RedisPublisher        (future; D4, provisional)
-  persist FIRST           publish second, best-effort,
-        │                 at-least-once
-        ▼                       ▼
-  market_data ══▶ read     live stream ══▶ dashboards, live/paper bots
-  product (D17)            (idempotent consumers, consumer groups)
+```mermaid
+flowchart TD
+    Pump["ingest.Pump<br><i>unchanged — queues, ordering, ack-after-apply intact</i>"]
+    Seam["CaptureStore<br><i>the seam the tee slots into</i>"]
+    PG["PostgresStore<br><b>persist FIRST</b>"]
+    RP["RedisPublisher<br><i>future — D4, provisional</i><br>publish second, best-effort, at-least-once"]
+    DB[("market_data<br><i>the read product, D17</i>")]
+    LIVE["live stream<br><i>idempotent consumers, consumer groups</i>"]
+    BT["backtests / bulk readers<br><i>read-only role, T6</i>"]
+    DASH["dashboards · live/paper bots"]
+    Pump --> Seam
+    Seam --> PG
+    Seam -.-> RP
+    PG --> DB
+    RP -.-> LIVE
+    DB --> BT
+    LIVE -.-> DASH
 ```
 
 The invariant is **persist-then-publish**: the stream must never advertise an event a
