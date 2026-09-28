@@ -34,7 +34,6 @@ import dev.amfshr.tradebench.ig.time.Sleeper;
 public final class CaptureRunner {
 
     private static final String USER = "default-user";
-    private static final String SOURCE = "ig-stream-demo";
     private static final Duration HEARTBEAT = Duration.ofSeconds(60);
 
     private CaptureRunner() {
@@ -46,16 +45,18 @@ public final class CaptureRunner {
         Path captureDir = Path.of(required(env, "TRADEBENCH_CAPTURE_DIR"));
         List<String> epics = Arrays.stream(required(env, "TRADEBENCH_EPICS").split(","))
                 .map(String::strip).filter(s -> !s.isEmpty()).toList();
-        IgCredentials credentials = IgCredentials.fromEnv(env, IgEnvironment.DEMO);
+        IgEnvironment igEnv = igEnvironment(required(env, "TRADEBENCH_IG_ENV"));
+        String source = "ig-stream-" + igEnv.name().toLowerCase(java.util.Locale.ROOT);
+        IgCredentials credentials = IgCredentials.fromEnv(env, igEnv);
 
         SystemClock clock = new SystemClock();
         IgSessionManager sessions = new IgSessionManager(new JdkHttpTransport(),
-                IgEnvironment.DEMO, credentials,
+                igEnv, credentials,
                 new RequestPacer(RequestPacer.ACCOUNT_NON_TRADING_PER_MINUTE,
                         clock::monotonicNanos, Sleeper.SYSTEM),
                 new LoginRateGate(clock::monotonicNanos, Sleeper.SYSTEM));
         IgSession session = sessions.current();
-        log(instance, "session on " + session.activeAccountId() + " via "
+        log(instance, igEnv + " session on " + session.activeAccountId() + " via "
                 + session.lightstreamerEndpoint());
 
         Instant started = clock.wallInstant();
@@ -63,7 +64,7 @@ public final class CaptureRunner {
         Path file = captureDir.resolve("capture-" + DateTimeFormatter.ISO_INSTANT
                 .format(started.truncatedTo(ChronoUnit.SECONDS)).replace(":", "") + ".jsonl");
         JsonlSink sink = new JsonlSink(Files.newBufferedWriter(file, StandardCharsets.UTF_8));
-        sink.writeMeta(USER, SOURCE, instance, epics, started);
+        sink.writeMeta(USER, source, instance, epics, started);
         log(instance, "capturing to " + file.toAbsolutePath());
 
         CaptureQueues queues = new CaptureQueues(CaptureQueues.DEFAULT_TICK_CAPACITY);
@@ -140,6 +141,15 @@ public final class CaptureRunner {
         return "ticks=" + queues.tickCount() + " bars=" + queues.barCount()
                 + " written=" + pump.writtenCount()
                 + " dropped=" + queues.droppedTicks() + " malformed=" + queues.malformedUpdates();
+    }
+
+    private static IgEnvironment igEnvironment(String value) {
+        return switch (value.strip().toLowerCase(java.util.Locale.ROOT)) {
+            case "demo" -> IgEnvironment.DEMO;
+            case "live" -> IgEnvironment.LIVE;
+            default -> throw new IgFatalConfigException(
+                    "TRADEBENCH_IG_ENV must be 'demo' or 'live', got '" + value + "'");
+        };
     }
 
     private static String required(Map<String, String> env, String key) {

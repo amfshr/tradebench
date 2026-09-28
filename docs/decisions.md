@@ -163,3 +163,18 @@ upward and then midding yields different highs/lows whenever the bid-max and ask
 in different minutes, which would break T8's shadow-diff against the prototype's proven
 formula. Bid+ask OHLC is what is *stored* at 1m (T3 Q1 ruling), so nothing is destroyed
 and other derivations stay possible later, clearly labelled.
+
+## D16 — Secrets & config: env-only apps, env-file injection, one key per service — **Accepted** (2026-09-28)
+
+Apps read plain environment variables only; injectors vary by context (local `.env` +
+loader script/direnv; deployed `/etc/tradebench/<service>.env` 0600 via compose
+`env_file:`; CI carries no broker secrets ever; optional 1Password `op run` locally).
+`TRADEBENCH_IG_ENV=demo|live` pins an instance and selects the `IG_DEMO_*`/`IG_LIVE_*`
+credential set so environment and credentials can never mix. One IG API key per service
+instance, named in the runbook, never used interactively — humans use their own key.
+Multi-user era: platform users' broker credentials are data (app-encrypted DB columns,
+master key from env), never env-file entries. Full design:
+`docs/design/secrets-and-config.md`. **Why:** the injector is the only part that varies
+across the platform's growth (more services, staging/prod, other users) — freezing the
+app-side contract as "plain env" makes every later move mechanical; the playbook's leak
+scars (§1.7) drive the tiny-radioactive-file shape and the never-in-CI rule.
