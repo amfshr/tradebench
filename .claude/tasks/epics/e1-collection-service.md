@@ -116,8 +116,16 @@ block: Postgres rows now, Parquet export is T6's job, revisit at scale.
 **Tests:** scripted failure scenarios on fakes — dead socket, silent-while-connected, host
 suspend — **each mutation-verified** (per DoD); boundary tests exact on escalation
 thresholds.
-**In-ticket decisions:** escalation ladder timings (propose from playbook §3, record in
-config, not code).
+**Design nod ruled (Alex, 2026-09-28):** witness quarantine built now (complete belt;
+N=1 parity structural) · dedicated `bar_gaps` table (V2, healed_at for T6, coverage seed)
+· pacer budget discovery via GET /operations/application in-ticket (start 10/min
+conservative, adjust minus headroom post-login) · exhaustion = clean exit(0), container
+restart policy is the outer loop at T7 · all §8 timings in one `Tuning` record with
+playbook defaults as named constants (policy, not machine config; env overrides only when
+actually needed).
+**Build slices:** A pure cores (supervise/coverage decision logic + scenario tests) →
+B store side (EventLog, V2 bar_gaps, drift regen) → C shell (Supervisor, HealthProbe,
+Main rewiring, heartbeat, pacer discovery).
 **Post-sweep refinement (2026-09-28, trading-ig comparison):** the REST pacer's budget is
 discovered at service startup from `GET /operations/application` (minus headroom) or
 config-injected — field data shows demo keys enforce 10/min, not the published 30; never
