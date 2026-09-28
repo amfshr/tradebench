@@ -29,6 +29,9 @@ streaming, Postgres persistence; live data flowing locally); next: T5 resilience
 5. For anything IG or engineering-doctrine: `docs/inherited/ig-broker-playbook.md` and
    `docs/inherited/prototype-engineering-playbook.md`. For why a prototype decision does/doesn't
    apply here: `docs/inherited/decisions-triage.md`.
+6. `docs/README.md` — the documentation map: the product overview (`docs/product/`), the
+   teaching book (`docs/book/` — jargon + code paths + scars, per chapter), and reference
+   digests. Human-readable docs live there; keep them true when the code they cite moves.
 
 `docs/inherited/` is a **read-only snapshot** of the Python prototype's seed pack (2026-09-25).
 Do not edit it; supersede it in this repo's own docs. Links inside it that point outside the
