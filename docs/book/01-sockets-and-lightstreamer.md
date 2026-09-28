@@ -82,18 +82,19 @@ outside review later independently derived this exact trap; the adapter was buil
 
 ## Our code path
 
-```
-LS SDK (socket, session, retry)             the only vendor-aware class
-        │ ItemUpdate / status strings              │
-        ▼                                          ▼
-StreamTransport (role-named seam) ◀── LightstreamerTransport (vendor-named impl)
-        │ onUpdate(item, Map<field, value?>)
-        ▼
-IgStreamSession — item naming, field lists, CONS_END filter (IG knowledge)
-        │
-StreamParsers — pure, never throws: strings → TickUpdate / SealedBarUpdate
-        │
-StreamEvents — the consumer's door (market-data-service implements it)
+```mermaid
+flowchart TD
+    SDK["LS SDK<br><i>socket · session · retry</i>"]
+    LT["LightstreamerTransport<br><i>the only vendor-aware class</i>"]
+    ST["StreamTransport<br><i>the role-named seam</i>"]
+    ISS["IgStreamSession<br><i>item naming · field lists · CONS_END filter (IG knowledge)</i>"]
+    SP["StreamParsers<br><i>pure, never throws: strings → TickUpdate / SealedBarUpdate</i>"]
+    SE["StreamEvents<br><i>the consumer's door — market-data-service implements it</i>"]
+    SDK -->|"ItemUpdate · status strings"| LT
+    LT -.->|implements| ST
+    ST -->|"onUpdate(item, Map&lt;field, value?&gt;)"| ISS
+    ISS --> SP
+    SP --> SE
 ```
 
 - `StreamTransport` (`…/ig/stream/StreamTransport.java`) is the seam: `connect` → `Connection`

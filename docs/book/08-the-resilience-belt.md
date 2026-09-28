@@ -28,12 +28,17 @@ it at all, and 3am is when you learn what it actually does.
 The belt inverts that. Every decision lives in a class whose inputs are observations plus
 a `long` clock reading, and whose output is a value:
 
-```
-observations ─▶ [ pure core ]  ─▶ Remedy / Judgment / Gap / boolean
-                     ▲                     │
-   ~1s cadence,      │                     ▼
-   both clocks   [ Supervisor — the ONE impure shell (slice C) ]
-                     │  executes: resubscribe · rebuild · back off · exit(0)
+```mermaid
+flowchart LR
+    O["observations<br><i>ticks · bars · flags · statuses</i>"]
+    C{{"pure cores<br>Watchdog · Escalator · Backoff<br>Classifier · Quarantine · GapDetector"}}
+    S["Supervisor — the ONE impure shell<br><i>(slice C)</i>"]
+    W["the world: the IG session"]
+    O --> C
+    C -->|"Remedy · Judgment · Gap · boolean<br><i>values, never actions</i>"| S
+    S -->|"~1s cadence, both clocks"| C
+    S -->|"resubscribe · rebuild · back off · exit(0)"| W
+    W -.->|new observations| O
 ```
 
 Consequences: the §3.4 scenario scripts run as millisecond unit tests (the
@@ -81,6 +86,23 @@ Around the signals, four pieces of judgment, each visible in the code:
   stopwatch and return nothing. The contract is a **~1s evaluation cadence** — the freeze
   detector *defines* coarser jumps as anomalies, which is why the tests advance
   second-by-second.
+
+A market's episode, as a state machine:
+
+```mermaid
+stateDiagram-v2
+    [*] --> Healthy
+    Healthy --> Episode: 90s tick-silent / 210s bar-silent-while-ticks-flow
+    state Episode {
+        [*] --> Resubscribe1: remedy fires, grace 60s
+        Resubscribe1 --> Resubscribe2: still silent after grace → remedy, grace 120s
+        Resubscribe2 --> Rebuild: resubscribes exhausted (max 2) → grace 240s
+        Rebuild --> Rebuild: grace keeps doubling, capped 30min
+    }
+    Episode --> Healthy: same-signal-kind data arrives (fresh budget)
+    Healthy --> StoodDown: DLG_FLAG CLOSED / SUSPEND
+    StoodDown --> Healthy: flag clears
+```
 
 **`StuckSubstateEscalator`** — the 2h56m scar (§3.3): the SDK hung in
 `DISCONNECTED:WILL-RETRY`, which trips no disconnect handler — it had given up without
