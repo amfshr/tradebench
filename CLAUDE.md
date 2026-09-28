@@ -51,7 +51,7 @@ stands alone) · P8 data collected forever, source-attributed always · P9 fail 
 ## Engineering conventions
 
 - **Java 21+, Spring Boot, Gradle multi-module** (services); **React/TypeScript** in
-  `frontend/` with its own toolchain. PostgreSQL via Flyway migrations. Redis Streams for
+  `web/` with its own toolchain (`web/docs` = the docs site; `web/platform` = the future SPA). PostgreSQL via Flyway migrations. Redis Streams for
   inter-service messaging (provisional — decisions.md D4). Docker; Linux targets only.
 - **Injectable clocks everywhere**; distinguish monotonic/awake time from wall time. Business
   logic on in-memory state; the DB is downstream of decisions, never upstream.

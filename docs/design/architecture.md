@@ -44,7 +44,7 @@ flowchart TB
     end
     subgraph apps [Deployable apps]
         MDS["market-data-service\nSpring Boot, 24/7 cloud (T3–T7)\nthe collection service — D2: ships first"]
-        FE["frontend/\nReact/TS SPA — seat reserved\n(E2 board viewer is the warm-up)"]
+        FE["web/\nReact/TS apps — docs site live (E2),\nplatform SPA seat reserved"]
     end
     PG[(PostgreSQL\nFlyway-migrated — T4)]
     IGX["IG Markets"]
@@ -230,7 +230,7 @@ Parquet to object storage → digest email. An audited `job_runs` row every run,
 
 ## 5. Frontend (shape reserved)
 
-React/TS SPA in `frontend/`, own toolchain (D3); backend does the work, streams data to a
+React/TS apps in `web/`, own toolchain (D3/D18); backend does the work, streams data to a
 thin visual client (PRD §10). First real resident: the **E2 board viewer** (D11 — markdown
 stays the write model; the app renders the read model). Component/state/dataflow
 documentation gets its own section here when E2 planning cuts tickets — same keep-current

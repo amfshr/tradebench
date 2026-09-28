@@ -69,15 +69,24 @@ CHART:1MINUTE sealed bars only) · engineering playbook §1–§4.
 | T7 | **Deploy.** Dockerfiles + compose; staging + prod configs with separate DBs (promote by release tag); cloud host selection (revisit the phase-1 doc's Lightsail analysis against the ~£20/mo envelope); secrets injection; deploy runbook. **DoD:** staging runs 24/7 for 3 consecutive days unattended with daily digests arriving. | ⬜ |
 | T8 | **Acceptance: shadow-diff week vs the Python appliance.** Both systems capture the same DAX sessions for a week; diff tick coverage, 1m bars, and own-aggregated 10m vs the prototype's; write the report; rule on making Tradebench the primary capture. **DoD:** the diff report with every delta explained + Alex's ruling recorded in `docs/decisions.md`. | ⬜ |
 
-## E2 🧰 Board viewer web app — STUB
+## E2 🧰 The docs site (`web/docs` → docs.tradebench) — ACTIVE (planned 2026-09-28, runs alongside E1-T5)
 
 The first frontend warm-up: a small locally-served React/TS app rendering this markdown board
 (and the epics/vision docs) as pages — MD stays the write model for agents, the app is the read
 model for humans. **Shape confirmed by Alex 2026-09-27 (D11; PRD open Q#10 resolved).** Scope
 grew naturally 2026-09-28: the read model now also renders `docs/` — the product overview and
 the book — as Alex's "online book of pages". Low stakes, real daily value, exercises the
-frontend toolchain + backend-streaming shape before the charting UI. **Plan when:** the
-docs-pass read is done — intended as a git-worktree side branch alongside E1-T5.
+frontend toolchain before the charting UI.
+
+**Ticket plans:** `.claude/tasks/epics/e2-docs-site.md` (T1 carries the frontend design
+nod N1–N4). **Working shape:** git worktree `.claude/worktrees/e2-docs-reader`, branch
+`e2-t1-docs-reader` (main + the docs-only commits cherry-picked), alongside E1-T5.
+
+| # | Ticket | Status |
+|---|--------|--------|
+| T1 | **Docs & board reader v0.** Vite/React/TS app at `web/docs` (tech-notes §6 shape as ruled by D18): sidebar over `docs/` + the board, GFM, rendered mermaid, highlighted code, rewritten internal links, light/dark, reading-first typography; content via dev-server glob of the repo's markdown — no backend; doc edits hot-reload. **DoD:** the book, product overview, PRD, decisions and board all render pleasantly with working nav. | 🔶 (nod ruled 2026-09-28: N1–N4 all as recommended; v0.2 reading chrome added on Alex's "spice it up": Inter/JetBrains Mono, breadcrumbs, scroll-spied ToC, prev/next, copy buttons) |
+| T2 | **Board read model.** Parse board + epic files into epic cards, status chips, done-history timeline; graceful raw-markdown fallback; parser mutation-verified on real board fixtures. Alex 2026-09-28: pages still read as top-to-bottom md — T2's structured views + a designed landing are the counterweight, with the brand session. **DoD:** the board page reads as a dashboard. | ⬜ |
+| T3 | **Build & CI lane.** Static build snapshotting content; `web/**`-keyed CI job; preview story (hosting decided later — now ruled: **GitHub Pages** (Alex, 2026-09-28; one docs site + `web/` naming = D18). **DoD:** one command yields the static site; CI green. | 🔶 (pages.yml deploy + web-ci.yml PR lane authored; needs repo Settings → Pages → Source: GitHub Actions, then first main merge deploys) |
 
 ## E3 🧪 Indicator DSL v0 + backtest spine — DESIGN-GATED
 
@@ -112,6 +121,9 @@ captured/imported data to chew on (E1 + first Databento decisions).
 
 ## Waits / externals
 
+- CI pipeline stages design (PR lane / main lane / release lane; artifact naming, required
+  checks) — sketch proposed 2026-09-28; draft `docs/design/ci-pipeline.md` when E1-T7 or
+  E0-T4 planning starts.
 - E3 design gates: vocabulary catalogue v0 (E3-T1) → off-repo acceptance-anchor check (E3-T2).
 - Databento initial purchase scoping (≥2yr DAX+NASDAQ ticks — PRD §7) — needed by E3, not E1.
 - PRD open questions #7–#11 — none block E0/E1. (#6 and #10 resolved 2026-09-27; #5 = E3-T1;
