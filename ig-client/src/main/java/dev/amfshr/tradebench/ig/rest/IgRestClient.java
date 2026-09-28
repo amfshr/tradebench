@@ -107,6 +107,11 @@ public final class IgRestClient {
                     node.hasNonNull("lastTradedVolume") ? node.get("lastTradedVolume").asLong()
                             : null));
         }
+        int totalPages = root.path("metadata").path("pageData").path("totalPages").asInt(1);
+        if (totalPages > 1) {
+            throw new IllegalStateException("prices response is paged (totalPages=" + totalPages
+                    + ") despite pageSize=max — refusing a silently truncated window");
+        }
         JsonNode allowance = root.path("metadata").path("allowance");
         return new PriceHistory(List.copyOf(candles), new Allowance(
                 allowance.path("remainingAllowance").asLong(),

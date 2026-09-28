@@ -110,6 +110,10 @@ suspend — **each mutation-verified** (per DoD); boundary tests exact on escala
 thresholds.
 **In-ticket decisions:** escalation ladder timings (propose from playbook §3, record in
 config, not code).
+**Post-sweep refinement (2026-09-28, trading-ig comparison):** the REST pacer's budget is
+discovered at service startup from `GET /operations/application` (minus headroom) or
+config-injected — field data shows demo keys enforce 10/min, not the published 30; never
+assume the constant.
 
 ## T6 — Daily completeness + archive + digest (D6)
 
@@ -132,6 +136,9 @@ digest-suppression failure-mode test; Parquet golden file for the day-export con
 **In-ticket decisions (named on the board):** object store — **R2 vs B2**; also: email
 transport (SMTP vs API service) and Parquet writer lib. Settle all three in-ticket, log any
 that grow durable consequences.
+**Post-sweep refinement (2026-09-28):** `exceeded-account-historical-data-allowance` resets
+*weekly* — the heal treats it as budget-exhausted (plan via the parsed `Allowance` metadata
+before firing), never as a backoff-and-retry error.
 
 ## T7 — Deploy
 

@@ -164,6 +164,21 @@ class IgRestClientTest {
     }
 
     @Test
+    void pagedPricesResponseFailsLoudInsteadOfTruncating() {
+        // trading-ig field data: the endpoint genuinely pages; a truncated window reported
+        // as success is the exact silent corruption the client exists to prevent.
+        String body = Wire.fixture("prices-minute.json")
+                .replace("\"totalPages\": 1", "\"totalPages\": 3");
+        transport.enqueue(FakeTransport.json(200, body));
+
+        IllegalStateException thrown = assertThrows(IllegalStateException.class,
+                () -> client.recentPrices(session, DAX_EPIC, Resolution.MINUTE, 3));
+
+        assertTrue(thrown.getMessage().contains("totalPages=3"),
+                "the refusal must name the paging, got: " + thrown.getMessage());
+    }
+
+    @Test
     void allowanceExhaustionIsRetryableWithTheCodePreserved() {
         transport.enqueue(FakeTransport.json(403,
                 "{\"errorCode\":\"error.public-api.exceeded-account-historical-data-allowance\"}"));
