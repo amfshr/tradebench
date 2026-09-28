@@ -1,4 +1,4 @@
-package dev.amfshr.tradebench.marketdata.persistence;
+package dev.amfshr.tradebench.marketdata.store;
 
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;

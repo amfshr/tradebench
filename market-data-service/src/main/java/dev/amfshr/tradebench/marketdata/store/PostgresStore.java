@@ -1,4 +1,4 @@
-package dev.amfshr.tradebench.marketdata.persistence;
+package dev.amfshr.tradebench.marketdata.store;
 
 import java.sql.Connection;
 import java.sql.PreparedStatement;
@@ -17,8 +17,8 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import dev.amfshr.tradebench.core.domain.Bar1m;
 import dev.amfshr.tradebench.core.domain.OhlcPrices;
 import dev.amfshr.tradebench.core.domain.Tick;
-import dev.amfshr.tradebench.marketdata.capture.CaptureQueues;
-import dev.amfshr.tradebench.marketdata.capture.CaptureSink;
+import dev.amfshr.tradebench.marketdata.ingest.Buffers;
+import dev.amfshr.tradebench.marketdata.store.CaptureStore;
 
 /**
  * The real write path (T4): bars and state changes apply immediately (ack-after-apply —
@@ -26,7 +26,7 @@ import dev.amfshr.tradebench.marketdata.capture.CaptureSink;
  * land on {@link #flush()} or when the batch fills (best-effort by design, like their
  * queue). Single-threaded by contract: only the pump calls a sink.
  */
-public final class DbSink implements CaptureSink {
+public final class PostgresStore implements CaptureStore {
 
     static final int TICK_BATCH_LIMIT = 500;
 
@@ -59,7 +59,7 @@ public final class DbSink implements CaptureSink {
     private final ObjectMapper mapper = new ObjectMapper();
     private int pendingTicks;
 
-    public DbSink(DataSource dataSource, String userName, String sourceName, String instance) {
+    public PostgresStore(DataSource dataSource, String userName, String sourceName, String instance) {
         this.instance = instance;
         try {
             this.connection = dataSource.getConnection();
@@ -70,7 +70,7 @@ public final class DbSink implements CaptureSink {
             this.barUpsert = connection.prepareStatement(UPSERT_BAR);
             this.eventInsert = connection.prepareStatement(INSERT_EVENT);
         } catch (SQLException e) {
-            throw new PersistenceException("DbSink initialisation failed", e);
+            throw new PersistenceException("PostgresStore initialisation failed", e);
         }
     }
 
@@ -113,7 +113,7 @@ public final class DbSink implements CaptureSink {
     }
 
     @Override
-    public void write(CaptureQueues.StateChange stateChange) {
+    public void write(Buffers.StateChange stateChange) {
         try {
             eventInsert.setString(1, instance);
             eventInsert.setString(2, "market_state");
@@ -149,7 +149,7 @@ public final class DbSink implements CaptureSink {
             eventInsert.close();
             connection.close();
         } catch (SQLException e) {
-            throw new PersistenceException("DbSink close failed", e);
+            throw new PersistenceException("PostgresStore close failed", e);
         }
     }
 

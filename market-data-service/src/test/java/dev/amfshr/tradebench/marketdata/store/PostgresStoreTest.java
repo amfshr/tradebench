@@ -1,4 +1,4 @@
-package dev.amfshr.tradebench.marketdata.persistence;
+package dev.amfshr.tradebench.marketdata.store;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -17,13 +17,13 @@ import org.junit.jupiter.api.Test;
 import dev.amfshr.tradebench.core.domain.Bar1m;
 import dev.amfshr.tradebench.core.domain.OhlcPrices;
 import dev.amfshr.tradebench.core.domain.Tick;
-import dev.amfshr.tradebench.marketdata.capture.CaptureQueues;
+import dev.amfshr.tradebench.marketdata.ingest.Buffers;
 
-class DbSinkTest extends PostgresTestBase {
+class PostgresStoreTest extends PostgresTestBase {
 
     private static final String DAX = "IX.D.DAX.DAILY.IP";
 
-    private DbSink sink;
+    private PostgresStore sink;
 
     @BeforeEach
     void setUp() throws SQLException {
@@ -32,7 +32,7 @@ class DbSinkTest extends PostgresTestBase {
             s.execute("TRUNCATE ticks, bars_1m, service_events, instruments"
                     + " RESTART IDENTITY CASCADE");
         }
-        sink = new DbSink(database.dataSource(), "default-user", "ig-stream-demo", "test-run");
+        sink = new PostgresStore(database.dataSource(), "default-user", "ig-stream-demo", "test-run");
     }
 
     @AfterEach
@@ -83,7 +83,7 @@ class DbSinkTest extends PostgresTestBase {
 
     @Test
     void tickBatchAutoFlushesExactlyAtTheLimit() throws SQLException {
-        for (int i = 0; i < DbSink.TICK_BATCH_LIMIT - 1; i++) {
+        for (int i = 0; i < PostgresStore.TICK_BATCH_LIMIT - 1; i++) {
             sink.write(tick(DAX, "2026-09-29T07:00:0" + (i % 10) + "." + (100000 + i) + "Z",
                     "1." + i, "2.0"));
         }
@@ -91,7 +91,7 @@ class DbSinkTest extends PostgresTestBase {
 
         sink.write(tick(DAX, "2026-09-29T07:59:59Z", "9.9", "9.99"));
 
-        assertEquals(DbSink.TICK_BATCH_LIMIT, count("ticks"),
+        assertEquals(PostgresStore.TICK_BATCH_LIMIT, count("ticks"),
                 "the limit-th write must flush — under a busy stream this is the ONLY"
                         + " flush trigger (review F2)");
     }
@@ -150,7 +150,7 @@ class DbSinkTest extends PostgresTestBase {
 
     @Test
     void stateChangeLandsAsServiceEvent() throws SQLException {
-        sink.write(new CaptureQueues.StateChange(DAX,
+        sink.write(new Buffers.StateChange(DAX,
                 Instant.parse("2026-09-29T16:30:00Z"), "CLOSED"));
 
         try (Connection c = database.dataSource().getConnection();
@@ -179,7 +179,7 @@ class DbSinkTest extends PostgresTestBase {
     @Test
     void unknownSourceNameFailsLoudAtConstruction() {
         IllegalStateException thrown = assertThrows(IllegalStateException.class,
-                () -> new DbSink(database.dataSource(), "default-user", "not-a-source", "x"));
+                () -> new PostgresStore(database.dataSource(), "default-user", "not-a-source", "x"));
         assertEquals(true, thrown.getMessage().contains("not-a-source"));
     }
 }

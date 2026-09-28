@@ -1,4 +1,4 @@
-package dev.amfshr.tradebench.marketdata.capture;
+package dev.amfshr.tradebench.marketdata.store;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
@@ -12,16 +12,17 @@ import org.junit.jupiter.api.Test;
 import dev.amfshr.tradebench.core.domain.Bar1m;
 import dev.amfshr.tradebench.core.domain.OhlcPrices;
 import dev.amfshr.tradebench.core.domain.Tick;
+import dev.amfshr.tradebench.marketdata.ingest.Buffers;
 
 /** Golden lines: the capture file IS a wire contract (T4's importer reads it). */
-class JsonlSinkTest {
+class JsonlStoreTest {
 
     private static final String DAX = "IX.D.DAX.DAILY.IP";
 
     @Test
     void writesTheFourLineKindsExactly() {
         StringWriter out = new StringWriter();
-        try (JsonlSink sink = new JsonlSink(out)) {
+        try (JsonlStore sink = new JsonlStore(out)) {
             sink.writeMeta("default-user", "ig-stream-demo", "capture-mac", List.of(DAX),
                     Instant.parse("2026-09-28T07:00:00Z"));
             sink.write(new Tick(DAX, Instant.parse("2026-09-25T14:57:03.250Z"),
@@ -32,7 +33,7 @@ class JsonlSinkTest {
                     new OhlcPrices(new BigDecimal("24511.7"), new BigDecimal("24516.0"),
                             new BigDecimal("24509.5"), new BigDecimal("24513.2")),
                     321L));
-            sink.write(new CaptureQueues.StateChange(DAX,
+            sink.write(new Buffers.StateChange(DAX,
                     Instant.parse("2026-09-25T16:30:00Z"), "CLOSED"));
         }
 
@@ -53,7 +54,7 @@ class JsonlSinkTest {
     @Test
     void barWithoutVolumeOmitsTheField() {
         StringWriter out = new StringWriter();
-        try (JsonlSink sink = new JsonlSink(out)) {
+        try (JsonlStore sink = new JsonlStore(out)) {
             sink.write(new Bar1m(DAX, Instant.parse("2026-09-25T14:57:00Z"),
                     new OhlcPrices(BigDecimal.ONE, BigDecimal.ONE, BigDecimal.ONE,
                             BigDecimal.ONE),

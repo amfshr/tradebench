@@ -1,4 +1,4 @@
-package dev.amfshr.tradebench.marketdata.capture;
+package dev.amfshr.tradebench.marketdata.app;
 
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -25,11 +25,15 @@ import dev.amfshr.tradebench.ig.stream.IgStreamSession;
 import dev.amfshr.tradebench.ig.stream.LightstreamerTransport;
 import dev.amfshr.tradebench.ig.stream.StreamTransport;
 import dev.amfshr.tradebench.ig.time.Sleeper;
-import dev.amfshr.tradebench.marketdata.persistence.Database;
-import dev.amfshr.tradebench.marketdata.persistence.DbSink;
-import dev.amfshr.tradebench.marketdata.persistence.SingleInstanceLock;
+import dev.amfshr.tradebench.marketdata.store.Database;
+import dev.amfshr.tradebench.marketdata.store.PostgresStore;
+import dev.amfshr.tradebench.marketdata.store.SingleInstanceLock;
 
 import org.jspecify.annotations.Nullable;
+import dev.amfshr.tradebench.marketdata.store.JsonlStore;
+import dev.amfshr.tradebench.marketdata.store.CaptureStore;
+import dev.amfshr.tradebench.marketdata.ingest.Pump;
+import dev.amfshr.tradebench.marketdata.ingest.Buffers;
 
 /**
  * The capture entrypoint: session → stream → queues → sink, until Ctrl-C. Plain
@@ -37,12 +41,12 @@ import org.jspecify.annotations.Nullable;
  * evidence files) or db (T4's real write path: Flyway-migrated Postgres behind the
  * single-instance advisory lock, taken BEFORE any IG contact).
  */
-public final class CaptureRunner {
+public final class Main {
 
     private static final String USER = "default-user";
     private static final Duration HEARTBEAT = Duration.ofSeconds(60);
 
-    private CaptureRunner() {
+    private Main() {
     }
 
     public static void main(String[] args) throws Exception {
@@ -60,7 +64,7 @@ public final class CaptureRunner {
 
         Database database = null;
         SingleInstanceLock lock = null;
-        CaptureSink sink;
+        CaptureStore sink;
         switch (sinkKind) {
             case "jsonl" -> {
                 Path captureDir = Path.of(required(env, "TRADEBENCH_CAPTURE_DIR"));
@@ -68,8 +72,8 @@ public final class CaptureRunner {
                 Path file = captureDir.resolve("capture-" + DateTimeFormatter.ISO_INSTANT
                         .format(started.truncatedTo(ChronoUnit.SECONDS)).replace(":", "")
                         + ".jsonl");
-                JsonlSink jsonl =
-                        new JsonlSink(Files.newBufferedWriter(file, StandardCharsets.UTF_8));
+                JsonlStore jsonl =
+                        new JsonlStore(Files.newBufferedWriter(file, StandardCharsets.UTF_8));
                 jsonl.writeMeta(USER, source, instance, epics, started);
                 sink = jsonl;
                 log(instance, "capturing to " + file.toAbsolutePath());
@@ -79,7 +83,7 @@ public final class CaptureRunner {
                 database = Database.connect(dbUrl, required(env, "TRADEBENCH_DB_USER"),
                         required(env, "TRADEBENCH_DB_PASSWORD"));
                 lock = SingleInstanceLock.acquire(database);
-                sink = new DbSink(database.dataSource(), USER, source, instance);
+                sink = new PostgresStore(database.dataSource(), USER, source, instance);
                 log(instance, "capturing to " + dbUrl + " (migrated; advisory lock held)");
             }
             default -> throw new IgFatalConfigException(
@@ -96,8 +100,8 @@ public final class CaptureRunner {
         log(instance, igEnv + " session on " + session.activeAccountId() + " via "
                 + session.lightstreamerEndpoint());
 
-        CaptureQueues queues = new CaptureQueues(CaptureQueues.DEFAULT_TICK_CAPACITY);
-        CapturePump pump = new CapturePump(queues, sink, Sleeper.SYSTEM);
+        Buffers queues = new Buffers(Buffers.DEFAULT_TICK_CAPACITY);
+        Pump pump = new Pump(queues, sink, Sleeper.SYSTEM);
         Thread pumpThread = new Thread(pump, "capture-pump");
 
         IgStreamSession stream = new IgStreamClient(new LightstreamerTransport())
@@ -170,7 +174,7 @@ public final class CaptureRunner {
         };
     }
 
-    private static String summary(CaptureQueues queues, CapturePump pump) {
+    private static String summary(Buffers queues, Pump pump) {
         return "ticks=" + queues.tickCount() + " bars=" + queues.barCount()
                 + " written=" + pump.writtenCount()
                 + " dropped=" + queues.droppedTicks() + " malformed=" + queues.malformedUpdates();

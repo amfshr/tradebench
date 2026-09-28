@@ -43,6 +43,12 @@
 - **Comments are lean** (Alex's ruling, 2026-09-28): javadoc for public contracts,
   one-liners preferred; inline comments only for invisible constraints (doctrine that the
   code cannot show); no narration of what the next line does.
+- **Package taxonomy is function-named, never layer-named** (Alex, 2026-09-29 —
+  market-data-service: `app` / `ingest` / `store`, with `supervise` / `coverage` / `eod`
+  seats reserved); **a class never repeats its package name as a redundant prefix**
+  (`ingest.Buffers`, not `ingest.IngestBuffers`; role *suffixes* like `store.PostgresStore`
+  are fine); stores are named role-with-technology (`PostgresStore`, `JsonlStore` — the
+  `JdkHttpTransport` pattern).
 - **Nesting rule:** nest types that form one contract with no independent life (the
   `StreamTransport` seam family — JDK precedent: `Flow`, `Map.Entry`); top-level for anything
   callers hold in its own right (`IgStreamSession`). Private impl/test helpers nest freely;

@@ -5,7 +5,7 @@ plugins {
 }
 
 application {
-    mainClass = "dev.amfshr.tradebench.marketdata.capture.CaptureRunner"
+    mainClass = "dev.amfshr.tradebench.marketdata.app.Main"
 }
 
 group = "dev.amfshr.tradebench"

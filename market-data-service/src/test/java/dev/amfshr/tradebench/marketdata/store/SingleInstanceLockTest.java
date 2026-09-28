@@ -1,4 +1,4 @@
-package dev.amfshr.tradebench.marketdata.persistence;
+package dev.amfshr.tradebench.marketdata.store;
 
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;

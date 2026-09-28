@@ -1,4 +1,4 @@
-package dev.amfshr.tradebench.marketdata.capture;
+package dev.amfshr.tradebench.marketdata.ingest;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
@@ -18,14 +18,15 @@ import dev.amfshr.tradebench.ig.stream.Ohlc;
 import dev.amfshr.tradebench.ig.stream.SealedBarUpdate;
 import dev.amfshr.tradebench.ig.stream.TickUpdate;
 import dev.amfshr.tradebench.ig.time.Sleeper;
+import dev.amfshr.tradebench.marketdata.store.CaptureStore;
 
-class CapturePumpTest {
+class PumpTest {
 
     private static final String DAX = "IX.D.DAX.DAILY.IP";
     private static final Sleeper NO_SLEEP = duration -> {
     };
 
-    private static class RecordingSink implements CaptureSink {
+    private static class RecordingSink implements CaptureStore {
         final List<String> order = new ArrayList<>();
         int flushes;
 
@@ -40,7 +41,7 @@ class CapturePumpTest {
         }
 
         @Override
-        public void write(CaptureQueues.StateChange stateChange) {
+        public void write(Buffers.StateChange stateChange) {
             order.add("state:" + stateChange.dealFlag());
         }
 
@@ -68,12 +69,12 @@ class CapturePumpTest {
 
     @Test
     void drainsBarsFirstThenStateThenTicksAndCountsWrites() {
-        CaptureQueues queues = new CaptureQueues(10);
+        Buffers queues = new Buffers(10);
         RecordingSink sink = new RecordingSink();
         queues.onTick(tick(10));
         queues.onTick(tick(11));
         queues.onSealedBar(bar(60));
-        CapturePump pump = new CapturePump(queues, sink, NO_SLEEP);
+        Pump pump = new Pump(queues, sink, NO_SLEEP);
 
         int written = pump.drainOnce();
 
@@ -86,7 +87,7 @@ class CapturePumpTest {
     @Test
     void idleCycleFlushesTheSink() throws InterruptedException {
         RecordingSink sink = new RecordingSink();
-        CapturePump pump = new CapturePump(new CaptureQueues(10), sink, NO_SLEEP);
+        Pump pump = new Pump(new Buffers(10), sink, NO_SLEEP);
 
         pump.cycle();
 
@@ -95,10 +96,10 @@ class CapturePumpTest {
 
     @Test
     void stoppedRunStillDrainsTheTail() {
-        CaptureQueues queues = new CaptureQueues(10);
+        Buffers queues = new Buffers(10);
         RecordingSink sink = new RecordingSink();
         queues.onSealedBar(bar(60));
-        CapturePump pump = new CapturePump(queues, sink, NO_SLEEP);
+        Pump pump = new Pump(queues, sink, NO_SLEEP);
         pump.stop();
 
         pump.run();
@@ -110,7 +111,7 @@ class CapturePumpTest {
 
     @Test
     void sinkFailureStopsThePumpKeepsTheBarAndKeepsTheCause() {
-        CaptureQueues queues = new CaptureQueues(10);
+        Buffers queues = new Buffers(10);
         queues.onSealedBar(bar(60));
         UncheckedIOException boom = new UncheckedIOException("disk full",
                 new java.io.IOException("disk full"));
@@ -123,7 +124,7 @@ class CapturePumpTest {
                 throw boom;
             }
         };
-        CapturePump pump = new CapturePump(queues, failingSink, NO_SLEEP);
+        Pump pump = new Pump(queues, failingSink, NO_SLEEP);
 
         pump.run();
 
