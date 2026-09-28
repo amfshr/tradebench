@@ -15,14 +15,15 @@ same branch while Alex reads and reviews the accumulated code. E0 only lacks enf
 (T4). E3's language semantics are ruled (D7–D9); its two design-gate tickets are cut and
 plannable. E4–E8 name the horizon; no tickets until their own planning sessions.
 
-**Next-session menu (refreshed 2026-09-28, mid E1-T5):**
-① *Alex reads* — the new `docs/` front door (`docs/README.md` → product overview → the
-book) alongside an IDE review of `market-data-service` + slice A; tweaks land as review
-feedback on the branch. ② *E1-T5 slices B + C* — event log, `bar_gaps` V2, Supervisor
-shell, Main rewiring, pacer budget discovery; then doctrine review → PR. ③ *Docs/pages app*
-— git worktree + own branch: plan E2 (board + docs read model — D11). ④ *E0-T4 guardrail
-enforcement* (CI exists; fold GitGuardian in) or *E3-T1 vocabulary catalogue v0*. Nothing
-else blocks: Databento scoping and PRD open Qs #7/#11 are E3-era.
+**Next-session menu (refreshed 2026-09-28 EOD, post E2-T1 merge):**
+① *Brand design session* — Alex explores visual directions (claude.ai design surface and/or
+Claude-built mockup artifacts), then `/design-session` here rules them into
+`docs/design/brand.md` + token values; feeds T2 directly. ② *E2-T2 board read model* —
+landing + board-as-dashboard, built to the brand ruling (branch from main in the
+e2-docs-reader worktree). ③ *E1-T5 slices B + C* — event log, bar_gaps V2, Supervisor
+shell (main checkout, branch `e1-t5-resilience`; merge main in first — docs + D18 renames).
+④ *Finish the book read* (chapters live on the site now) · optional: custom-domain setup
+(T3 close), E0-T4 enforcement.
 
 ---
 
@@ -84,9 +85,9 @@ nod N1–N4). **Working shape:** git worktree `.claude/worktrees/e2-docs-reader`
 
 | # | Ticket | Status |
 |---|--------|--------|
-| T1 | **Docs & board reader v0.** Vite/React/TS app at `web/docs` (tech-notes §6 shape as ruled by D18): sidebar over `docs/` + the board, GFM, rendered mermaid, highlighted code, rewritten internal links, light/dark, reading-first typography; content via dev-server glob of the repo's markdown — no backend; doc edits hot-reload. **DoD:** the book, product overview, PRD, decisions and board all render pleasantly with working nav. | 🔶 (nod ruled 2026-09-28: N1–N4 all as recommended; v0.2 reading chrome added on Alex's "spice it up": Inter/JetBrains Mono, breadcrumbs, scroll-spied ToC, prev/next, copy buttons) |
+| T1 | **Docs & board reader v0.** Vite/React/TS app at `web/docs` (tech-notes §6 shape as ruled by D18): sidebar over `docs/` + the board, GFM, rendered mermaid, highlighted code, rewritten internal links, light/dark, reading-first typography; content via dev-server glob of the repo's markdown — no backend; doc edits hot-reload. **DoD:** the book, product overview, PRD, decisions and board all render pleasantly with working nav. | ✅ 2026-09-28 (PR #6; 21 behavioural tests, 9 mutations killed incl. review F1's deletion mutant; doctrine F1–F6 all fixed pre-open; v0.2 chrome + lightbox + theme toggle per Alex's iterative rulings; D18 renames rode the PR) |
 | T2 | **Board read model.** Parse board + epic files into epic cards, status chips, done-history timeline; graceful raw-markdown fallback; parser mutation-verified on real board fixtures. Alex 2026-09-28: pages still read as top-to-bottom md — T2's structured views + a designed landing are the counterweight, with the brand session. **DoD:** the board page reads as a dashboard. | ⬜ |
-| T3 | **Build & CI lane.** Static build snapshotting content; `web/**`-keyed CI job; preview story (hosting decided later — now ruled: **GitHub Pages** (Alex, 2026-09-28; one docs site + `web/` naming = D18). **DoD:** one command yields the static site; CI green. | 🔶 (pages.yml deploy + web-ci.yml PR lane authored; needs repo Settings → Pages → Source: GitHub Actions, then first main merge deploys) |
+| T3 | **Build & CI lane.** Static build snapshotting content; `web/**`-keyed CI job; preview story (hosting decided later — now ruled: **GitHub Pages** (Alex, 2026-09-28; one docs site + `web/` naming = D18). **DoD:** one command yields the static site; CI green. | 🔶 (deploy + PR lane live; **first Pages deploy green 2026-09-28 — site live at amfshr.github.io/tradebench/**. Remaining: Alex's custom-domain call — docs.tradebench.amfshr.dev via Cloudflare CNAME + PAGES_BASE=/ — or accept github.io and close) |
 
 ## E3 🧪 Indicator DSL v0 + backtest spine — DESIGN-GATED
 
@@ -170,3 +171,12 @@ captured/imported data to chew on (E1 + first Databento decisions).
   seat named for the strategy-language reference), `docs/book/` (nine teaching chapters,
   socket → Postgres → outward), architecture §3.4 trajectory + §3.5 fan-out plan, board
   refresh. Purpose: Alex's read/review checkpoint before T5 slices B/C.
+- **2026-09-28 — E2-T1 The docs site v0** ✅: `web/docs` (Vite/React/TS, npm workspaces) —
+  repo markdown as pages: sidebar tree, GFM, client-rendered mermaid + lightbox, highlighted
+  code + copy, rewritten internal links, scroll-spied ToC, prev/next, breadcrumbs,
+  Inter/JetBrains Mono, light/dark + persisted toggle; no backend (dev-server glob,
+  hot-reload). 21 behavioural tests, 9 mutations killed; doctrine review F1–F6 fixed
+  pre-open (F1 caught an overstated mutation claim — deletion mutant now dies). T3 lanes:
+  web-ci.yml PR check + pages.yml → **first GitHub Pages deploy green, site live**. D18
+  ruled in-review (one docs site; `web/` naming). Evidence: PR #6 (merged) +
+  amfshr.github.io/tradebench/.
