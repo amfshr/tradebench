@@ -7,7 +7,7 @@ integration docs). Markdown stays the write model (agents and Alex edit
 files; git stays the history); this small React/TS app renders the board *and* the docs
 tree — the product overview, the book, design specs — as pleasant pages (D11; scope widened
 2026-09-28 to cover `docs/` as Alex's "online book of pages"). It is also the frontend
-warm-up: first exercise of the `frontend/` toolchain at low stakes, deliberately separate
+warm-up: first exercise of the `web/` toolchain at low stakes, deliberately separate
 from the future product SPA so warm-up choices bind nothing (tech-notes §6).
 
 **References:** D11 (read model shape) · tech-notes §6 (provisional workspace structure,
@@ -71,7 +71,7 @@ mutation-verified). **DoD:** the board page reads as a dashboard, not a rendered
 
 ## T3 — Build & CI lane 🔶
 
-Static `npm run build` snapshotting content at build time; CI job keyed on `frontend/**`
+Static `npm run build` snapshotting content at build time; CI job keyed on `web/**`
 (tech-notes §6); local preview story. Hosting ruled by Alex 2026-09-28: **GitHub Pages**
 (public — same content as the public repo, no new exposure). Authored on-branch:
 `pages.yml` (main-push deploy: test → build with `VITE_BASE=/tradebench/` → 404.html SPA

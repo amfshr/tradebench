@@ -18,7 +18,7 @@
 | Testing | JUnit 6, fakes-first; Testcontainers (T4+); golden wire fixtures | doctrine: playbook §2 / G5 |
 | DB | PostgreSQL + Flyway from V1 | PRD §10; user + source columns from day one |
 | Messaging | Redis Streams (provisional) | D4 — Kafka is a gated re-decision |
-| Frontend | React/TypeScript SPA, own toolchain in `frontend/` | D3/D11; conventions TBD with E2 *(reserved)* |
+| Web | React/TypeScript apps, own toolchain in `web/` (`docs` live, `platform` seat) | D3/D11/D18; §6 |
 | Deploy | Docker, Linux only; staging + prod by release tag | PRD §10 — no Windows target, ever |
 
 ## 2. Java language & feature policy

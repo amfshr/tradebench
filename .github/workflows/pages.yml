@@ -1,4 +1,4 @@
-# Builds the board-viewer (content snapshotted at build time) and deploys it to GitHub
+# Builds the docs site (content snapshotted at build time) and deploys it to GitHub
 # Pages on every main push that touches content or the app. One-off setup: repo Settings →
 # Pages → Source: "GitHub Actions".
 name: pages
