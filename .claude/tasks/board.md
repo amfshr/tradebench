@@ -6,21 +6,23 @@
 > Tickets carry a DoD; ideation that hasn't earned a ticket lives in `docs/` or the inherited
 > ideas, not here.
 
-**Guide (2026-09-27):** E0 (AI operating framework) born urgent and mostly landed the same day
-— only enforcement (T4) remains, and it pairs with E1-T1's CI. E1 is the active build epic —
-the deploy-first ruling (D2) stands: it ships to the cloud before anything else exists. E3's
-language semantics are ruled (design session 2026-09-27, D7–D9); its two design-gate tickets
-are cut and plannable. E4–E8 name the horizon so the whole road is visible; they hold no
-tickets until their own planning sessions.
+**Guide (refreshed 2026-09-28):** E1 is the active build epic and its spine is real — T1–T4
+merged, live DAX data flowing into Postgres locally; the deploy-first ruling (D2) stands.
+T5 (resilience belt) is mid-flight: slice A (the pure decision cores) is built and verified
+on branch `e1-t5-resilience`; slices B (event log + gap rows) and C (the Supervisor shell)
+remain. A docs pass (product overview, the book, docs map — see `docs/README.md`) rides the
+same branch while Alex reads and reviews the accumulated code. E0 only lacks enforcement
+(T4). E3's language semantics are ruled (D7–D9); its two design-gate tickets are cut and
+plannable. E4–E8 name the horizon; no tickets until their own planning sessions.
 
-**Next-session menu (refreshed 2026-09-27, post E1-T2):**
-① *E1-T3 streaming* (Lightstreamer ticks + sealed 1m bars — D13 design nod first) and/or
-*E1-T4 persistence* (Flyway schema — can run in parallel with T3 per the epic plan).
-② *Run the demo smoke* — `IG_SMOKE=1 ./gradlew :ig-client:demoSmoke` with IG_DEMO_* set
-(Alex only; first real-wire contact for T2's session core). ② *E3-T1 vocabulary catalogue
-v0* — Claude drafts to `docs/design/`, Alex rules line by line. ③ *E0-T4 guardrail
-enforcement* — CI exists; GitGuardian already runs (fold in). ④ *E2 planning / page
-designs*. Nothing else blocks: Databento scoping and PRD open Qs #7/#11 are E3-era.
+**Next-session menu (refreshed 2026-09-28, mid E1-T5):**
+① *Alex reads* — the new `docs/` front door (`docs/README.md` → product overview → the
+book) alongside an IDE review of `market-data-service` + slice A; tweaks land as review
+feedback on the branch. ② *E1-T5 slices B + C* — event log, `bar_gaps` V2, Supervisor
+shell, Main rewiring, pacer budget discovery; then doctrine review → PR. ③ *Docs/pages app*
+— git worktree + own branch: plan E2 (board + docs read model — D11). ④ *E0-T4 guardrail
+enforcement* (CI exists; fold GitGuardian in) or *E3-T1 vocabulary catalogue v0*. Nothing
+else blocks: Databento scoping and PRD open Qs #7/#11 are E3-era.
 
 ---
 
@@ -62,7 +64,7 @@ CHART:1MINUTE sealed bars only) · engineering playbook §1–§4.
 | T2 | **`ig-client`: session + REST core behind the provider port.** REST login/refresh (demo + live envs), typed config (no code defaults; secrets via env beside config — never committed), request pacing guard (IG session rate limits are real — playbook + engineering playbook §4.6), typed errors. **DoD:** unit suite on fakes; one integration-gated smoke that logs into demo. | ✅ 2026-09-27 (PR #2; smoke run clean vs live demo 2026-09-28 — switch path unexercised, profile prefers the configured account) |
 | T3 | **Streaming: ticks + sealed 1m bars.** Lightstreamer Java SDK: PRICE (ticks) + CHART:1MINUTE (accept `CONS_END=1` only) per market; cheap-work-only on callback threads, everything queued to one consumer; per-market subscriptions (identity-vs-addressing per triage D16). **DoD:** a live demo session captures a full DAX day of ticks + 1m bars locally. | ✅ 2026-09-28 (PR #4; Alex's ruling: Sunday's live capture — 500+ ticks, 4 sealed bars, 0 dropped/malformed — suffices; the multi-day local soak moves to T7's pre-cloud runway) |
 | T4 | **Persistence.** Flyway from birth: `instruments`, `ticks`, `bars_1m` (user + source columns from day one), `service_events`, `job_runs`; least-privilege roles (triage D22); testcontainers suite; generated schema render + CI drift gate (triage D23). **DoD:** captured data lands via the real write path; drift gate green. | ✅ 2026-09-28 (PR #5; live DAX → Postgres via the real path, all dimension-attributed; drift gate green) |
-| T5 | **Resilience belt.** Reconnect stack; staleness watchdog on injectable clocks — should-be-ticking derived from the stream itself, monotonic/awake vs wall time split, escalation ladder (triage D25); gap detection writing gap rows; structured `service_events` + quiet-is-healthy warnings stream. **DoD:** scripted failure scenarios (dead socket, silent-while-connected, host suspend) pass on fakes — each test mutation-verified. | 🔶 (nod ruled 2026-09-28; live outage 17:00–17:15 is the motivating specimen) |
+| T5 | **Resilience belt.** Reconnect stack; staleness watchdog on injectable clocks — should-be-ticking derived from the stream itself, monotonic/awake vs wall time split, escalation ladder (triage D25); gap detection writing gap rows; structured `service_events` + quiet-is-healthy warnings stream. **DoD:** scripted failure scenarios (dead socket, silent-while-connected, host suspend) pass on fakes — each test mutation-verified. | 🔶 (nod ruled 2026-09-28; live outage 17:00–17:15 is the motivating specimen. Slice A ✅ on branch: 7 pure cores + scenario suites, 23 mutations verified. Slices B/C remain) |
 | T6 | **Daily completeness + archive + digest (decisions D6).** `@Scheduled` end-of-day job: 1m-bar REST heal (window-clipped, paced, allowance-aware; outcomes classified healed / tickless-at-source / failed — ticks are stream-only, the job never claims otherwise), day's Parquet export to object storage (pick R2 vs B2 in-ticket), digest email (counts, gaps, heal outcomes, archive path). Audited `job_runs` row every run, clean or not. **DoD:** staging produces archive + digest end-to-end; a suppressed digest is detectable (absence = alarm documented in the runbook). | ⬜ |
 | T7 | **Deploy.** Dockerfiles + compose; staging + prod configs with separate DBs (promote by release tag); cloud host selection (revisit the phase-1 doc's Lightsail analysis against the ~£20/mo envelope); secrets injection; deploy runbook. **DoD:** staging runs 24/7 for 3 consecutive days unattended with daily digests arriving. | ⬜ |
 | T8 | **Acceptance: shadow-diff week vs the Python appliance.** Both systems capture the same DAX sessions for a week; diff tick coverage, 1m bars, and own-aggregated 10m vs the prototype's; write the report; rule on making Tradebench the primary capture. **DoD:** the diff report with every delta explained + Alex's ruling recorded in `docs/decisions.md`. | ⬜ |
@@ -71,9 +73,11 @@ CHART:1MINUTE sealed bars only) · engineering playbook §1–§4.
 
 The first frontend warm-up: a small locally-served React/TS app rendering this markdown board
 (and the epics/vision docs) as pages — MD stays the write model for agents, the app is the read
-model for humans. **Shape confirmed by Alex 2026-09-27 (D11; PRD open Q#10 resolved).** Low
-stakes, real daily value, exercises the frontend toolchain + backend-streaming shape before the
-charting UI. **Plan when:** Alex wants a break from E1 or E1-T1 lands the frontend seat.
+model for humans. **Shape confirmed by Alex 2026-09-27 (D11; PRD open Q#10 resolved).** Scope
+grew naturally 2026-09-28: the read model now also renders `docs/` — the product overview and
+the book — as Alex's "online book of pages". Low stakes, real daily value, exercises the
+frontend toolchain + backend-streaming shape before the charting UI. **Plan when:** the
+docs-pass read is done — intended as a git-worktree side branch alongside E1-T5.
 
 ## E3 🧪 Indicator DSL v0 + backtest spine — DESIGN-GATED
 
@@ -128,19 +132,6 @@ captured/imported data to chew on (E1 + first Databento decisions).
   green on mutation-verified walking skeletons, branch protection active (required check
   `build`, admin bypass for docs-only). First `/start-ticket` + `doctrine-reviewer` run in
   anger. Foundation choices logged as D12. Evidence: PR #1 (merged).
-- **2026-09-28 — E1-T4 Persistence** ✅: Flyway V1 (user+source on every fact row, _utc
-  naming, name-anchored seeds), store.PostgresStore behind the CaptureStore seam
-  (ack-after-apply end-to-end), dedicated-session advisory lock (review F1: pooled-
-  connection lock was a masked defect), schema drift gate (self-mutation-verified),
-  13 mutations killed, D17 topology + compose-managed loopback-only dev Postgres, app/
-  ingest/store restructure (Alex's Q1–Q4), db-admin agent. Evidence: PR #5 (merged) +
-  live DAX rows in market_data. Deferred by ruling: D22 roles + schema/public design → T6.
-- **2026-09-28 — E1-T3 Streaming + capture pipeline** ✅: core domain/time SPIs (D15 mid
-  discipline, D38 dataTime), StreamTransport seam + Lightstreamer wrapper (capability-split
-  subscriptions), capture queues/pump/JSONL runner with honest heartbeat; 30 mutations
-  killed; doctrine-review F1–F5 fixed; trading-ig sweep adoptions; D14/D15/D16 landed
-  en route; proven against live Sunday data (500+ ticks, 4 bars, clean counters). Evidence:
-  PR #4 (merged) + capture JSONL. Event-stream SPI parked to E3 (Alex's ruling).
 - **2026-09-27 — E1-T2 ig-client session + REST core** ✅: §1.6 taxonomy, login→switch→token
   re-read, validate-before-relogin + 61s stagger, sliding-window pacer in the library, REST
   v3 markets/prices keyed on snapshotTimeUTC (fail-loud, never guess — Alex's ruling: client
@@ -149,3 +140,21 @@ captured/imported data to chew on (E1 + first Databento decisions).
   scraped labs.ig.com reference (now at `docs/reference/`) + field-proven backfill code.
   D13 (design nod) born from this ticket's feedback; architecture.md v1 seeded. Evidence:
   PR #2 (merged).
+- **2026-09-28 — E1-T3 Streaming + capture pipeline** ✅: core domain/time SPIs (D15 mid
+  discipline, D38 dataTime), StreamTransport seam + Lightstreamer wrapper (capability-split
+  subscriptions), capture queues/pump/JSONL runner with honest heartbeat; 30 mutations
+  killed; doctrine-review F1–F5 fixed; trading-ig sweep adoptions; D14/D15/D16 landed
+  en route; proven against live Sunday data (500+ ticks, 4 bars, clean counters). Evidence:
+  PR #4 (merged) + capture JSONL. Event-stream SPI parked to E3 (Alex's ruling).
+- **2026-09-28 — E1-T4 Persistence** ✅: Flyway V1 (user+source on every fact row, _utc
+  naming, name-anchored seeds), store.PostgresStore behind the CaptureStore seam
+  (ack-after-apply end-to-end), dedicated-session advisory lock (review F1: pooled-
+  connection lock was a masked defect), schema drift gate (self-mutation-verified),
+  13 mutations killed, D17 topology + compose-managed loopback-only dev Postgres, app/
+  ingest/store restructure (Alex's Q1–Q4), db-admin agent. Evidence: PR #5 (merged) +
+  live DAX rows in market_data. Deferred by ruling: D22 roles + schema/public design → T6.
+- **2026-09-28 — Docs pass** (on branch `e1-t5-resilience`, rides the T5 PR): `docs/`
+  front door (`docs/README.md` map), `docs/product/overview.md` (technical product doc;
+  seat named for the strategy-language reference), `docs/book/` (nine teaching chapters,
+  socket → Postgres → outward), architecture §3.4 trajectory + §3.5 fan-out plan, board
+  refresh. Purpose: Alex's read/review checkpoint before T5 slices B/C.
