@@ -624,3 +624,290 @@ h3:hover .hanchor {
   color: var(--accent);
   border-color: var(--accent);
 }
+
+/* ---- board dashboard (E2-T2, brand IA R11b) ---- */
+
+.board,
+.epic-page {
+  max-width: 62rem;
+  margin: 0 auto;
+}
+
+.board-head {
+  margin-bottom: 2.5rem;
+}
+
+.board-head h1 {
+  margin: 0 0 0.4rem;
+  font-size: 1.9rem;
+}
+
+.board-sub {
+  margin: 0 0 0.8rem;
+  color: var(--fg-muted);
+  max-width: 42rem;
+}
+
+.board-stats {
+  font-family: var(--font-mono);
+  font-size: 0.82rem;
+  color: var(--fg-muted);
+  margin: 0;
+}
+
+.board-stats b {
+  color: var(--fg);
+}
+
+.section-label {
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--fg-muted);
+  margin: 0 0 0.75rem;
+}
+
+.epic-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(15rem, 1fr));
+  gap: 1rem;
+  margin-bottom: 2.5rem;
+}
+
+.epic-card {
+  display: block;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 1rem 1.1rem 1.2rem;
+  background: var(--bg-raised);
+  text-decoration: none !important;
+  color: inherit;
+}
+
+.epic-card-link {
+  transition: border-color 0.12s;
+}
+
+.epic-card-link:hover {
+  border-color: var(--accent);
+}
+
+.epic-card-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  color: var(--fg-muted);
+}
+
+.epic-card-name {
+  margin: 0.35rem 0 0.4rem;
+  font-size: 1.02rem;
+  line-height: 1.3;
+}
+
+.epic-card-mission {
+  margin: 0 0 0.9rem;
+  font-size: 0.86rem;
+  color: var(--fg-muted);
+  line-height: 1.45;
+}
+
+.epic-bar {
+  height: 3px;
+  border-radius: 3px;
+  background: var(--border);
+  overflow: hidden;
+}
+
+.epic-bar span {
+  display: block;
+  height: 100%;
+  background: var(--accent);
+}
+
+.epic-bar-wide {
+  height: 4px;
+  margin: 0.6rem 0 0.4rem;
+}
+
+.board-cols {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 15rem;
+  gap: 2.5rem;
+  align-items: start;
+}
+
+@media (max-width: 60rem) {
+  .board-cols {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.ticket-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.88rem;
+}
+
+.ticket-table td {
+  border-bottom: 1px solid var(--border);
+  padding: 0.5rem 0.6rem 0.5rem 0;
+  vertical-align: top;
+}
+
+.tcell-id {
+  font-family: var(--font-mono);
+  font-size: 0.78rem;
+  color: var(--fg-muted);
+  white-space: nowrap;
+  width: 2.5rem;
+}
+
+.tcell-epic {
+  font-family: var(--font-mono);
+  font-size: 0.78rem;
+  white-space: nowrap;
+  width: 3rem;
+}
+
+.tcell-epic a {
+  color: var(--fg-muted);
+  text-decoration: none;
+}
+
+.tcell-epic a:hover {
+  color: var(--accent);
+}
+
+.tcell-status {
+  white-space: nowrap;
+  width: 6.5rem;
+  text-align: right;
+}
+
+.row-done .tcell-title {
+  color: var(--fg-muted);
+  text-decoration: line-through;
+  text-decoration-color: var(--border);
+}
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-family: var(--font-mono);
+  font-size: 0.7rem;
+  padding: 0.1rem 0.5rem;
+  border-radius: 5px;
+  border: 1px solid var(--border);
+  color: var(--fg-muted);
+  white-space: nowrap;
+}
+
+.chip-dot {
+  width: 0.4rem;
+  height: 0.4rem;
+  border-radius: 50%;
+  background: var(--accent);
+}
+
+.chip-in-progress {
+  color: var(--accent);
+  border-color: color-mix(in srgb, var(--accent) 40%, var(--border));
+}
+
+.chip-done {
+  opacity: 0.7;
+}
+
+.timeline {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  border-left: 1px solid var(--border);
+}
+
+.timeline li {
+  position: relative;
+  padding: 0 0 1rem 1rem;
+}
+
+.timeline li::before {
+  content: '';
+  position: absolute;
+  left: -4px;
+  top: 0.35rem;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--border);
+}
+
+.timeline-date {
+  display: block;
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  color: var(--fg-muted);
+}
+
+.timeline-title {
+  font-size: 0.88rem;
+}
+
+.epic-page .crumbs {
+  font-family: var(--font-mono);
+  font-size: 0.78rem;
+  color: var(--fg-muted);
+  margin-bottom: 1.2rem;
+}
+
+.epic-page .crumbs a {
+  color: var(--fg-muted);
+  text-decoration: none;
+}
+
+.epic-page .crumbs a:hover {
+  color: var(--accent);
+}
+
+.epic-head {
+  margin-bottom: 2rem;
+}
+
+.epic-eyebrow {
+  font-family: var(--font-mono);
+  font-size: 0.78rem;
+  color: var(--fg-muted);
+  margin: 0 0 0.3rem;
+}
+
+.epic-head h1 {
+  margin: 0 0 0.5rem;
+  font-size: 1.7rem;
+}
+
+.epic-mission {
+  color: var(--fg-muted);
+  margin: 0;
+  max-width: 42rem;
+}
+
+.epic-page .epic-progress-label {
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  color: var(--fg-muted);
+  margin: 0;
+}
+
+.epic-page section {
+  margin-bottom: 2rem;
+}
+
+.epic-plan {
+  margin-top: 3rem;
+  padding-top: 1.5rem;
+  border-top: 1px solid var(--border);
+}
