@@ -53,9 +53,14 @@ function brandTheme() {
       transitionLabelColor: fg,
       stateBkg: surface,
       stateBorder: border,
+      stateLabelColor: fg,
+      labelColor: fg,
       compositeBackground: bg,
+      compositeTitleBackground: surface,
       compositeBorder: border,
       altBackground: bg,
+      innerEndBackground: surface,
+      specialStateColor: fg,
     },
   };
 }
@@ -83,8 +88,8 @@ export function Mermaid({ chart }: { chart: string }) {
       .then(async ({ default: mermaid }) => {
         mermaid.initialize({
           startOnLoad: false,
-          securityLevel: 'strict',
-          flowchart: { curve: 'basis', padding: 14 },
+          securityLevel: 'loose',
+          flowchart: { curve: 'basis', padding: 14, htmlLabels: true },
           ...brandTheme(),
         });
         try {

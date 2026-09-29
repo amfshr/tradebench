@@ -598,7 +598,7 @@ body {
   overflow-x: auto;
   text-align: center;
   cursor: zoom-in;
-  background: var(--bg-raised);
+  background: var(--bg);
   border: 1px solid var(--border);
   border-radius: 10px;
   transition: border-color 0.12s;
@@ -630,24 +630,59 @@ body {
   height: auto;
 }
 
+/* Force label text to the foreground in every diagram type — mermaid's base theme
+   leaves state-diagram labels near-invisible against our surface otherwise. */
+.mermaid-diagram .nodeLabel,
+.mermaid-diagram .stateLabel,
+.mermaid-diagram .cluster-label,
+.mermaid-diagram .titleText,
+.mermaid-diagram text,
+.mermaid-diagram tspan {
+  fill: var(--fg) !important;
+  color: var(--fg) !important;
+}
+
+.mermaid-diagram .edgeLabel,
+.mermaid-diagram .edgeLabel p,
+.mermaid-diagram .edgeLabel rect {
+  background-color: var(--bg) !important;
+  color: var(--fg) !important;
+  fill: var(--bg) !important;
+}
+
+.mermaid-diagram .edgeLabel .edgeLabel,
+.mermaid-diagram .edgeLabel span {
+  color: var(--fg) !important;
+}
+
 .lightbox {
   position: fixed;
   inset: 0;
   z-index: 50;
   background: color-mix(in srgb, var(--bg) 94%, transparent);
-  display: grid;
-  place-items: center;
-  align-content: center;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
   gap: 0.75rem;
-  overflow: auto;
+  overflow: hidden;
   padding: 2rem;
   cursor: zoom-out;
 }
 
+.lightbox-inner {
+  display: flex;
+  min-height: 0;
+  max-width: 94vw;
+  max-height: 84vh;
+}
+
+/* Fit the whole diagram inside the viewport, never force it larger than it needs. */
 .lightbox-inner svg {
-  max-width: none !important;
-  width: min(1500px, 92vw);
-  height: auto;
+  width: auto !important;
+  height: auto !important;
+  max-width: 94vw !important;
+  max-height: 84vh !important;
 }
 
 .lightbox-hint {
