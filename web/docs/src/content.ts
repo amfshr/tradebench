@@ -33,3 +33,13 @@ export const docByRoute = new Map(docs.map((d) => [d.route, d]));
 export const repoPathExists = (repoPath: string): boolean =>
   docs.some((d) => d.repoPath === repoPath);
 export const sidebarTree = buildTree(docs.map((d) => d.repoPath));
+
+/** Epic number → its plan doc, e.g. 1 → `.claude/tasks/epics/e1-collection-service.md`. */
+export const epicDocByNum = new Map<number, Doc>(
+  docs
+    .map((d): [number, Doc] | null => {
+      const m = d.repoPath.match(/\/epics\/e(\d+)-/);
+      return m ? [Number(m[1]), d] : null;
+    })
+    .filter((x): x is [number, Doc] => x !== null),
+);
