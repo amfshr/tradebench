@@ -86,6 +86,8 @@ export function Mermaid({ chart }: { chart: string }) {
     let live = true;
     import('mermaid')
       .then(async ({ default: mermaid }) => {
+        // 'loose' is required for htmlLabels; safe here because the only content rendered
+        // is the repo's own committed markdown — never user input.
         mermaid.initialize({
           startOnLoad: false,
           securityLevel: 'loose',

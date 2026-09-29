@@ -43,6 +43,7 @@ const FIXTURE = `# Tradebench Board
 - **2026-09-27 — Sanity lap** (menu ①): cold-start playback proved the handoff.
   a **bold phrase** on a continuation line must not become an entry.
 - **2026-09-28 — E1-T4 Persistence** ✅: Flyway V1 landed.
+- **2026-09-30 — E12-T1 decoy epic** ✅: must not leak onto E1's page.
 `;
 
 describe('classifyStatus', () => {
@@ -117,7 +118,28 @@ describe('parseBoard', () => {
     expect(board.history).toEqual([
       { date: '2026-09-27', title: 'Sanity lap' },
       { date: '2026-09-28', title: 'E1-T4 Persistence' },
+      { date: '2026-09-30', title: 'E12-T1 decoy epic' },
     ]);
+  });
+
+  test('degrades to zero epics on prose with no headers (raw-markdown fallback contract)', () => {
+    expect(parseBoard('# Notes\n\nJust prose, no epic headers here.').epics).toEqual([]);
+  });
+
+  test('reconstructs a ticket summary that contains an in-cell pipe', () => {
+    const md = [
+      '# B',
+      '',
+      '## E1 📡 X — ACTIVE',
+      '',
+      '| # | Ticket | Status |',
+      '|---|--------|--------|',
+      '| T1 | **Ranges.** ticks | bars. | ⬜ |',
+      '',
+    ].join('\n');
+    const t = parseBoard(md).epics[0].tickets[0];
+    expect(t.title).toBe('Ranges.');
+    expect(t.summary).toBe('ticks | bars.');
   });
 });
 
@@ -138,7 +160,7 @@ describe('allTickets', () => {
 });
 
 describe('historyForEpic', () => {
-  test('keeps only entries tagged with the epic id', () => {
+  test('keeps only entries tagged with the epic id — the dash boundary excludes E12 from E1', () => {
     const board = parseBoard(FIXTURE);
     expect(historyForEpic(board, 'E1').map((h) => h.title)).toEqual(['E1-T4 Persistence']);
     expect(historyForEpic(board, 'E9')).toEqual([]);
