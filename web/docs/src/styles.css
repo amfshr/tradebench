@@ -114,18 +114,24 @@ body {
   z-index: 30;
   display: flex;
   align-items: center;
-  gap: 1.5rem;
+  gap: 0.9rem;
   height: var(--nav-h);
-  padding: 0 1.25rem;
+  padding: 0 1.5rem;
   border-bottom: 1px solid var(--border);
   background: color-mix(in srgb, var(--bg) 85%, transparent);
   backdrop-filter: blur(8px);
 }
 
+/* Left cluster (mark + wordmark + tag) far left; nav + search + toggle group right. */
 .topnav-left {
   display: flex;
   align-items: center;
   gap: 0.5rem;
+  text-decoration: none;
+}
+
+.topnav-mark {
+  flex-shrink: 0;
 }
 
 .topnav-wordmark {
@@ -136,7 +142,6 @@ body {
   font-weight: 500;
   letter-spacing: -0.01em;
   color: var(--fg);
-  text-decoration: none;
 }
 
 .topnav-cursor {
@@ -149,17 +154,18 @@ body {
 
 .topnav-tag {
   font-family: var(--font-mono);
-  font-size: 0.7rem;
+  font-size: 0.68rem;
+  letter-spacing: 0.02em;
   color: var(--fg-muted);
-  border: 1px solid var(--border);
-  border-radius: 5px;
-  padding: 0.05rem 0.35rem;
+  padding: 0.05rem 0.3rem;
 }
 
 .topnav-links {
+  margin-left: auto;
   display: flex;
-  gap: 1.1rem;
+  gap: 1.4rem;
   font-size: 0.88rem;
+  padding-right: 0.5rem;
 }
 
 .topnav-links a {
@@ -167,28 +173,27 @@ body {
   text-decoration: none;
 }
 
-.topnav-links a:hover,
-.topnav-links a.active {
+.topnav-links a:hover {
   color: var(--fg);
 }
 
-.topnav-right {
-  margin-left: auto;
-  display: flex;
-  align-items: center;
-  gap: 0.6rem;
+.topnav-links a.active {
+  color: var(--fg);
+  font-weight: 600;
 }
 
 .nav-search {
   display: flex;
   align-items: center;
-  gap: 0.6rem;
+  justify-content: space-between;
+  gap: 2rem;
+  min-width: 11rem;
   font-size: 0.82rem;
   color: var(--fg-muted);
   background: var(--bg-raised);
   border: 1px solid var(--border);
   border-radius: 7px;
-  padding: 0.28rem 0.6rem;
+  padding: 0.32rem 0.7rem;
   cursor: pointer;
 }
 
@@ -213,12 +218,23 @@ body {
   border-radius: 7px;
   width: 2rem;
   height: 1.9rem;
+  flex-shrink: 0;
   cursor: pointer;
 }
 
 .nav-icon:hover {
   color: var(--accent);
   border-color: var(--accent);
+}
+
+@media (max-width: 56rem) {
+  .topnav-links {
+    display: none;
+  }
+  .nav-search {
+    min-width: 0;
+    gap: 0.6rem;
+  }
 }
 
 /* ---- search palette ---- */
