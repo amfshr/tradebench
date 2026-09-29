@@ -15,13 +15,16 @@ same branch while Alex reads and reviews the accumulated code. E0 only lacks enf
 (T4). E3's language semantics are ruled (D7–D9); its two design-gate tickets are cut and
 plannable. E4–E8 name the horizon; no tickets until their own planning sessions.
 
-**Next-session menu (refreshed 2026-09-29, post brand ruling):**
-① *E2-T2 build* — landing + board dashboard + epic pages to the brand (D19, brand.md;
-design intent = the exploration's IA, R11b) on `e2-t2-board-read-model`; the token
-re-skin + wordmark + favicon are already on the branch and land with its PR. ② *E1-T5
-slices B + C* — event log, bar_gaps V2, Supervisor shell (main checkout; merge main in
-first — docs + D18 renames). ③ *Finish the book read* · optional: custom-domain setup
-(T3 close, docs.tradebench.amfshr.dev recipe in session chat), E0-T4 enforcement.
+**Next-session menu (refreshed 2026-09-29 EOD, post E2-T2 merge):** the docs site is live
+at **docs.tradebench.amfshr.dev** with the full brand. Alex's standing preference: **no
+return to E1 until he has fully read the book lessons** (now readable on the live site).
+① *Read the book* (chapters 1–9) — Alex's chosen next, on the live site. ② *E2-T4 book
+polish* — scar-callout treatment (design R9) across the nine chapters + framed diagrams;
+pairs naturally with the read. ③ *E2-T5 ticket-detail pages* — `/board/epics/:slug/:ticket`
+(needs a richer ticket write-model). ④ *E1-T5 slices B + C* — event log, bar_gaps V2,
+Supervisor shell (main checkout, branch `e1-t5-resilience`; **merge main in first** — docs +
+D18 renames + brand). ⑤ optional: SPA deep-link 404 on Pages (cosmetic — 404.html serves
+the app, browser routes fine; a note, not a bug), E0-T4 enforcement.
 
 ---
 
@@ -90,7 +93,7 @@ nod N1–N4). **Working shape:** git worktree `.claude/worktrees/e2-docs-reader`
 | # | Ticket | Status |
 |---|--------|--------|
 | T1 | **Docs & board reader v0.** Vite/React/TS app at `web/docs` (tech-notes §6 shape as ruled by D18): sidebar over `docs/` + the board, GFM, rendered mermaid, highlighted code, rewritten internal links, light/dark, reading-first typography; content via dev-server glob of the repo's markdown — no backend; doc edits hot-reload. **DoD:** the book, product overview, PRD, decisions and board all render pleasantly with working nav. | ✅ 2026-09-28 (PR #6; 21 behavioural tests, 9 mutations killed incl. review F1's deletion mutant; doctrine F1–F6 all fixed pre-open; v0.2 chrome + lightbox + theme toggle per Alex's iterative rulings; D18 renames rode the PR) |
-| T2 | **Board read model + designed pages.** Parse board + epic files into epic cards, status chips, attention-first tickets, done-history timeline, epic pages with metadata/decisions/history rails (board.md enriched with per-epic since/decisions/book; updated derived); designed landing page; sidebar section dividers to the brand; graceful raw-markdown fallback; parser mutation-verified on real board fixtures. Design intent (R11b): the brand exploration's board/epic IA. **DoD:** the board page reads as a dashboard. | 🔶 (built on branch: board+epic+home to D19 skin, parser 36 tests / 8 mutations killed; **defers ticket-detail pages → T5, book scar-callouts → T4**; PR pending Alex review) |
+| T2 | **Board read model + designed pages.** Parse board + epic files into epic cards, status chips, attention-first tickets, done-history timeline, epic pages with metadata/decisions/history rails (board.md enriched with per-epic since/decisions/book; updated derived); designed landing page; top nav + ⌘K search; brand-themed mermaid + framed lightbox; sidebar section dividers; graceful raw-markdown fallback; parser mutation-verified. Design intent (R11b): the brand exploration's board/epic IA. **DoD:** the board page reads as a dashboard. | ✅ 2026-09-29 (PR #7; 42 tests, ~10 mutations killed across two campaigns + doctrine F1/F2; brand re-skin D19 + D18 renames rode along; **deferred: ticket-detail pages → T5, book scar-callouts → T4**) |
 | T3 | **Build & CI lane.** Static build snapshotting content; `web/**`-keyed CI job; preview story. Hosting ruled **GitHub Pages** (D18); custom domain **live: docs.tradebench.amfshr.dev** (Cloudflare CNAME + PAGES_BASE=/, HTTPS enforced — Alex, 2026-09-29). **DoD:** one command yields the static site; CI green. | ✅ 2026-09-29 (pages.yml deploy + web-ci.yml PR lane; site live on custom domain) |
 | T4 | **Book polish — scar callouts + diagram frames (design R9/P5).** A markdown convention (`> **Scar** · title · dated cost` blockquote) the renderer styles into the mono-spine SCAR card; a content pass converting the nine chapters' scar sections; framed-diagram treatment. **DoD:** book chapters render scars as the R9 card, not plain prose. **Delayed from T2, not dropped.** | ⬜ |
 | T5 | **Ticket-detail pages (design turn-8 TB-view).** `/board/epics/:slug/:ticket` — WHAT / DONE-WHEN checklist / CODE / metadata (created, updated, blocked-by, relates-to, branch) / activity rail. Needs a richer ticket write-model in board.md or the epic files. **DoD:** a ticket opens as its own page. **Deferred by R11b, not dropped.** | ⬜ |
@@ -139,6 +142,17 @@ captured/imported data to chew on (E1 + first Databento decisions).
   #4 half-resolved: Gradle confirmed in practice (D12), tick-lake storage format still open.)
 
 ## Done history
+
+- **2026-09-29 — E2-T2 The docs read model** ✅: `web/docs` grew from a markdown reader into
+  a read model — board.md parsed into a dashboard (epic cards, attention-first tickets,
+  done-history timeline) + epic pages with real-data metadata/decisions/history rails
+  (board.md enriched with per-epic since/decisions/book, updated derived); designed landing;
+  top nav + ⌘K search palette; Quiet Terminal re-skin (D19); brand-themed mermaid + framed
+  fit-to-viewport lightbox; themed scrollbars. 42 tests, ~10 mutations killed; doctrine
+  review pass-with-findings, F1 (surviving history-boundary mutation) + F1–F6 all fixed
+  pre-merge. D18 renames + custom domain (docs.tradebench.amfshr.dev, HTTPS) rode along;
+  T3 closed. Evidence: PR #7 (merged) + live site. Deferred, tracked: T4 (scar callouts),
+  T5 (ticket-detail pages).
 
 - **2026-09-27 — Sanity lap** (menu ①): cold-start playback proved the handoff self-sufficient;
   no contradictions found.
