@@ -64,8 +64,36 @@
   --hl-number: #5b9cf6;
 }
 
+:root {
+  --nav-h: 3.25rem;
+}
+
 * {
   box-sizing: border-box;
+}
+
+/* Thin, themed scrollbars everywhere — no default OS bar ruining the aesthetic. */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--border) transparent;
+}
+
+::-webkit-scrollbar {
+  width: 9px;
+  height: 9px;
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--border);
+  border-radius: 5px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--fg-muted);
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
 }
 
 body {
@@ -78,22 +106,216 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
+/* ---- top nav ---- */
+
+.topnav {
+  position: sticky;
+  top: 0;
+  z-index: 30;
+  display: flex;
+  align-items: center;
+  gap: 1.5rem;
+  height: var(--nav-h);
+  padding: 0 1.25rem;
+  border-bottom: 1px solid var(--border);
+  background: color-mix(in srgb, var(--bg) 85%, transparent);
+  backdrop-filter: blur(8px);
+}
+
+.topnav-left {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.topnav-wordmark {
+  display: flex;
+  align-items: center;
+  font-family: var(--font-mono);
+  font-size: 1rem;
+  font-weight: 500;
+  letter-spacing: -0.01em;
+  color: var(--fg);
+  text-decoration: none;
+}
+
+.topnav-cursor {
+  display: inline-block;
+  width: 0.42em;
+  height: 0.9em;
+  margin-left: 0.12em;
+  background: var(--accent);
+}
+
+.topnav-tag {
+  font-family: var(--font-mono);
+  font-size: 0.7rem;
+  color: var(--fg-muted);
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  padding: 0.05rem 0.35rem;
+}
+
+.topnav-links {
+  display: flex;
+  gap: 1.1rem;
+  font-size: 0.88rem;
+}
+
+.topnav-links a {
+  color: var(--fg-muted);
+  text-decoration: none;
+}
+
+.topnav-links a:hover,
+.topnav-links a.active {
+  color: var(--fg);
+}
+
+.topnav-right {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+}
+
+.nav-search {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  font-size: 0.82rem;
+  color: var(--fg-muted);
+  background: var(--bg-raised);
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  padding: 0.28rem 0.6rem;
+  cursor: pointer;
+}
+
+.nav-search:hover {
+  border-color: var(--accent);
+}
+
+.nav-search kbd {
+  font-family: var(--font-mono);
+  font-size: 0.7rem;
+  color: var(--fg-muted);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 0 0.3rem;
+}
+
+.nav-icon {
+  font-size: 0.95rem;
+  color: var(--fg-muted);
+  background: none;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  width: 2rem;
+  height: 1.9rem;
+  cursor: pointer;
+}
+
+.nav-icon:hover {
+  color: var(--accent);
+  border-color: var(--accent);
+}
+
+/* ---- search palette ---- */
+
+.search-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  background: color-mix(in srgb, var(--bg) 70%, transparent);
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  padding-top: 12vh;
+}
+
+.search-box {
+  width: min(34rem, 92vw);
+  background: var(--bg-raised);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  overflow: hidden;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.35);
+}
+
+.search-input {
+  width: 100%;
+  border: none;
+  border-bottom: 1px solid var(--border);
+  background: none;
+  color: var(--fg);
+  font-family: var(--font-body);
+  font-size: 1rem;
+  padding: 0.9rem 1.1rem;
+  outline: none;
+}
+
+.search-results {
+  list-style: none;
+  margin: 0;
+  padding: 0.35rem;
+  max-height: 22rem;
+  overflow-y: auto;
+}
+
+.search-hit {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 1rem;
+  width: 100%;
+  text-align: left;
+  background: none;
+  border: none;
+  border-radius: 7px;
+  padding: 0.5rem 0.7rem;
+  cursor: pointer;
+  color: var(--fg);
+  font-size: 0.9rem;
+}
+
+.search-hit.active {
+  background: var(--accent);
+  color: #fff;
+}
+
+.search-hit-group {
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  color: var(--fg-muted);
+}
+
+.search-hit.active .search-hit-group {
+  color: rgba(255, 255, 255, 0.8);
+}
+
+.search-empty {
+  padding: 0.8rem;
+  color: var(--fg-muted);
+  font-size: 0.9rem;
+}
+
 /* ---- layout ---- */
 
 .layout {
   display: flex;
-  min-height: 100vh;
+  min-height: calc(100vh - var(--nav-h));
 }
 
 .sidebar {
   position: sticky;
-  top: 0;
+  top: var(--nav-h);
   align-self: flex-start;
   width: var(--sidebar-width);
   flex-shrink: 0;
-  height: 100vh;
+  height: calc(100vh - var(--nav-h));
   overflow-y: auto;
-  padding: 1.25rem 1rem 2rem;
+  padding: 1.5rem 1rem 2rem;
   border-right: 1px solid var(--border);
   background: var(--bg-raised);
   font-size: 0.875rem;
@@ -127,58 +349,6 @@ body {
 }
 
 /* ---- sidebar ---- */
-
-.sidebar-head {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 0.5rem;
-}
-
-/* R4 wordmark: tradebench + accent cursor block (drawn, not a glyph). */
-.sidebar-title {
-  display: block;
-  font-family: var(--font-mono);
-  font-size: 1.05rem;
-  font-weight: 500;
-  letter-spacing: -0.01em;
-  color: var(--fg);
-  text-decoration: none;
-}
-
-.sidebar-title::after {
-  content: '';
-  display: inline-block;
-  width: 0.45em;
-  height: 0.95em;
-  margin-left: 0.14em;
-  vertical-align: -0.12em;
-  background: var(--accent);
-}
-
-.theme-toggle {
-  font-family: var(--font-mono);
-  font-size: 0.7rem;
-  color: var(--fg-muted);
-  background: none;
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  padding: 0.2rem 0.5rem;
-  cursor: pointer;
-  white-space: nowrap;
-}
-
-.theme-toggle:hover {
-  color: var(--accent);
-  border-color: var(--accent);
-}
-
-.sidebar-subtitle {
-  margin: 0.1rem 0 1.5rem;
-  font-family: var(--font-mono);
-  font-size: 0.72rem;
-  color: var(--fg-muted);
-}
 
 /* Design R6/turn-6: uppercase mono section dividers (START · THE BOOK · SYSTEM feel). */
 .sidebar details {
@@ -512,9 +682,9 @@ body {
 
 .toc {
   position: sticky;
-  top: 2rem;
+  top: calc(var(--nav-h) + 1.5rem);
   align-self: start;
-  max-height: calc(100vh - 4rem);
+  max-height: calc(100vh - var(--nav-h) - 3rem);
   overflow-y: auto;
   font-size: 0.8rem;
   border-left: 1px solid var(--border);
@@ -947,7 +1117,7 @@ h3:hover .hanchor {
 
 .epic-aside {
   position: sticky;
-  top: 2rem;
+  top: calc(var(--nav-h) + 1.5rem);
   font-size: 0.82rem;
 }
 

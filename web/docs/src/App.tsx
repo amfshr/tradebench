@@ -5,19 +5,23 @@ import { EpicPage } from './EpicPage';
 import { HomePage } from './HomePage';
 import { MarkdownPage } from './MarkdownPage';
 import { Sidebar } from './Sidebar';
+import { TopNav } from './TopNav';
 
 export function App() {
   return (
-    <div className="layout">
-      <Sidebar />
-      <main className="content">
-        <Routes>
-          <Route path="/" element={<HomePage />} />
-          <Route path="/board" element={<BoardPage />} />
-          <Route path="/board/epics/:slug" element={<EpicPage />} />
-          <Route path="/*" element={<MarkdownPage />} />
-        </Routes>
-      </main>
+    <div className="app">
+      <TopNav />
+      <div className="layout">
+        <Sidebar />
+        <main className="content">
+          <Routes>
+            <Route path="/" element={<HomePage />} />
+            <Route path="/board" element={<BoardPage />} />
+            <Route path="/board/epics/:slug" element={<EpicPage />} />
+            <Route path="/*" element={<MarkdownPage />} />
+          </Routes>
+        </main>
+      </div>
     </div>
   );
 }
