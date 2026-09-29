@@ -211,3 +211,16 @@ workspace root is `web/` (supersedes `frontend/` — D3's monorepo ruling unchan
 apps are named for the subdomain they serve: `web/docs` live, `web/platform` seat reserved.
 **Why:** one static build, one deploy, one place to look; dir↔domain symmetry keeps naming
 honest; "frontend" names a layer, `web/` names the artifact family.
+
+## D19 — Brand & visual identity: Quiet Terminal — **Accepted** (2026-09-29, Alex)
+
+Ruled via the 2026-09-29 design session (R1–R11): dark-first Quiet Terminal direction;
+token palette (brand.md) with blue accent; Inter + JetBrains Mono; `tradebench▊` wordmark;
+two-candles mark; amber attention used at most once per screen; scar callouts with mono
+spine and Lesson line. **Standing doctrine from R8: green/red exist only as the market's
+up/down + P&L pair — strategy elements use the brand accent; the market and the strategy
+never share a colour** (binds all chart UI, E4+). Evidence: Alex's design-tool exploration
+(self-documenting decision log, archived under docs/design/research/). Spec:
+`docs/design/brand.md`. **Why:** with red/green reserved for market semantics, attention
+must be amber, and a brass/amber *brand* would collide with it — restraint that leaves
+data loudest wins on the product's own logic.

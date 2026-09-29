@@ -1,11 +1,15 @@
 # Design session — brand & visual identity (docs site first surface)
 
-**Status: OPEN** (2026-09-29). Phase 1: Alex explores visually in Claude's design tool
-using the briefs below; artifacts land in `docs/design/research/2026-09-29-brand-explorations/`.
-Phase 2: reconvene, rule (R-numbers), produce `docs/design/brand.md` + token values;
-re-skin `web/docs`; T2 builds to the ruling. **Resolves:** the visual identity the E2
-site and later `web/platform` inherit. **Spawns:** brand.md, token update, possibly a
-wordmark/favicon asset.
+**Status: CLOSED** (2026-09-29, same day). Phase 1: Alex ran the full exploration in
+Claude's design tool — a ten-turn session whose export is itself a decision log
+(D-01…D-09 with picks, rejections, and rationale), archived in
+`docs/design/research/2026-09-29-brand-explorations/`. Phase 2: Claude audited it against
+doctrine (WCAG AA computed for every token pair; red/green reservation verified;
+quiet-is-healthy honored) and put it to Alex as R1–R11. **Alex ruled: all as recommended
+("all rec, go ahead and execute").** **Resolved:** the visual identity for `web/docs` and
+later `web/platform` — spec at `docs/design/brand.md`; decision D19. **Spawned:** token
+re-skin + wordmark + two-candles favicon in `web/docs` (rides the T2 PR); R8 elevated to
+standing platform doctrine; T2 design intent = the exploration's board/epic IA (R11b).
 
 ## Grounding (what is already ruled — not re-litigated here)
 
@@ -111,12 +115,25 @@ One dashboard frame of the FUTURE platform app in the same direction: a candlest
 chart panel (this is where red/green live, and only here), a running-bots status strip,
 an equity curve card — proving the brand survives contact with real market UI.
 
-## Phase-2 questions (to rule on return — recommendations held until artifacts exist)
+## Rulings (R1–R11 — Alex, 2026-09-29, all as recommended)
 
-Q1 direction · Q2 accent (the green-collision verdict) · Q3 type (keep Inter/JBM; serif
-for the book?) · Q4 wordmark/mark/favicon · Q5 dark-first or light-first default ·
-Q6 what carries to `web/platform` unchanged.
+R1 Direction: Quiet Terminal (ratifies exploration D-01; strawman Workbench conceded on
+the brass/amber-attention collision) · R2 Tokens (D-02 tables — see brand.md) · R3 Type:
+Inter + JetBrains Mono, Newsreader rejected (D-03) · R4 Wordmark `tradebench▊` mono-500
+cursor block (D-04) · R5 Mark/favicon: two candles, accent hollow (D-05) · R6 Sidebar
+active: tree rail, 2px accent segment (D-06) · R7 Attention = amber, at most once per
+screen (D-07) · R8 Market colours only for up/down + P&L; strategy uses accent — market
+and strategy never share a colour — **standing platform doctrine** (D-08) · R9 Scar
+callout: mono spine, dated cost, Lesson line, no icon/colour (D-09) · R10 Guardrail:
+light-mode up/down as text is AA-large only → P&L text semibold-large or darkened
+variants · R11 Scope: mock content is fiction, none ratified; the exploration's
+epic/ticket IA becomes T2 design intent.
+
+Contrast audit (computed, both modes): every text-role pair ≥ 4.5:1 AA; the sole
+exception is R10's case. Full ratios recorded in session chat and re-derivable from the
+token table.
 
 ## Satellites
 
-Board menu already lists this session (①). Decisions and brand.md land at phase 2.
+`docs/design/brand.md` (the spec) · D19 in `docs/decisions.md` · board Done-history +
+menu refresh · re-skin commit on `e2-t2-board-read-model`.

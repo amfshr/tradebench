@@ -15,15 +15,13 @@ same branch while Alex reads and reviews the accumulated code. E0 only lacks enf
 (T4). E3's language semantics are ruled (D7–D9); its two design-gate tickets are cut and
 plannable. E4–E8 name the horizon; no tickets until their own planning sessions.
 
-**Next-session menu (refreshed 2026-09-28 EOD, post E2-T1 merge):**
-① *Brand design session* — Alex explores visual directions (claude.ai design surface and/or
-Claude-built mockup artifacts), then `/design-session` here rules them into
-`docs/design/brand.md` + token values; feeds T2 directly. ② *E2-T2 board read model* —
-landing + board-as-dashboard, built to the brand ruling (branch from main in the
-e2-docs-reader worktree). ③ *E1-T5 slices B + C* — event log, bar_gaps V2, Supervisor
-shell (main checkout, branch `e1-t5-resilience`; merge main in first — docs + D18 renames).
-④ *Finish the book read* (chapters live on the site now) · optional: custom-domain setup
-(T3 close), E0-T4 enforcement.
+**Next-session menu (refreshed 2026-09-29, post brand ruling):**
+① *E2-T2 build* — landing + board dashboard + epic pages to the brand (D19, brand.md;
+design intent = the exploration's IA, R11b) on `e2-t2-board-read-model`; the token
+re-skin + wordmark + favicon are already on the branch and land with its PR. ② *E1-T5
+slices B + C* — event log, bar_gaps V2, Supervisor shell (main checkout; merge main in
+first — docs + D18 renames). ③ *Finish the book read* · optional: custom-domain setup
+(T3 close, docs.tradebench.amfshr.dev recipe in session chat), E0-T4 enforcement.
 
 ---
 
@@ -86,7 +84,7 @@ nod N1–N4). **Working shape:** git worktree `.claude/worktrees/e2-docs-reader`
 | # | Ticket | Status |
 |---|--------|--------|
 | T1 | **Docs & board reader v0.** Vite/React/TS app at `web/docs` (tech-notes §6 shape as ruled by D18): sidebar over `docs/` + the board, GFM, rendered mermaid, highlighted code, rewritten internal links, light/dark, reading-first typography; content via dev-server glob of the repo's markdown — no backend; doc edits hot-reload. **DoD:** the book, product overview, PRD, decisions and board all render pleasantly with working nav. | ✅ 2026-09-28 (PR #6; 21 behavioural tests, 9 mutations killed incl. review F1's deletion mutant; doctrine F1–F6 all fixed pre-open; v0.2 chrome + lightbox + theme toggle per Alex's iterative rulings; D18 renames rode the PR) |
-| T2 | **Board read model.** Parse board + epic files into epic cards, status chips, done-history timeline; graceful raw-markdown fallback; parser mutation-verified on real board fixtures. Alex 2026-09-28: pages still read as top-to-bottom md — T2's structured views + a designed landing are the counterweight, with the brand session. **DoD:** the board page reads as a dashboard. | ⬜ |
+| T2 | **Board read model.** Parse board + epic files into epic cards, status chips, done-history timeline; graceful raw-markdown fallback; parser mutation-verified on real board fixtures. Design intent ruled 2026-09-29 (R11b): the brand exploration's board/epic IA. Alex 2026-09-28: pages still read as top-to-bottom md — T2's structured views + a designed landing are the counterweight, with the brand session. **DoD:** the board page reads as a dashboard. | ⬜ |
 | T3 | **Build & CI lane.** Static build snapshotting content; `web/**`-keyed CI job; preview story (hosting decided later — now ruled: **GitHub Pages** (Alex, 2026-09-28; one docs site + `web/` naming = D18). **DoD:** one command yields the static site; CI green. | 🔶 (deploy + PR lane live; **first Pages deploy green 2026-09-28 — site live at amfshr.github.io/tradebench/**. Remaining: Alex's custom-domain call — docs.tradebench.amfshr.dev via Cloudflare CNAME + PAGES_BASE=/ — or accept github.io and close) |
 
 ## E3 🧪 Indicator DSL v0 + backtest spine — DESIGN-GATED
@@ -180,3 +178,11 @@ captured/imported data to chew on (E1 + first Databento decisions).
   web-ci.yml PR check + pages.yml → **first GitHub Pages deploy green, site live**. D18
   ruled in-review (one docs site; `web/` naming). Evidence: PR #6 (merged) +
   amfshr.github.io/tradebench/.
+- **2026-09-29 — Brand & visual identity design session** ✅ (same-day close): Alex ran a
+  ten-turn exploration in Claude's design tool that produced its own decision log
+  (D-01…D-09); Claude audited (full WCAG AA pass computed; red/green reservation
+  verified) and proposed R1–R11; Alex ruled all as recommended. Quiet Terminal direction,
+  token palette, Inter+JBM, `tradebench▊` wordmark, two-candles mark, amber-once
+  attention, market-vs-strategy colour doctrine (R8, standing), scar callout treatment.
+  Artifacts: `docs/design/brand.md` (spec) · D19 · session record CLOSED · exploration
+  export archived under `docs/design/research/`. Re-skin rides the T2 PR.
