@@ -592,10 +592,42 @@ body {
 /* ---- mermaid ---- */
 
 .mermaid-diagram {
-  margin: 1.4em 0;
+  position: relative;
+  margin: 1.6em 0;
+  padding: 1.4rem 1rem;
   overflow-x: auto;
   text-align: center;
   cursor: zoom-in;
+  background: var(--bg-raised);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  transition: border-color 0.12s;
+}
+
+.mermaid-diagram:hover {
+  border-color: var(--accent);
+}
+
+/* a small "enlarge" affordance in the corner, revealed on hover */
+.mermaid-diagram::after {
+  content: '⤢ enlarge';
+  position: absolute;
+  top: 0.55rem;
+  right: 0.7rem;
+  font-family: var(--font-mono);
+  font-size: 0.68rem;
+  color: var(--fg-muted);
+  opacity: 0;
+  transition: opacity 0.12s;
+}
+
+.mermaid-diagram:hover::after {
+  opacity: 1;
+}
+
+.mermaid-diagram svg {
+  max-width: 100%;
+  height: auto;
 }
 
 .lightbox {
@@ -622,11 +654,6 @@ body {
   color: var(--fg-muted);
   font-size: 0.8rem;
   margin: 0;
-}
-
-.mermaid-diagram svg {
-  max-width: 100%;
-  height: auto;
 }
 
 .mermaid-loading {
