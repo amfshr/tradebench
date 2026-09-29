@@ -14,7 +14,7 @@ const FIXTURE = `# Tradebench Board
 
 ## E1 📡 Collection service, deployed 24/7 — ACTIVE
 
-**Since** 2026-09-25 · **Decisions** D2, D17 · **Book** ch. 1–9
+**Since** 2026-09-25 · **Decisions** D2, and TBD, D17 · **Book** ch. 1–9
 
 **Mission:** stream and store market data.
 
