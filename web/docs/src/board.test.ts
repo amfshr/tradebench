@@ -19,8 +19,9 @@ const FIXTURE = `# Tradebench Board
 | # | Ticket | Status |
 |---|--------|--------|
 | T1 | **Foundations.** skeleton and CI. **DoD:** green. | ✅ 2026-09-27 (PR #1) |
-| T2 | **Streaming.** ticks + bars. | 🔶 (nod ruled) |
-| T3 | **Persistence.** Flyway. | ⬜ |
+| T2 | **IG client.** REST + stream. | ✅ 2026-09-27 |
+| T3 | **Streaming.** ticks + bars. | 🔶 (nod ruled) |
+| T4 | **Persistence.** Flyway. | ⬜ |
 
 ## E2 🧰 The docs site (\`web/docs\` → docs.tradebench) — ACTIVE (planned 2026-09-28)
 
@@ -38,7 +39,7 @@ const FIXTURE = `# Tradebench Board
 ## Done history
 
 - **2026-09-27 — Sanity lap** (menu ①): cold-start playback proved the handoff.
-  continuation line that must not become an entry.
+  a **bold phrase** on a continuation line must not become an entry.
 - **2026-09-28 — E1-T4 Persistence** ✅: Flyway V1 landed.
 `;
 
@@ -85,12 +86,12 @@ describe('parseBoard', () => {
   });
 
   test('skips the header and separator rows of the ticket table', () => {
-    expect(board.epics[0].tickets.map((t) => t.id)).toEqual(['T1', 'T2', 'T3']);
+    expect(board.epics[0].tickets.map((t) => t.id)).toEqual(['T1', 'T2', 'T3', 'T4']);
   });
 
   test('computes done/total per epic', () => {
-    expect(board.epics[0].done).toBe(1);
-    expect(board.epics[0].total).toBe(3);
+    expect(board.epics[0].done).toBe(2);
+    expect(board.epics[0].total).toBe(4);
     expect(board.epics[1].done).toBe(1);
     expect(board.epics[1].total).toBe(2);
   });
