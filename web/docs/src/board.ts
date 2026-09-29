@@ -22,6 +22,10 @@ export interface Epic {
   name: string;
   statusLabel: string;
   mission: string;
+  since: string;
+  decisions: string[];
+  book: string;
+  updated: string;
   tickets: Ticket[];
   done: number;
   total: number;
@@ -105,7 +109,9 @@ function ticketFrom(row: string): Ticket | null {
   };
 }
 
-function epicHeader(line: string): Omit<Epic, 'mission' | 'tickets' | 'done' | 'total'> | null {
+type EpicSeed = Omit<Epic, 'mission' | 'since' | 'decisions' | 'book' | 'updated' | 'tickets' | 'done' | 'total'>;
+
+function epicHeader(line: string): EpicSeed | null {
   const em = line.match(/^##\s+(E\d+)\s+(.*)$/);
   if (!em) {
     return null;
@@ -119,6 +125,24 @@ function epicHeader(line: string): Omit<Epic, 'mission' | 'tickets' | 'done' | '
   const name = spaceAfterEmoji === -1 ? namePart : namePart.slice(spaceAfterEmoji + 1).trim();
   const statusLabel = statusPart.split('(')[0].trim();
   return { id: em[1], num: Number(em[1].slice(1)), emoji, name, statusLabel };
+}
+
+/** `**Since** 2026-09-27 · **Decisions** D2, D14 · **Book** ch. 1–9` → the meta fields. */
+function parseMeta(line: string): Pick<Epic, 'since' | 'decisions' | 'book'> {
+  const since = line.match(/\*\*Since\*\*\s+([\d-]+)/)?.[1] ?? '';
+  const book = line.match(/\*\*Book\*\*\s+([^·]+)/)?.[1]?.trim() ?? '';
+  const decRaw = line.match(/\*\*Decisions\*\*\s+([^·]+)/)?.[1] ?? '';
+  const decisions = decRaw
+    .split(',')
+    .map((d) => d.trim())
+    .filter((d) => /^D\d+$/.test(d));
+  return { since, decisions, book };
+}
+
+/** The latest YYYY-MM-DD mentioned anywhere in the epic's ticket notes. */
+function latestDate(epic: Epic): string {
+  const dates = epic.tickets.flatMap((t) => t.note.match(/\d{4}-\d{2}-\d{2}/g) ?? []);
+  return dates.sort().at(-1) ?? epic.since;
 }
 
 function parseHistory(lines: string[]): HistoryEntry[] {
@@ -152,7 +176,17 @@ export function parseBoard(markdown: string): ParsedBoard {
       inHistory = /^##\s+Done history/i.test(line);
       const header = epicHeader(line);
       if (header) {
-        current = { ...header, mission: '', tickets: [], done: 0, total: 0 };
+        current = {
+          ...header,
+          mission: '',
+          since: '',
+          decisions: [],
+          book: '',
+          updated: '',
+          tickets: [],
+          done: 0,
+          total: 0,
+        };
         epics.push(current);
       } else {
         current = null;
@@ -168,6 +202,8 @@ export function parseBoard(markdown: string): ParsedBoard {
     }
     if (line.startsWith('**Mission:**')) {
       current.mission = line.slice('**Mission:**'.length).trim();
+    } else if (line.startsWith('**Since**')) {
+      Object.assign(current, parseMeta(line));
     } else if (line.startsWith('| T')) {
       const ticket = ticketFrom(line);
       if (ticket) {
@@ -179,9 +215,15 @@ export function parseBoard(markdown: string): ParsedBoard {
   for (const epic of epics) {
     epic.total = epic.tickets.length;
     epic.done = epic.tickets.filter((t) => t.status === 'done').length;
+    epic.updated = latestDate(epic);
   }
 
   return { title, epics, history: parseHistory(historyLines) };
+}
+
+/** History entries tagged with this epic's id (e.g. `E1-T4 Persistence`), newest first. */
+export function historyForEpic(board: ParsedBoard, id: string): HistoryEntry[] {
+  return board.history.filter((h) => h.title.includes(`${id}-`));
 }
 
 export function allTickets(board: ParsedBoard): (Ticket & { epicId: string })[] {

@@ -1,11 +1,72 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import { Link, useParams } from 'react-router-dom';
 
-import type { Ticket } from './board';
+import { historyForEpic, type Epic, type Ticket } from './board';
 import { epicDocByNum } from './content';
 import { MarkdownBody } from './MarkdownBody';
 import { StatusChip } from './StatusChip';
 import { useBoard } from './useBoard';
+import type { ParsedBoard } from './board';
+
+function MetaRow({ label, children }: { label: string; children: ReactNode }) {
+  return (
+    <div className="meta-row">
+      <dt>{label}</dt>
+      <dd>{children}</dd>
+    </div>
+  );
+}
+
+function EpicAside({ epic, board }: { epic: Epic; board: ParsedBoard }) {
+  const open = epic.tickets.filter((t) => t.status !== 'done').length;
+  const history = historyForEpic(board, epic.id);
+  return (
+    <aside className="epic-aside">
+      <dl className="meta-panel">
+        <MetaRow label="since">{epic.since || '—'}</MetaRow>
+        <MetaRow label="updated">{epic.updated || '—'}</MetaRow>
+        <MetaRow label="open">{open}</MetaRow>
+        <MetaRow label="done">
+          {epic.done} / {epic.total}
+        </MetaRow>
+        <MetaRow label="book">
+          {epic.book && epic.book !== '—' ? (
+            <Link to="/docs/book">{epic.book}</Link>
+          ) : (
+            '—'
+          )}
+        </MetaRow>
+      </dl>
+
+      {epic.decisions.length > 0 && (
+        <div className="aside-block">
+          <p className="section-label">Decisions</p>
+          <ul className="aside-list">
+            {epic.decisions.map((d) => (
+              <li key={d}>
+                <Link to="/docs/decisions">{d}</Link>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      {history.length > 0 && (
+        <div className="aside-block">
+          <p className="section-label">History</p>
+          <ol className="timeline">
+            {history.map((h, i) => (
+              <li key={i}>
+                <span className="timeline-date">{h.date}</span>
+                <span className="timeline-title">{h.title}</span>
+              </li>
+            ))}
+          </ol>
+        </div>
+      )}
+    </aside>
+  );
+}
 
 function TicketTable({ tickets }: { tickets: Ticket[] }) {
   return (
@@ -83,25 +144,29 @@ export function EpicPage() {
         </p>
       </header>
 
-      {open.length > 0 && (
-        <section>
-          <p className="section-label">Open</p>
-          <TicketTable tickets={open} />
-        </section>
-      )}
-      {done.length > 0 && (
-        <section>
-          <p className="section-label">Done</p>
-          <TicketTable tickets={done} />
-        </section>
-      )}
-
-      {plan && (
-        <section className="epic-plan">
-          <p className="section-label">Full plan</p>
-          <MarkdownBody markdown={plan} repoPath={doc?.repoPath ?? ''} />
-        </section>
-      )}
+      <div className="epic-cols">
+        <div className="epic-main">
+          {open.length > 0 && (
+            <section>
+              <p className="section-label">Open</p>
+              <TicketTable tickets={open} />
+            </section>
+          )}
+          {done.length > 0 && (
+            <section>
+              <p className="section-label">Done</p>
+              <TicketTable tickets={done} />
+            </section>
+          )}
+          {plan && (
+            <section className="epic-plan">
+              <p className="section-label">Full plan</p>
+              <MarkdownBody markdown={plan} repoPath={doc?.repoPath ?? ''} />
+            </section>
+          )}
+        </div>
+        <EpicAside epic={epic} board={board} />
+      </div>
     </div>
   );
 }

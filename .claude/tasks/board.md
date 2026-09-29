@@ -27,6 +27,8 @@ first — docs + D18 renames). ③ *Finish the book read* · optional: custom-do
 
 ## E0 🤖 AI operating framework — ACTIVE (born urgent 2026-09-27)
 
+**Since** 2026-09-27 · **Decisions** D10, D13 · **Book** —
+
 **Mission:** make AI a reliable standing development partner (PRD §9's AI-workable NFR):
 explicit roles, hard guardrails, session protocols, and a standardized `.claude/` + `docs/`
 structure — so any session, however cold, is safe and productive by default.
@@ -42,6 +44,8 @@ testing doctrine G5 binds to) · PRD §9.
 | T4 | **Guardrail enforcement.** Pre-commit + CI scan for credentials and strategy-content patterns (a seeded fake-secret fixture must go red — mutation-verified, per doctrine); `.claude/settings.json` permissions baseline; hooks only if a real need shows. **DoD:** planted violations caught in CI; permissions documented in the framework doc. | ⬜ (pairs with E1-T1's CI) |
 
 ## E1 📡 Collection service, deployed 24/7 — ACTIVE
+
+**Since** 2026-09-27 · **Decisions** D2, D14, D15, D16, D17 · **Book** ch. 1–9
 
 **Mission:** Tradebench's first deployed artifact: a standalone Spring Boot service streaming
 IG **ticks + 1-minute bars** for DAX into Postgres, resilient and self-reporting, with the
@@ -70,6 +74,8 @@ CHART:1MINUTE sealed bars only) · engineering playbook §1–§4.
 
 ## E2 🧰 The docs site (`web/docs` → docs.tradebench) — ACTIVE (planned 2026-09-28, runs alongside E1-T5)
 
+**Since** 2026-09-28 · **Decisions** D11, D18, D19 · **Book** —
+
 The first frontend warm-up: a small locally-served React/TS app rendering this markdown board
 (and the epics/vision docs) as pages — MD stays the write model for agents, the app is the read
 model for humans. **Shape confirmed by Alex 2026-09-27 (D11; PRD open Q#10 resolved).** Scope
@@ -88,6 +94,8 @@ nod N1–N4). **Working shape:** git worktree `.claude/worktrees/e2-docs-reader`
 | T3 | **Build & CI lane.** Static build snapshotting content; `web/**`-keyed CI job; preview story (hosting decided later — now ruled: **GitHub Pages** (Alex, 2026-09-28; one docs site + `web/` naming = D18). **DoD:** one command yields the static site; CI green. | 🔶 (deploy + PR lane live; **first Pages deploy green 2026-09-28 — site live at amfshr.github.io/tradebench/**. Remaining: Alex's custom-domain call — docs.tradebench.amfshr.dev via Cloudflare CNAME + PAGES_BASE=/ — or accept github.io and close) |
 
 ## E3 🧪 Indicator DSL v0 + backtest spine — DESIGN-GATED
+
+**Since** 2026-09-27 · **Decisions** D7, D8, D9 · **Book** —
 
 The rest of PRD §11 phase 1: basic chart over stored data → indicator DSL v0 (look-ahead
 rejection from day one) → backtest job runner v0 (default FLAT⇄IN_POSITION machine) → first

@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'vitest';
 
-import { allTickets, classifyStatus, parseBoard, rankOf } from './board';
+import { allTickets, classifyStatus, historyForEpic, parseBoard, rankOf } from './board';
 
 // A fixture shaped exactly like the real board.md (header forms, table forms, history
 // bullets) but with invented content. Expectations are hand-derived from the format.
@@ -14,12 +14,14 @@ const FIXTURE = `# Tradebench Board
 
 ## E1 📡 Collection service, deployed 24/7 — ACTIVE
 
+**Since** 2026-09-25 · **Decisions** D2, D17 · **Book** ch. 1–9
+
 **Mission:** stream and store market data.
 
 | # | Ticket | Status |
 |---|--------|--------|
 | T1 | **Foundations.** skeleton and CI. **DoD:** green. | ✅ 2026-09-27 (PR #1) |
-| T2 | **IG client.** REST + stream. | ✅ 2026-09-27 |
+| T2 | **IG client.** REST + stream. | ✅ 2026-09-28 |
 | T3 | **Streaming.** ticks + bars. | 🔶 (nod ruled) |
 | T4 | **Persistence.** Flyway. | ⬜ |
 
@@ -100,6 +102,17 @@ describe('parseBoard', () => {
     expect(board.epics[0].mission).toBe('stream and store market data.');
   });
 
+  test('reads the metadata line: since, decisions (D-numbers only), book', () => {
+    const e1 = board.epics[0];
+    expect(e1.since).toBe('2026-09-25');
+    expect(e1.decisions).toEqual(['D2', 'D17']);
+    expect(e1.book).toBe('ch. 1–9');
+  });
+
+  test('derives "updated" from the latest date in the ticket notes, not "since"', () => {
+    expect(board.epics[0].updated).toBe('2026-09-28');
+  });
+
   test('reads history top-level bullets only, splitting date from title', () => {
     expect(board.history).toEqual([
       { date: '2026-09-27', title: 'Sanity lap' },
@@ -121,5 +134,13 @@ describe('allTickets', () => {
   test('tags each ticket with its epic id', () => {
     const first = allTickets(parseBoard(FIXTURE)).find((t) => t.id === 'T3');
     expect(first?.epicId).toBe('E1');
+  });
+});
+
+describe('historyForEpic', () => {
+  test('keeps only entries tagged with the epic id', () => {
+    const board = parseBoard(FIXTURE);
+    expect(historyForEpic(board, 'E1').map((h) => h.title)).toEqual(['E1-T4 Persistence']);
+    expect(historyForEpic(board, 'E9')).toEqual([]);
   });
 });
