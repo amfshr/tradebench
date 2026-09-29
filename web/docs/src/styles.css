@@ -670,19 +670,20 @@ body {
   cursor: zoom-out;
 }
 
+/* A definite box; the svg fits inside it, preserving aspect (contain). */
 .lightbox-inner {
   display: flex;
-  min-height: 0;
-  max-width: 94vw;
-  max-height: 84vh;
+  align-items: center;
+  justify-content: center;
+  width: 94vw;
+  height: 84vh;
 }
 
-/* Fit the whole diagram inside the viewport, never force it larger than it needs. */
 .lightbox-inner svg {
   width: auto !important;
   height: auto !important;
-  max-width: 94vw !important;
-  max-height: 84vh !important;
+  max-width: 100% !important;
+  max-height: 100% !important;
 }
 
 .lightbox-hint {
