@@ -1674,3 +1674,26 @@ h3:hover .hanchor {
   color: var(--fg-muted);
   margin-right: 0.15rem;
 }
+
+/* ---- site licence footer (D23) ---- */
+
+/* Full-width page footer (content column), centred text — aligns under any page's
+   content regardless of that page's measure. */
+.site-footer {
+  margin-top: 4rem;
+  padding: 1.25rem 0 0;
+  border-top: 1px solid var(--border);
+  font-size: 0.78rem;
+  color: var(--fg-muted);
+  line-height: 1.5;
+  text-align: center;
+}
+
+.site-footer a {
+  color: var(--accent);
+  text-decoration: none;
+}
+
+.site-footer a:hover {
+  text-decoration: underline;
+}
