@@ -3,7 +3,7 @@ import { Link, useLocation } from 'react-router-dom';
 import { sidebarTree as tree } from './content';
 import { normalizeRoute } from './tree';
 
-const OPEN_BY_DEFAULT = new Set(['Product', 'The book', 'Board']);
+const OPEN_BY_DEFAULT = new Set(['Product', 'Field Manual', 'Board']);
 
 export function Sidebar() {
   const current = normalizeRoute(useLocation().pathname);

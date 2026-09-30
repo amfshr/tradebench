@@ -131,4 +131,4 @@ flowchart TD
   2/3/10/15-minute entirely. Every higher timeframe is aggregated from healed 1m in our own
   code (D15) — the stream can't do it for you.
 
-*Previous: [Book index](README.md) · Next: [Chapter 2 — Threads and the callback boundary](02-threads-and-the-callback-boundary.md)*
+*Previous: [Field Manual index](README.md) · Next: [Chapter 2 — Threads and the callback boundary](02-threads-and-the-callback-boundary.md)*

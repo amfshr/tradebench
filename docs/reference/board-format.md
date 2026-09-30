@@ -17,7 +17,7 @@ actually look up: what type of work, which branch, when it started, what blocks 
   as structure.
 - One `## E<n> <emoji> <name> — <STATUS-LABEL> (<note>)` header per epic.
 - Directly under each epic header, the epic metadata line:
-  `**Since** <YYYY-MM-DD> · **Decisions** <D2, D17, …> · **Book** <ch. 1–9 | —>`
+  `**Since** <YYYY-MM-DD> · **Decisions** <D2, D17, …> · **Manual** <ch. 1–9 | —>`
 - `**Mission:** <one line>` — the epic's mission.
 - A ticket table: `| # | Ticket | Status |` with rows
   `| T<n> | **<Title.>** <summary> **DoD:** <done-when> | <emoji> <note> |`.

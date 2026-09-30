@@ -115,4 +115,4 @@ but the reasoning is airtight: a retry into a broken sink throws a fresh excepti
 the original cause, and the first error — the only interesting one — is the thing you
 must never bury.
 
-*Previous: [Chapter 3 — Buffers, queues and backpressure](03-buffers-queues-and-backpressure.md) · [Book index](README.md) · Next: [Chapter 5 — The capture store and Postgres](05-the-capture-store-and-postgres.md)*
+*Previous: [Chapter 3 — Buffers, queues and backpressure](03-buffers-queues-and-backpressure.md) · [Field Manual index](README.md) · Next: [Chapter 5 — The capture store and Postgres](05-the-capture-store-and-postgres.md)*

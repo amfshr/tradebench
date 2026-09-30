@@ -10,7 +10,7 @@ handoff is self-sufficient** — any gap you hit is itself a finding.
 
 1. **Read, in order:** `CLAUDE.md` → `docs/inherited/product-requirements.md` (the PRD) →
    `.claude/tasks/board.md` → `docs/decisions.md` → the most recent record in
-   `docs/design-sessions/` (if any).
+   `docs/design/sessions/` (if any).
 2. **Play back, leading with the outcome:**
    - *What the project is* — one tight section; cite principles by number (P1–P10).
    - *Where it stands* — epic statuses, decisions to date (D-numbers), Done history, anything

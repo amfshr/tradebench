@@ -1,7 +1,7 @@
 # Tradebench documentation map
 
 One page to find everything. The tree has four registers — product (what and why for
-humans), teaching (the book), design truth (specs, sessions, decisions), and inherited
+humans), teaching (the Field Manual), design truth (specs, sessions, decisions), and inherited
 evidence (the prototype's read-only seed pack) — plus the working layer in `.claude/`.
 
 ## Start here
@@ -9,7 +9,7 @@ evidence (the prototype's read-only seed pack) — plus the working layer in `.c
 | You want… | Go to |
 |---|---|
 | What Tradebench is and how it works, in prose | [`product/overview.md`](product/overview.md) |
-| To *understand* a mechanism (sockets, threads, queues, locks, clocks, resilience, busses) | [The book](book/README.md) |
+| To *understand* a mechanism (sockets, threads, queues, locks, clocks, resilience, busses) | [The Field Manual](field-manual/README.md) |
 | The system's shape — modules, seams, data flows | [`design/architecture.md`](design/architecture.md) |
 | Why a decision was made (and its status) | [`decisions.md`](decisions.md) |
 | What's being built right now | [`.claude/tasks/board.md`](../.claude/tasks/board.md) |
@@ -18,7 +18,7 @@ evidence (the prototype's read-only seed pack) — plus the working layer in `.c
 
 - **[`product/`](product/overview.md)** — technical product docs. Today: the overview. A
   named seat waits for the strategy-language reference when E3 makes the DSL real.
-- **[`book/`](book/README.md)** — the learning pages: jargon → first principles → our exact
+- **[`book/`](field-manual/README.md)** — the learning pages: jargon → first principles → our exact
   code paths → the scar that taught it. Nine chapters following the data from IG's socket
   to Postgres and out again.
 - **[`design/`](design/README.md)** — enduring technical specs (*what is*):
@@ -26,7 +26,7 @@ evidence (the prototype's read-only seed pack) — plus the working layer in `.c
   trajectory, fan-out plan), [`tech-notes.md`](design/tech-notes.md) (stack, Java feature
   policy, null-safety, naming and SQL conventions),
   [`secrets-and-config.md`](design/secrets-and-config.md) (the D16 env/credentials design).
-- **[`design-sessions/`](design-sessions/2026-09-27-indicators-and-predicates.md)** — dated
+- **[`design-sessions/`](design/sessions/2026-09-27-indicators-and-predicates.md)** — dated
   *answered records* of how designs got decided (*why*, frozen; they don't evolve).
 - **[`decisions.md`](decisions.md)** — this repo's decision log, D1 onward: each with
   context, ruling, and status. Never re-litigated silently.

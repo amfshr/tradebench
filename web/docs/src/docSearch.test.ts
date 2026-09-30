@@ -7,7 +7,7 @@ import { searchDocs } from './docSearch';
 describe('searchDocs', () => {
   test('a subsequence match finds the resilience chapter', () => {
     const hits = searchDocs('reslience'.replace('s', ''), 20); // "reilience" — fuzzy
-    expect(hits.some((h) => h.route === '/docs/book/08-the-resilience-belt')).toBe(true);
+    expect(hits.some((h) => h.route === '/docs/field-manual/08-the-resilience-belt')).toBe(true);
   });
 
   test('exact-substring beats scattered-subsequence in ranking', () => {

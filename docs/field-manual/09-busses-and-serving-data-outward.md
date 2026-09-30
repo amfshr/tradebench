@@ -1,6 +1,6 @@
 # Chapter 9 — Busses, and serving the data outward
 
-Part of the Tradebench book. The capture pipeline ends in Postgres — so how do
+Part of the Tradebench Field Manual. The capture pipeline ends in Postgres — so how do
 downstream applications (charts, the backtester, live bots) get the data? This chapter
 explains message busses from first principles, why the platform's answer is *mostly not
 a bus*, and the fan-out plan recorded in architecture §3.5.
@@ -121,4 +121,4 @@ When the first live consumer arrives, the order of work is: schema the event con
 under a kill test, and only then let the consumer ship.
 
 *Previous: [Chapter 8 — The resilience belt](08-the-resilience-belt.md) ·
-[Book index](README.md)*
+[Field Manual index](README.md)*

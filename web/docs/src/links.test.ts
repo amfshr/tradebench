@@ -5,8 +5,8 @@ import { resolveLink, routeFor } from './links';
 // Expectations are hand-derived from the routing rules, never from running the code.
 const REPO = new Set([
   'docs/README.md',
-  'docs/book/04-the-pump-and-ack-after-apply.md',
-  'docs/book/05-the-capture-store-and-postgres.md',
+  'docs/field-manual/04-the-pump-and-ack-after-apply.md',
+  'docs/field-manual/05-the-capture-store-and-postgres.md',
   'docs/design/architecture.md',
   '.claude/tasks/board.md',
 ]);
@@ -19,7 +19,7 @@ describe('routeFor', () => {
 
   test('README collapses onto its directory', () => {
     expect(routeFor('docs/README.md')).toBe('/docs');
-    expect(routeFor('docs/book/README.md')).toBe('/docs/book');
+    expect(routeFor('docs/field-manual/README.md')).toBe('/docs/field-manual');
   });
 
   test('the board and epics get the /board namespace', () => {
@@ -34,15 +34,15 @@ describe('resolveLink', () => {
   test('a sibling chapter link becomes an internal route', () => {
     expect(
       resolveLink(
-        'docs/book/04-the-pump-and-ack-after-apply.md',
+        'docs/field-manual/04-the-pump-and-ack-after-apply.md',
         '05-the-capture-store-and-postgres.md',
         exists,
       ),
-    ).toEqual({ kind: 'internal', to: '/docs/book/05-the-capture-store-and-postgres' });
+    ).toEqual({ kind: 'internal', to: '/docs/field-manual/05-the-capture-store-and-postgres' });
   });
 
   test('.. climbs out of the current directory', () => {
-    expect(resolveLink('docs/book/README.md', '../design/architecture.md', exists)).toEqual({
+    expect(resolveLink('docs/field-manual/README.md', '../design/architecture.md', exists)).toEqual({
       kind: 'internal',
       to: '/docs/design/architecture',
     });
@@ -58,15 +58,15 @@ describe('resolveLink', () => {
   test('anchors survive the rewrite', () => {
     expect(
       resolveLink(
-        'docs/book/04-the-pump-and-ack-after-apply.md',
+        'docs/field-manual/04-the-pump-and-ack-after-apply.md',
         '05-the-capture-store-and-postgres.md#the-jargon',
         exists,
       ),
-    ).toEqual({ kind: 'internal', to: '/docs/book/05-the-capture-store-and-postgres#the-jargon' });
+    ).toEqual({ kind: 'internal', to: '/docs/field-manual/05-the-capture-store-and-postgres#the-jargon' });
   });
 
   test('an anchor-only link stays an in-page anchor', () => {
-    expect(resolveLink('docs/book/README.md', '#the-scars', exists)).toEqual({
+    expect(resolveLink('docs/field-manual/README.md', '#the-scars', exists)).toEqual({
       kind: 'anchor',
       to: '#the-scars',
     });

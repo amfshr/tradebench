@@ -105,4 +105,4 @@ ownership structural.
   logged warning over a corrupt file/store from a close/write race. The JSONL golden-line
   format (chapter 5) is line-framed partly so a truncated tail damages one line, not the file.
 
-*Previous: [Chapter 1 — Sockets and Lightstreamer](01-sockets-and-lightstreamer.md) · [Book index](README.md) · Next: [Chapter 3 — Buffers, queues and backpressure](03-buffers-queues-and-backpressure.md)*
+*Previous: [Chapter 1 — Sockets and Lightstreamer](01-sockets-and-lightstreamer.md) · [Field Manual index](README.md) · Next: [Chapter 3 — Buffers, queues and backpressure](03-buffers-queues-and-backpressure.md)*

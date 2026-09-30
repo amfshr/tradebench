@@ -1,6 +1,6 @@
 # Chapter 8 — The resilience belt: pure cores, one impure shell
 
-Part of the Tradebench book. T5's supervision layer exists because the prototype ran
+Part of the Tradebench Field Manual. T5's supervision layer exists because the prototype ran
 long enough, unattended enough, to collect real outages — and every class in
 `market-data-service/.../supervise/` and `.../coverage/` is a specific incident with a
 name. This chapter explains the pattern they share, then tours each core.
@@ -174,5 +174,5 @@ literal test fixture. None of these numbers are guesses; that is why they live i
 `Tuning.playbook()` under version control rather than in anyone's memory.
 
 *Previous: [Chapter 7 — Clocks](07-clocks-wall-monotonic-and-sleep.md) ·
-[Book index](README.md) · Next: [Chapter 9 — Busses and serving data
+[Field Manual index](README.md) · Next: [Chapter 9 — Busses and serving data
 outward](09-busses-and-serving-data-outward.md)*

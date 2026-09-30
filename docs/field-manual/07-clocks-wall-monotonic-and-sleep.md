@@ -1,6 +1,6 @@
 # Chapter 7 — Clocks: wall time, monotonic time, and what sleep does to both
 
-Part of the Tradebench book. This chapter explains why the platform carries **two**
+Part of the Tradebench Field Manual. This chapter explains why the platform carries **two**
 clocks everywhere, why business logic is forbidden from reading either one directly, and
 how comparing the two detects host sleep and process freezes — the trick the staleness
 watchdog's correctness rests on.
@@ -113,5 +113,5 @@ time; a strategy that says "90 seconds" means 90 seconds of *market data time*, 
 bit-for-bit. The capture side's clock hygiene is what keeps that promise honest.
 
 *Previous: [Chapter 6 — The advisory lock and single-instance
-discipline](06-the-advisory-lock-and-single-instance.md) · [Book index](README.md) ·
+discipline](06-the-advisory-lock-and-single-instance.md) · [Field Manual index](README.md) ·
 Next: [Chapter 8 — The resilience belt](08-the-resilience-belt.md)*

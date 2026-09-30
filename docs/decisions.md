@@ -205,7 +205,7 @@ CI-enforced contract is stronger than pretending consumers won't need it.
 
 All static documentation is ONE site — `web/docs`, served at `docs.tradebench.amfshr.dev`
 (public; the Cloudflare-gated platform SPA at `tradebench.amfshr.dev` links to it): product
-docs, the book, architecture, decisions, the board section, and later the DSL reference and
+docs, the Field Manual, architecture, decisions, the board section, and later the DSL reference and
 REST API/integration docs. No second docs site until something real forces it (P7). The
 workspace root is `web/` (supersedes `frontend/` — D3's monorepo ruling unchanged), and web
 apps are named for the subdomain they serve: `web/docs` live, `web/platform` seat reserved.
@@ -237,3 +237,16 @@ when it started, what blocks it), not data for its own sake (Alex); new fields a
 not invented. Existing tickets are retrofitted over time; the site renders whatever is
 present, degrading gracefully. **Why:** the write model must carry exactly the structure the
 read model needs and no more — and an agent enforcing one template beats hand-kept drift.
+
+## D21 — Docs split by audience: the Field Manual (build) vs the User Guide (use) — **Accepted** (2026-09-30, Alex)
+
+The docs site serves two distinct audiences and must not conflate them. **Build track**
+(builder/contributor-facing): the engineering internals — how the app works and why, with
+scars — renamed from "the Field Manual" to **The Field Manual** (`docs/field-manual/`), alongside
+Architecture and Decisions. **Use track** (end-user-facing: Dad, brother): the Product
+overview, a future **User Guide** (`docs/guide/`, reserved seat), and the **DSL /
+strategy-language reference** — task-oriented, assuming no knowledge of Java, buffers, or
+threads. The DSL explainer belongs in the Use track, never the Field Manual. Site nav groups
+by these two tracks once the Use track has real content (E3/E4 era). **Why:** a single "book"
+serves neither reader — an end user hitting "ack-after-apply" is lost, a builder wading
+through "click New Bot" is annoyed; audience is the right top-level axis for docs.

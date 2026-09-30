@@ -19,10 +19,10 @@ const SECTIONS: Section[] = [
   },
   {
     n: '02',
-    route: '/docs/book',
-    title: 'The Book',
+    route: '/docs/field-manual',
+    title: 'The Field Manual',
     blurb:
-      'A teaching text written from scars. How the collection service works — sockets to Postgres and out again — and why each choice.',
+      'The engineering internals, written from scars. How the collection service works — sockets to Postgres and out again — and why each choice.',
   },
   {
     n: '03',
@@ -56,14 +56,14 @@ export function HomePage() {
         <p className="home-lede">
           A private platform for the whole algorithmic-trading loop — collect data, chart it,
           write a strategy, test it against years of history, and only then let it trade. These
-          docs are the manual, the book, and the record of how it was built.
+          docs are the overview, the field manual, and the record of how it was built.
         </p>
         <div className="home-cta">
           <Link className="home-cta-primary" to="/docs/product/overview">
             Start with the overview
           </Link>
-          <Link className="home-cta-secondary" to="/docs/book">
-            Read the book from chapter one
+          <Link className="home-cta-secondary" to="/docs/field-manual">
+            Read the field manual from chapter one
           </Link>
         </div>
       </header>

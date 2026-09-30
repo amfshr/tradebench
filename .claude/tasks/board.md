@@ -10,7 +10,7 @@
 merged, live DAX data flowing into Postgres locally; the deploy-first ruling (D2) stands.
 T5 (resilience belt) is mid-flight: slice A (the pure decision cores) is built and verified
 on branch `e1-t5-resilience`; slices B (event log + gap rows) and C (the Supervisor shell)
-remain. A docs pass (product overview, the book, docs map — see `docs/README.md`) rides the
+remain. A docs pass (product overview, the Field Manual, docs map — see `docs/README.md`) rides the
 same branch while Alex reads and reviews the accumulated code. E0 only lacks enforcement
 (T4). E3's language semantics are ruled (D7–D9); its two design-gate tickets are cut and
 plannable. E4–E8 name the horizon; no tickets until their own planning sessions.
@@ -21,14 +21,14 @@ docs.tradebench.amfshr.dev. **One ticket left to close E2: T4 — the final docs
 nine chapters, (b) book cleanup + rename decision, (c) decision-log designed view,
 (d) nest `design-sessions` under `design`; closes E2. ② *E1-T5 slices B + C* — event log,
 bar_gaps V2, Supervisor shell (main checkout, branch `e1-t5-resilience`; **merge main in
-first** — docs + D18 + brand + board-format). ③ *Finish the book read* (still owed before
+first** — docs + D18 + brand + board-format). ③ *Finish the Field Manual read* (still owed before
 returning to E1).
 
 ---
 
 ## E0 🤖 AI operating framework — ACTIVE (born urgent 2026-09-27)
 
-**Since** 2026-09-27 · **Decisions** D10, D13 · **Book** —
+**Since** 2026-09-27 · **Decisions** D10, D13 · **Manual** —
 
 **Mission:** make AI a reliable standing development partner (PRD §9's AI-workable NFR):
 explicit roles, hard guardrails, session protocols, and a standardized `.claude/` + `docs/`
@@ -47,7 +47,7 @@ testing doctrine G5 binds to) · PRD §9.
 
 ## E1 📡 Collection service, deployed 24/7 — ACTIVE
 
-**Since** 2026-09-27 · **Decisions** D2, D14, D15, D16, D17 · **Book** ch. 1–9
+**Since** 2026-09-27 · **Decisions** D2, D14, D15, D16, D17 · **Manual** ch. 1–9
 
 **Mission:** Tradebench's first deployed artifact: a standalone Spring Boot service streaming
 IG **ticks + 1-minute bars** for DAX into Postgres, resilient and self-reporting, with the
@@ -76,13 +76,13 @@ CHART:1MINUTE sealed bars only) · engineering playbook §1–§4.
 
 ## E2 🧰 The docs site (`web/docs` → docs.tradebench) — ACTIVE (planned 2026-09-28, runs alongside E1-T5)
 
-**Since** 2026-09-28 · **Decisions** D11, D18, D19 · **Book** —
+**Since** 2026-09-28 · **Decisions** D11, D18, D19 · **Manual** —
 
 The first frontend warm-up: a small locally-served React/TS app rendering this markdown board
 (and the epics/vision docs) as pages — MD stays the write model for agents, the app is the read
 model for humans. **Shape confirmed by Alex 2026-09-27 (D11; PRD open Q#10 resolved).** Scope
 grew naturally 2026-09-28: the read model now also renders `docs/` — the product overview and
-the book — as Alex's "online book of pages". Low stakes, real daily value, exercises the
+the Field Manual — as Alex's "online book of pages". Low stakes, real daily value, exercises the
 frontend toolchain before the charting UI.
 
 **Ticket plans:** `.claude/tasks/epics/e2-docs-site.md` (T1 carries the frontend design
@@ -91,20 +91,20 @@ nod N1–N4). **Working shape:** git worktree `.claude/worktrees/e2-docs-reader`
 
 | # | Ticket | Status |
 |---|--------|--------|
-| T1 | **Docs & board reader v0.** Vite/React/TS app at `web/docs` (tech-notes §6 shape as ruled by D18): sidebar over `docs/` + the board, GFM, rendered mermaid, highlighted code, rewritten internal links, light/dark, reading-first typography; content via dev-server glob of the repo's markdown — no backend; doc edits hot-reload. **DoD:** the book, product overview, PRD, decisions and board all render pleasantly with working nav. | ✅ 2026-09-28 (PR #6; 21 behavioural tests, 9 mutations killed incl. review F1's deletion mutant; doctrine F1–F6 all fixed pre-open; v0.2 chrome + lightbox + theme toggle per Alex's iterative rulings; D18 renames rode the PR) |
+| T1 | **Docs & board reader v0.** Vite/React/TS app at `web/docs` (tech-notes §6 shape as ruled by D18): sidebar over `docs/` + the board, GFM, rendered mermaid, highlighted code, rewritten internal links, light/dark, reading-first typography; content via dev-server glob of the repo's markdown — no backend; doc edits hot-reload. **DoD:** the Field Manual, product overview, PRD, decisions and board all render pleasantly with working nav. | ✅ 2026-09-28 (PR #6; 21 behavioural tests, 9 mutations killed incl. review F1's deletion mutant; doctrine F1–F6 all fixed pre-open; v0.2 chrome + lightbox + theme toggle per Alex's iterative rulings; D18 renames rode the PR) |
 | T2 | **Board read model + designed pages.** Parse board + epic files into epic cards, status chips, attention-first tickets, done-history timeline, epic pages with metadata/decisions/history rails (board.md enriched with per-epic since/decisions/book; updated derived); designed landing page; top nav + ⌘K search; brand-themed mermaid + framed lightbox; sidebar section dividers; graceful raw-markdown fallback; parser mutation-verified. Design intent (R11b): the brand exploration's board/epic IA. **DoD:** the board page reads as a dashboard. | ✅ 2026-09-29 (PR #7; 42 tests, ~10 mutations killed across two campaigns + doctrine F1/F2; brand re-skin D19 + D18 renames rode along; **deferred: ticket-detail pages → T5, book scar-callouts → T4**) |
 | T3 | **Build & CI lane.** Static build snapshotting content; `web/**`-keyed CI job; preview story. Hosting ruled **GitHub Pages** (D18); custom domain **live: docs.tradebench.amfshr.dev** (Cloudflare CNAME + PAGES_BASE=/, HTTPS enforced — Alex, 2026-09-29). **DoD:** one command yields the static site; CI green. | ✅ 2026-09-29 (pages.yml deploy + web-ci.yml PR lane; site live on custom domain) |
-| T4 | **Docs polish & structure — the final E2 sweep.** (a) **Scar callouts** (design R9): a `> **Scar** …` convention the renderer styles into the mono-spine card + a content pass over the nine chapters; framed diagrams. (b) **Book cleanup** — tighten the chapters; *decide a rename* (open Q — "the book" vs a real name). (c) **Decision log** — a structured, visually spiced view (not raw md): D-cards with status/date, cross-links, filterable by area. (d) **Nest design-sessions under design** — move `docs/design-sessions/` → `docs/design/sessions/`, fix links + sidebar grouping (one Design group, not two roots). **DoD:** scars render as R9 cards; decision log reads as a designed page; design-sessions nested; book rename ruled. | ⬜ |
+| T4 | **Docs polish & structure — the final E2 sweep.** (a) **Scar callouts** (design R9): a `> **Scar** …` convention the renderer styles into the mono-spine card + a content pass over the nine chapters; framed diagrams. (b) **Book cleanup** — tighten the chapters; *decide a rename* (open Q — "the Field Manual" vs a real name). (c) **Decision log** — a structured, visually spiced view (not raw md): D-cards with status/date, cross-links, filterable by area. (d) **Nest design-sessions under design** — move `docs/design/sessions/` → `docs/design/sessions/`, fix links + sidebar grouping (one Design group, not two roots). **DoD:** scars render as R9 cards; decision log reads as a designed page; design-sessions nested; book rename ruled. | ⬜ |
 | T5 | **Ticket-detail pages.** Clickable `/board/epics/:slug/:ticket` — structured header (breadcrumb, status chip, title), a done-when checklist from the ticket's DoD, the rich plan section, and a lean metadata panel (type · branch · started · blocked-by · epic · PR); board + epic ticket rows link to it. Spawned the board-format spec (D20) + the `board-steward` agent (E0-T5). **DoD:** a ticket opens as its own page with header, checklist, plan body, and lean metadata; rows link to it. | ✅ 2026-09-30 (PR #8; ticket pages + epic-view redesign to the design; 60 tests, doctrine F1–F7 fixed pre-merge; deployed) |
 
 ## E3 🧪 Indicator DSL v0 + backtest spine — DESIGN-GATED
 
-**Since** 2026-09-27 · **Decisions** D7, D8, D9 · **Book** —
+**Since** 2026-09-27 · **Decisions** D7, D8, D9 · **Manual** —
 
 The rest of PRD §11 phase 1: basic chart over stored data → indicator DSL v0 (look-ahead
 rejection from day one) → backtest job runner v0 (default FLAT⇄IN_POSITION machine) → first
 results page. **Language semantics ruled 2026-09-27**
-(`docs/design-sessions/2026-09-27-indicators-and-predicates.md`, decisions D7–D9; PRD Q#6
+(`docs/design/sessions/2026-09-27-indicators-and-predicates.md`, decisions D7–D9; PRD Q#6
 resolved). Build tickets get cut after the two design gates below land — plus enough
 captured/imported data to chew on (E1 + first Databento decisions).
 
@@ -164,7 +164,7 @@ captured/imported data to chew on (E1 + first Databento decisions).
 - **2026-09-27 — Sanity lap** (menu ①): cold-start playback proved the handoff self-sufficient;
   no contradictions found.
 - **2026-09-27 — Indicators & predicates design session** (menu ②): answered record filed
-  (`docs/design-sessions/2026-09-27-indicators-and-predicates.md`); rulings R1–R8; decisions
+  (`docs/design/sessions/2026-09-27-indicators-and-predicates.md`); rulings R1–R8; decisions
   D7–D9; PRD open Q#6 resolved; spawned E3-T1/T2. Evidence: commit `b0387d0`.
 - **2026-09-27 — E0-T1/T2/T3 + board/epics/docs pass**: AI operating framework v1 (contract,
   2 agents, 3 skills, directory standard), CLAUDE.md/task-workflow wiring, `docs/design/`
@@ -197,7 +197,7 @@ captured/imported data to chew on (E1 + first Databento decisions).
   live DAX rows in market_data. Deferred by ruling: D22 roles + schema/public design → T6.
 - **2026-09-28 — Docs pass** (on branch `e1-t5-resilience`, rides the T5 PR): `docs/`
   front door (`docs/README.md` map), `docs/product/overview.md` (technical product doc;
-  seat named for the strategy-language reference), `docs/book/` (nine teaching chapters,
+  seat named for the strategy-language reference), `docs/field-manual/` (nine teaching chapters,
   socket → Postgres → outward), architecture §3.4 trajectory + §3.5 fan-out plan, board
   refresh. Purpose: Alex's read/review checkpoint before T5 slices B/C.
 - **2026-09-28 — E2-T1 The docs site v0** ✅: `web/docs` (Vite/React/TS, npm workspaces) —

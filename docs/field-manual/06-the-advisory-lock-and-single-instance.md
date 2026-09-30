@@ -107,4 +107,4 @@ session as the lock's identity, and a test rewritten so the defect it exists to 
 would actually turn it red (testing doctrine G5 — anchor expectations independently of
 the code under test).
 
-*Previous: [Chapter 5 — The capture store and Postgres](05-the-capture-store-and-postgres.md) · [Book index](README.md) · Next: [Chapter 7 — Clocks: wall, monotonic and sleep](07-clocks-wall-monotonic-and-sleep.md)*
+*Previous: [Chapter 5 — The capture store and Postgres](05-the-capture-store-and-postgres.md) · [Field Manual index](README.md) · Next: [Chapter 7 — Clocks: wall, monotonic and sleep](07-clocks-wall-monotonic-and-sleep.md)*

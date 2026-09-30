@@ -6,7 +6,7 @@ describe('normalizeRoute', () => {
   test('the root and trailing slashes normalise to canonical routes', () => {
     expect(normalizeRoute('/')).toBe('/docs');
     expect(normalizeRoute('')).toBe('/docs');
-    expect(normalizeRoute('/docs/book/')).toBe('/docs/book');
+    expect(normalizeRoute('/docs/field-manual/')).toBe('/docs/field-manual');
     expect(normalizeRoute('/board')).toBe('/board');
   });
 });
@@ -18,9 +18,9 @@ describe('buildTree', () => {
     '.claude/tasks/00-inbox.md',
     '.claude/tasks/board.md',
     'docs/README.md',
-    'docs/book/10-imaginary-late-chapter.md',
-    'docs/book/02-threads-and-the-callback-boundary.md',
-    'docs/book/README.md',
+    'docs/field-manual/10-imaginary-late-chapter.md',
+    'docs/field-manual/02-threads-and-the-callback-boundary.md',
+    'docs/field-manual/README.md',
     'docs/decisions.md',
     'docs/inherited/grill/session-1-vision.md',
     'docs/product/overview.md',
@@ -30,7 +30,7 @@ describe('buildTree', () => {
   test('groups appear in fixed order and empty groups vanish', () => {
     expect(tree.map((g) => g.label)).toEqual([
       'Product',
-      'The book',
+      'Field Manual',
       'Decisions',
       'Inherited (read-only)',
       'Board',
@@ -43,14 +43,14 @@ describe('buildTree', () => {
   });
 
   test('book chapters sort in chapter order with pretty labels', () => {
-    const book = tree.find((g) => g.label === 'The book');
+    const book = tree.find((g) => g.label === 'Field Manual');
     expect(book?.items).toEqual([
       {
-        route: '/docs/book/02-threads-and-the-callback-boundary',
+        route: '/docs/field-manual/02-threads-and-the-callback-boundary',
         label: '2 · Threads and the callback boundary',
       },
-      { route: '/docs/book/10-imaginary-late-chapter', label: '10 · Imaginary late chapter' },
-      { route: '/docs/book', label: 'Index' },
+      { route: '/docs/field-manual/10-imaginary-late-chapter', label: '10 · Imaginary late chapter' },
+      { route: '/docs/field-manual', label: 'Index' },
     ]);
   });
 
@@ -64,12 +64,12 @@ describe('buildTree', () => {
   });
 
   test('neighbours page-turn stays inside the current group', () => {
-    expect(neighbours(tree, '/docs/book/10-imaginary-late-chapter')).toEqual({
+    expect(neighbours(tree, '/docs/field-manual/10-imaginary-late-chapter')).toEqual({
       prev: {
-        route: '/docs/book/02-threads-and-the-callback-boundary',
+        route: '/docs/field-manual/02-threads-and-the-callback-boundary',
         label: '2 · Threads and the callback boundary',
       },
-      next: { route: '/docs/book', label: 'Index' },
+      next: { route: '/docs/field-manual', label: 'Index' },
     });
     // Product has one item: no wrap into the next group, no phantom neighbours.
     expect(neighbours(tree, '/docs/product/overview')).toEqual({

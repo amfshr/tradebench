@@ -55,7 +55,7 @@ Sessions come in three shapes; each has a project skill that carries the protoco
   and what's next; stop for Alex's pick. Run whenever context is cold or stale.
 - **Design → `/design-session`.** Ground in the seed pack first; survey standard practice;
   strawman; structured questions; Alex rules. The answered record is filed under
-  `docs/design-sessions/` **the same day**; decisions go to the log; the board gets touched.
+  `docs/design/sessions/` **the same day**; decisions go to the log; the board gets touched.
   (Question sheets → answered records is the project's calibration-truth pattern, playbook
   §5.2.)
 - **Build → `/start-ticket`.** Ticket-scoped; **design nod before implementation** on any

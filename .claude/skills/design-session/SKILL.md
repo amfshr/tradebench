@@ -9,7 +9,7 @@ The pattern is the project's own calibration-truth machinery (playbook §5.2: qu
 → answered records). **Claude proposes, Alex rules.**
 
 1. **Ground first.** Search `docs/inherited/` (use the `seed-pack-librarian` agent), prior
-   `docs/design-sessions/` records, and `docs/decisions.md` for everything already settled.
+   `docs/design/sessions/` records, and `docs/decisions.md` for everything already settled.
    Never re-litigate silently (G2).
 2. **Bring the lesson.** Survey how the industry / standard practice handles the problem —
    name the paradigms, what each got right, and their known failure modes. Alex's domain
@@ -19,7 +19,7 @@ The pattern is the project's own calibration-truth machinery (playbook §5.2: qu
 4. **Structured questions.** Pointed, numbered, each with a recommendation; free-form answers
    welcome. Push back where Alex's instinct conflicts with evidence — he wants the argument,
    not deference; his ruling ends it.
-5. **File the record — same day**, at `docs/design-sessions/YYYY-MM-DD-<topic>.md`:
+5. **File the record — same day**, at `docs/design/sessions/YYYY-MM-DD-<topic>.md`:
    status header (OPEN/CLOSED, what it resolves/spawns) · the survey condensed · numbered
    rulings (R1…) each with the *why* and who ruled · illustrative sketches (marked
    non-committed) · spawned work · PRD open-question register effects.

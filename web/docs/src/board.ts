@@ -24,7 +24,7 @@ export interface Epic {
   mission: string;
   since: string;
   decisions: string[];
-  book: string;
+  manual: string;
   updated: string;
   tickets: Ticket[];
   done: number;
@@ -109,7 +109,7 @@ function ticketFrom(row: string): Ticket | null {
   };
 }
 
-type EpicSeed = Omit<Epic, 'mission' | 'since' | 'decisions' | 'book' | 'updated' | 'tickets' | 'done' | 'total'>;
+type EpicSeed = Omit<Epic, 'mission' | 'since' | 'decisions' | 'manual' | 'updated' | 'tickets' | 'done' | 'total'>;
 
 function epicHeader(line: string): EpicSeed | null {
   const em = line.match(/^##\s+(E\d+)\s+(.*)$/);
@@ -127,16 +127,16 @@ function epicHeader(line: string): EpicSeed | null {
   return { id: em[1], num: Number(em[1].slice(1)), emoji, name, statusLabel };
 }
 
-/** `**Since** 2026-09-27 · **Decisions** D2, D14 · **Book** ch. 1–9` → the meta fields. */
-function parseMeta(line: string): Pick<Epic, 'since' | 'decisions' | 'book'> {
+/** `**Since** 2026-09-27 · **Decisions** D2, D14 · **Manual** ch. 1–9` → the meta fields. */
+function parseMeta(line: string): Pick<Epic, 'since' | 'decisions' | 'manual'> {
   const since = line.match(/\*\*Since\*\*\s+([\d-]+)/)?.[1] ?? '';
-  const book = line.match(/\*\*Book\*\*\s+([^·]+)/)?.[1]?.trim() ?? '';
+  const manual = line.match(/\*\*Manual\*\*\s+([^·]+)/)?.[1]?.trim() ?? '';
   const decRaw = line.match(/\*\*Decisions\*\*\s+([^·]+)/)?.[1] ?? '';
   const decisions = decRaw
     .split(',')
     .map((d) => d.trim())
     .filter((d) => /^D\d+$/.test(d));
-  return { since, decisions, book };
+  return { since, decisions, manual };
 }
 
 /** The latest YYYY-MM-DD mentioned anywhere in the epic's ticket notes. */
@@ -181,7 +181,7 @@ export function parseBoard(markdown: string): ParsedBoard {
           mission: '',
           since: '',
           decisions: [],
-          book: '',
+          manual: '',
           updated: '',
           tickets: [],
           done: 0,
