@@ -226,6 +226,22 @@ export function historyForEpic(board: ParsedBoard, id: string): HistoryEntry[] {
   return board.history.filter((h) => h.title.includes(`${id}-`));
 }
 
+/** The first YYYY-MM-DD in a ticket's status note (its done/updated date), or ''. */
+export function ticketDate(note: string): string {
+  return note.match(/\d{4}-\d{2}-\d{2}/)?.[0] ?? '';
+}
+
+/** A ticket-style status for the whole epic, derived from its tickets. */
+export function epicStatus(epic: Epic): TicketStatus {
+  if (epic.total > 0 && epic.done === epic.total) {
+    return 'done';
+  }
+  if (epic.tickets.some((t) => t.status === 'in-progress')) {
+    return 'in-progress';
+  }
+  return 'queued';
+}
+
 export function allTickets(board: ParsedBoard): (Ticket & { epicId: string })[] {
   return board.epics
     .flatMap((e) => e.tickets.map((t) => ({ ...t, epicId: e.id })))
