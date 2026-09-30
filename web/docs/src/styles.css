@@ -1051,21 +1051,34 @@ h3:hover .hanchor {
   text-align: right;
 }
 
-.row-done .tcell-title {
+/* Ticket titles are clickable but read as text, not blue web links. */
+.tcell-title a {
+  color: var(--fg);
+  text-decoration: none;
+}
+
+.tcell-title a:hover {
+  color: var(--accent);
+}
+
+.row-done .tcell-title,
+.row-done .tcell-title a {
   color: var(--fg-muted);
   text-decoration: line-through;
   text-decoration-color: var(--border);
 }
 
+/* Boxy shaded look (Alex): a soft raised fill + border reads as a tidy box. */
 .chip {
   display: inline-flex;
   align-items: center;
   gap: 0.35rem;
   font-family: var(--font-mono);
   font-size: 0.7rem;
-  padding: 0.1rem 0.5rem;
+  padding: 0.12rem 0.5rem;
   border-radius: 5px;
   border: 1px solid var(--border);
+  background: var(--bg-raised);
   color: var(--fg-muted);
   white-space: nowrap;
 }
@@ -1077,13 +1090,18 @@ h3:hover .hanchor {
   background: var(--accent);
 }
 
+/* In progress: a small accent dot is the whole signal — no heavy blue text/border. */
 .chip-in-progress {
-  color: var(--accent);
-  border-color: color-mix(in srgb, var(--accent) 40%, var(--border));
+  color: var(--fg);
 }
 
 .chip-done {
   opacity: 0.7;
+}
+
+.chip-id {
+  color: var(--fg);
+  font-weight: 500;
 }
 
 .timeline {
@@ -1141,21 +1159,26 @@ h3:hover .hanchor {
 }
 
 .epic-eyebrow {
-  font-family: var(--font-mono);
-  font-size: 0.78rem;
-  color: var(--fg-muted);
-  margin: 0 0 0.3rem;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin: 0 0 0.6rem;
 }
 
 .epic-head h1 {
-  margin: 0 0 0.5rem;
+  margin: 0 0 0.7rem;
   font-size: 1.7rem;
 }
 
-.epic-mission {
-  color: var(--fg-muted);
+.epic-progress {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.epic-progress .epic-bar-wide {
+  flex: 1;
   margin: 0;
-  max-width: 42rem;
 }
 
 .epic-page .epic-progress-label {
@@ -1163,14 +1186,187 @@ h3:hover .hanchor {
   font-size: 0.75rem;
   color: var(--fg-muted);
   margin: 0;
+  white-space: nowrap;
+}
+
+.why-epic {
+  margin-bottom: 2.5rem;
+}
+
+.why-text {
+  margin: 0;
+  max-width: 44rem;
+  line-height: 1.6;
 }
 
 .epic-page section {
   margin-bottom: 2rem;
 }
 
-.epic-plan {
-  margin-top: 3rem;
+.section-count {
+  color: var(--fg-muted);
+  font-weight: 400;
+}
+
+.tcell-date {
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  color: var(--fg-muted);
+  text-align: right;
+  white-space: nowrap;
+  width: 6rem;
+}
+
+.decision-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  font-size: 0.8rem;
+}
+
+.decision-list li {
+  padding: 0.3rem 0;
+  line-height: 1.4;
+}
+
+.decision-list a {
+  font-family: var(--font-mono);
+  color: var(--accent);
+  text-decoration: none;
+}
+
+.decision-title {
+  color: var(--fg);
+}
+
+.decision-date {
+  display: block;
+  font-family: var(--font-mono);
+  font-size: 0.7rem;
+  color: var(--fg-muted);
+}
+
+.epic-planlink {
+  margin-top: 2.5rem;
+  padding-top: 1.5rem;
+  border-top: 1px solid var(--border);
+  font-size: 0.85rem;
+}
+
+.epic-planlink a {
+  color: var(--accent);
+  text-decoration: none;
+}
+
+/* ---- ticket page ---- */
+
+.ticket-page {
+  max-width: 62rem;
+  margin: 0 auto;
+}
+
+.ticket-page .crumbs {
+  font-family: var(--font-mono);
+  font-size: 0.78rem;
+  color: var(--fg-muted);
+  margin-bottom: 1.2rem;
+}
+
+.ticket-page .crumbs a {
+  color: var(--fg-muted);
+  text-decoration: none;
+}
+
+.ticket-page .crumbs a:hover {
+  color: var(--accent);
+}
+
+.ticket-head {
+  margin-bottom: 2rem;
+}
+
+.ticket-eyebrow {
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+  margin-bottom: 0.6rem;
+}
+
+.ticket-epic-tag {
+  font-family: var(--font-mono);
+  font-size: 0.78rem;
+  color: var(--fg-muted);
+}
+
+.ticket-head h1 {
+  margin: 0 0 0.6rem;
+  font-size: 1.7rem;
+}
+
+.ticket-what {
+  color: var(--fg-muted);
+  margin: 0;
+  max-width: 42rem;
+  line-height: 1.6;
+}
+
+.ticket-cols {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 14rem;
+  gap: 2.5rem;
+  align-items: start;
+}
+
+@media (max-width: 60rem) {
+  .ticket-cols {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .ticket-page .epic-aside {
+    order: -1;
+  }
+}
+
+.ticket-page section {
+  margin-bottom: 2rem;
+}
+
+.donewhen {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.donewhen li {
+  display: flex;
+  gap: 0.6rem;
+  align-items: baseline;
+  padding: 0.35rem 0;
+  border-bottom: 1px solid var(--border);
+  font-size: 0.92rem;
+}
+
+.donewhen-box {
+  flex-shrink: 0;
+  width: 1.05rem;
+  height: 1.05rem;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  font-size: 0.75rem;
+  line-height: 1rem;
+  text-align: center;
+  color: var(--accent);
+}
+
+.donewhen li.checked {
+  color: var(--fg-muted);
+}
+
+.donewhen li.checked .donewhen-box {
+  border-color: var(--accent);
+}
+
+.ticket-plan {
+  margin-top: 2.5rem;
   padding-top: 1.5rem;
   border-top: 1px solid var(--border);
 }
@@ -1234,27 +1430,6 @@ h3:hover .hanchor {
 
 .aside-block {
   margin-bottom: 1.5rem;
-}
-
-.aside-list {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  font-family: var(--font-mono);
-  font-size: 0.78rem;
-}
-
-.aside-list li {
-  padding: 0.15rem 0;
-}
-
-.aside-list a {
-  color: var(--accent);
-  text-decoration: none;
-}
-
-.aside-list a:hover {
-  text-decoration: underline;
 }
 
 /* ---- home / landing (design P3) ---- */

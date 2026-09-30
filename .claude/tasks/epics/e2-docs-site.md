@@ -22,7 +22,9 @@ E1-T5 without touching it.
 
 ---
 
-## T1 — Docs & board reader v0 🔶
+## T1 — Docs & board reader v0 ✅
+
+**Type** build · **Branch** `e2-t1-docs-reader` · **Started** 2026-09-28 · **Blocked by** —
 
 **Goal:** `npm run dev` serves the repo's markdown as a reading experience: sidebar
 navigation over `docs/` + the board, GFM tables, **rendered mermaid**, highlighted code,
@@ -62,19 +64,74 @@ kind. No test theatre on divs.
 overview, PRD, decisions, and the board; sidebar covers the docs tree; light/dark honest;
 a doc edit hot-reloads.
 
-## T2 — Board read model ⬜
+## T2 — Board read model + designed pages ✅
+
+**Type** build · **Branch** `e2-t2-board-read-model` · **Started** 2026-09-29 · **Blocked by** —
 
 Parse `board.md` (and epic files) into structure: epic cards, ticket tables with status
-chips, the done-history as a timeline. Graceful fallback to raw markdown when parsing
-meets something new. The parser is the prime unit-test target (real board fixtures;
-mutation-verified). **DoD:** the board page reads as a dashboard, not a rendered README.
+chips, the done-history as a timeline; epic pages with metadata/decisions/history rails;
+designed landing; top nav + ⌘K search; brand re-skin (D19). Graceful fallback to raw
+markdown. The parser is the prime unit-test target (real board fixtures; mutation-verified).
+**DoD:** the board page reads as a dashboard, not a rendered README.
 
-## T3 — Build & CI lane 🔶
+## T3 — Build & CI lane ✅
+
+**Type** ops · **Branch** `e2-t2-board-read-model` · **Started** 2026-09-28 · **Blocked by** —
 
 Static `npm run build` snapshotting content at build time; CI job keyed on `web/**`
 (tech-notes §6); local preview story. Hosting ruled by Alex 2026-09-28: **GitHub Pages**
-(public — same content as the public repo, no new exposure). Authored on-branch:
-`pages.yml` (main-push deploy: test → build with `VITE_BASE=/tradebench/` → 404.html SPA
-fallback → deploy-pages; one-off setup: Settings → Pages → Source "GitHub Actions") and
-`frontend-ci.yml` (PR lane, not yet a required check). **DoD:** one command produces the static
-site; CI builds it green.
+(public — same content as the public repo, no new exposure). `pages.yml` (main-push deploy:
+test → build with `VITE_BASE` → 404.html SPA fallback → deploy-pages) + `web-ci.yml` (PR
+lane). Custom domain **docs.tradebench.amfshr.dev** live (Cloudflare CNAME + `PAGES_BASE=/`,
+HTTPS enforced — 2026-09-29). **DoD:** one command produces the static site; CI builds it green.
+
+## T4 — Docs polish & structure (the final E2 sweep) ⬜
+
+**Type** docs · **Branch** — · **Started** — · **Blocked by** —
+
+The last content/structure pass before E2 closes. Four strands (Alex, 2026-09-30):
+
+- **(a) Scar callouts + framed diagrams (design R9/P5).** A markdown convention
+  (`> **Scar** · title · dated cost` blockquote) the renderer styles into the mono-spine
+  SCAR card; a content pass converting the nine chapters' scar sections; framed-diagram
+  treatment. Delayed from T2, not dropped.
+- **(b) Book cleanup + possible rename.** Tighten the chapters where they've drifted;
+  **decide whether "the book" gets a real name** (open question — surface options, Alex
+  rules). Update all references if renamed.
+- **(c) Decision log — visually spiced.** Today it renders as raw markdown (D1–D20 as a
+  long scroll). Turn it into a designed view: D-cards with status + date, area/epic
+  cross-links, and (nice-to-have) filter by status/area. A parsed read model of
+  `decisions.md`, like the board — the parser already exists in part (`decisions.ts`).
+- **(d) Nest design-sessions under design.** Move `docs/design-sessions/` →
+  `docs/design/sessions/`; fix internal links, the sidebar grouping (one **Design** group,
+  not two separate roots), and any references in CLAUDE.md / docs/README.md.
+
+**DoD:** book scars render as R9 cards + chapters tightened + rename ruled; the decision log
+reads as a designed page, not raw md; design-sessions nested under design with links intact.
+
+**Test plan (G5):** the decision-log read model reuses/extends `decisions.ts` (mutation-
+verified); a link-integrity check after the design-sessions move; scar-callout rendering
+exercised by a smoke. Components exempt.
+
+## T5 — Ticket-detail pages 🔶
+
+**Type** build · **Branch** `e2-t5-ticket-views` · **Started** 2026-09-30 · **Blocked by** —
+
+Clickable ticket-detail pages: `/board/epics/:slug/:ticket` — structured header (breadcrumb,
+status chip, title), a **Done-when checklist** parsed from the ticket's `**DoD:**` clause,
+the rich plan section rendered below, and a metadata panel of the *lean* template fields
+(type · branch · started · blocked-by · epic · PR-from-note) shown when present, gracefully
+absent otherwise. Ticket rows on the board + epic pages become links.
+
+**Design nod (D13) — ruled by Alex 2026-09-30 (all recommendations + the write-model
+template idea):** N1 route+data (board row floor + epic-file `## T<n>` section enrichment;
+E1/E2 scope) · N2 structured header + DoD checklist (move beyond rendered md) · N3 real
+metadata only, never fabricated — the lean field set Alex named (type/branch/started/
+blocked-by), rendered when present · N4 clickable rows. Spawned: the **board format spec**
+(`docs/reference/board-format.md`, D20) and the **`board-steward` agent** (E0-T5).
+
+**Test plan (G5):** the DoD→checklist splitter, the PR-link parser, and the epic-file
+per-ticket section+metadata extractor get mutation-verified tests; components exempt.
+
+**DoD:** a ticket opens as its own page with a structured header, DoD checklist, plan body,
+and lean metadata; board/epic ticket rows link to it.

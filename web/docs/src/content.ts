@@ -43,3 +43,9 @@ export const epicDocByNum = new Map<number, Doc>(
     })
     .filter((x): x is [number, Doc] => x !== null),
 );
+
+/** Ticket-detail route, or undefined when the epic has no plan file (E0/E3 today). */
+export function ticketRoute(epicNum: number, ticketId: string): string | undefined {
+  const route = epicDocByNum.get(epicNum)?.route;
+  return route ? `${route}/${ticketId}` : undefined;
+}

@@ -1,6 +1,14 @@
 import { describe, expect, test } from 'vitest';
 
-import { allTickets, classifyStatus, historyForEpic, parseBoard, rankOf } from './board';
+import {
+  allTickets,
+  classifyStatus,
+  epicStatus,
+  historyForEpic,
+  parseBoard,
+  rankOf,
+  ticketDate,
+} from './board';
 
 // A fixture shaped exactly like the real board.md (header forms, table forms, history
 // bullets) but with invented content. Expectations are hand-derived from the format.
@@ -156,6 +164,41 @@ describe('allTickets', () => {
   test('tags each ticket with its epic id', () => {
     const first = allTickets(parseBoard(FIXTURE)).find((t) => t.id === 'T3');
     expect(first?.epicId).toBe('E1');
+  });
+});
+
+describe('ticketDate', () => {
+  test('extracts the first date from a status note, or empty', () => {
+    expect(ticketDate('✅ 2026-09-27 (PR #1)')).toBe('2026-09-27');
+    expect(ticketDate('(nod ruled)')).toBe('');
+  });
+});
+
+describe('epicStatus', () => {
+  const board = parseBoard(FIXTURE);
+  test('in-progress when a ticket is in progress and not all done', () => {
+    expect(epicStatus(board.epics[0])).toBe('in-progress');
+  });
+  test('done only when every ticket is done', () => {
+    const allDone = { ...board.epics[0], done: 4, total: 4, tickets: board.epics[0].tickets.map((t) => ({ ...t, status: 'done' as const })) };
+    expect(epicStatus(allDone)).toBe('done');
+  });
+  test('queued when tickets exist, none in progress, and not all done', () => {
+    const mixed = {
+      ...board.epics[0],
+      done: 1,
+      total: 3,
+      tickets: [
+        { ...board.epics[0].tickets[0], status: 'done' as const },
+        { ...board.epics[0].tickets[0], id: 'T2', status: 'queued' as const },
+        { ...board.epics[0].tickets[0], id: 'T3', status: 'iced' as const },
+      ],
+    };
+    expect(epicStatus(mixed)).toBe('queued');
+  });
+  test('an empty epic (no tickets) is queued, never done', () => {
+    const empty = { ...board.epics[0], done: 0, total: 0, tickets: [] };
+    expect(epicStatus(empty)).toBe('queued');
   });
 });
 

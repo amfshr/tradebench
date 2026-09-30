@@ -97,6 +97,8 @@ New AI artifacts go in these seats — never invent parallel structures.
 |---|---|---|
 | `doctrine-reviewer` | agent | Before any PR: review the diff against conventions, the testing doctrine (G5), and guardrails (G1). |
 | `seed-pack-librarian` | agent | Any "what did the prototype decide/learn about X?" — searches `docs/inherited/`, answers with citations. |
+| `db-admin` | agent | Read/inspect the live capture Postgres; DML only on explicit ask with SQL shown; never ad-hoc DDL (Flyway only). |
+| `board-steward` | agent | Author/maintain tickets & epics to the board-format template (D20) and keep the board truthful; planning markdown only, never fabricates, never self-marks ✅. |
 | `/sanity-lap` | skill | Cold start or stale context. |
 | `/design-session` | skill | Running a design deep-dive with Alex. |
 | `/start-ticket` | skill | Starting build work on a board ticket. |

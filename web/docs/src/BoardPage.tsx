@@ -1,7 +1,7 @@
 import { Link } from 'react-router-dom';
 
 import { allTickets, type Epic } from './board';
-import { epicDocByNum } from './content';
+import { epicDocByNum, ticketRoute } from './content';
 import { StatusChip } from './StatusChip';
 import { useBoard } from './useBoard';
 
@@ -85,13 +85,17 @@ export function BoardPage() {
           <table className="ticket-table">
             <tbody>
               {tickets.map((t) => {
-                const route = epicRoute(Number(t.epicId.slice(1)));
+                const num = Number(t.epicId.slice(1));
+                const tRoute = ticketRoute(num, t.id);
+                const eRoute = epicRoute(num);
                 return (
                   <tr key={`${t.epicId}-${t.id}`} className={`row-${t.status}`}>
                     <td className="tcell-id">{t.id}</td>
-                    <td className="tcell-title">{t.title || t.summary}</td>
+                    <td className="tcell-title">
+                      {tRoute ? <Link to={tRoute}>{t.title || t.summary}</Link> : t.title || t.summary}
+                    </td>
                     <td className="tcell-epic">
-                      {route ? <Link to={route}>{t.epicId}</Link> : t.epicId}
+                      {eRoute ? <Link to={eRoute}>{t.epicId}</Link> : t.epicId}
                     </td>
                     <td className="tcell-status">
                       <StatusChip status={t.status} />
