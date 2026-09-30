@@ -85,14 +85,33 @@ test → build with `VITE_BASE` → 404.html SPA fallback → deploy-pages) + `w
 lane). Custom domain **docs.tradebench.amfshr.dev** live (Cloudflare CNAME + `PAGES_BASE=/`,
 HTTPS enforced — 2026-09-29). **DoD:** one command produces the static site; CI builds it green.
 
-## T4 — Book polish: scar callouts + framed diagrams ⬜
+## T4 — Docs polish & structure (the final E2 sweep) ⬜
 
 **Type** docs · **Branch** — · **Started** — · **Blocked by** —
 
-A markdown convention (`> **Scar** · title · dated cost` blockquote) the renderer styles
-into the mono-spine SCAR card (design R9); a content pass converting the nine chapters'
-scar sections; framed-diagram treatment. **DoD:** book chapters render scars as the R9
-card, not plain prose. Delayed from T2, not dropped.
+The last content/structure pass before E2 closes. Four strands (Alex, 2026-09-30):
+
+- **(a) Scar callouts + framed diagrams (design R9/P5).** A markdown convention
+  (`> **Scar** · title · dated cost` blockquote) the renderer styles into the mono-spine
+  SCAR card; a content pass converting the nine chapters' scar sections; framed-diagram
+  treatment. Delayed from T2, not dropped.
+- **(b) Book cleanup + possible rename.** Tighten the chapters where they've drifted;
+  **decide whether "the book" gets a real name** (open question — surface options, Alex
+  rules). Update all references if renamed.
+- **(c) Decision log — visually spiced.** Today it renders as raw markdown (D1–D20 as a
+  long scroll). Turn it into a designed view: D-cards with status + date, area/epic
+  cross-links, and (nice-to-have) filter by status/area. A parsed read model of
+  `decisions.md`, like the board — the parser already exists in part (`decisions.ts`).
+- **(d) Nest design-sessions under design.** Move `docs/design-sessions/` →
+  `docs/design/sessions/`; fix internal links, the sidebar grouping (one **Design** group,
+  not two separate roots), and any references in CLAUDE.md / docs/README.md.
+
+**DoD:** book scars render as R9 cards + chapters tightened + rename ruled; the decision log
+reads as a designed page, not raw md; design-sessions nested under design with links intact.
+
+**Test plan (G5):** the decision-log read model reuses/extends `decisions.ts` (mutation-
+verified); a link-integrity check after the design-sessions move; scar-callout rendering
+exercised by a smoke. Components exempt.
 
 ## T5 — Ticket-detail pages 🔶
 
