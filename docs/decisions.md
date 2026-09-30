@@ -250,3 +250,17 @@ threads. The DSL explainer belongs in the Use track, never the Field Manual. Sit
 by these two tracks once the Use track has real content (E3/E4 era). **Why:** a single "book"
 serves neither reader — an end user hitting "ack-after-apply" is lost, a builder wading
 through "click New Bot" is annoyed; audience is the right top-level axis for docs.
+
+## D22 — Within the Build track: Field Manual teaches, Architecture specs — **Accepted** (2026-09-30, Alex)
+
+The two Build-track docs have distinct jobs and grow differently. **The Field Manual** is
+*narrative teaching* — how it works and why, with scars, read front-to-back; it grows by
+adding chapters (and sections within a chapter). **Architecture** is *spec + reference* —
+the system shape (`architecture/README.md`) plus a **component reference**
+(`architecture/components/<module>.md`), one page per built module, read by lookup; it grows
+a sub-tree as modules are added. Detailed per-component technical docs live in the component
+reference, never the Field Manual; the two cross-link. Rule of thumb: a plot and a scar →
+Field Manual; something you'd look up → Architecture. Extends D21. The docs site's nested
+sidebar (E2-T6) renders these sub-trees. **Why:** teaching and reference are different reading
+modes — conflating them (a spec buried in a story, or a story you can't look things up in)
+serves neither; separating them lets each grow in its own shape.

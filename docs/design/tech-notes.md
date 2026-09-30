@@ -1,6 +1,6 @@
 # Tech Notes — language, stack, and code conventions
 
-> **What this is.** The technical-choices companion to `architecture.md`: what we build
+> **What this is.** The technical-choices companion to `architecture/README.md`: what we build
 > with, which language features we use and avoid, and the code conventions that don't fit
 > in CLAUDE.md's short form. Each section links its ruling (D-numbers). Living document —
 > grows a section per settled area; **frontend section reserved** (Alex has ideas; written

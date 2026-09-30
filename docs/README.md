@@ -10,7 +10,7 @@ evidence (the prototype's read-only seed pack) — plus the working layer in `.c
 |---|---|
 | What Tradebench is and how it works, in prose | [`product/overview.md`](product/overview.md) |
 | To *understand* a mechanism (sockets, threads, queues, locks, clocks, resilience, busses) | [The Field Manual](field-manual/README.md) |
-| The system's shape — modules, seams, data flows | [`design/architecture.md`](design/architecture.md) |
+| The system's shape — modules, seams, data flows | [`design/architecture/README.md`](design/architecture/README.md) |
 | Why a decision was made (and its status) | [`decisions.md`](decisions.md) |
 | What's being built right now | [`.claude/tasks/board.md`](../.claude/tasks/board.md) |
 
@@ -22,7 +22,7 @@ evidence (the prototype's read-only seed pack) — plus the working layer in `.c
   code paths → the scar that taught it. Nine chapters following the data from IG's socket
   to Postgres and out again.
 - **[`design/`](design/README.md)** — enduring technical specs (*what is*):
-  [`architecture.md`](design/architecture.md) (living C4 — modules, seams, key behaviours,
+  [`architecture/README.md`](design/architecture/README.md) (living C4 — modules, seams, key behaviours,
   trajectory, fan-out plan), [`tech-notes.md`](design/tech-notes.md) (stack, Java feature
   policy, null-safety, naming and SQL conventions),
   [`secrets-and-config.md`](design/secrets-and-config.md) (the D16 env/credentials design).

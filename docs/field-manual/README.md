@@ -2,7 +2,7 @@
 
 A set of learning pages on how this system actually works — the jargon defined, the
 concepts from first principles, and then *our exact code paths* walked with file
-references. Where the [architecture doc](../design/architecture.md) is the spec and
+references. Where the [architecture doc](../design/architecture/README.md) is the spec and
 [decisions.md](../decisions.md) is the why-log, the Field Manual is the *teacher*: each chapter
 exists so a builder (present or future) can go from "I've heard the word" to "I could defend
 this design in review". This is the **Build track** (D21) — engineering internals, for people
