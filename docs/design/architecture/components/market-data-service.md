@@ -1,8 +1,10 @@
 # market-data-service — the capture service
 
 **What it is.** Tradebench's first deployed artifact (D2): a standalone service that streams
-IG ticks + sealed 1m bars into Postgres, losslessly and self-reportingly, then heals and
-archives daily. The composition root is plain `Main` today; Spring enters at T6-era.
+IG ticks + sealed 1m bars into Postgres, losslessly and self-reportingly (the daily heal +
+Parquet archive is **T6-era, planned**). The composition root is plain `Main` today; Spring
+enters at T6. *Built through E1-T4; the resilience/coverage packages below are marked where
+they are still in progress on `e1-t5-resilience`.*
 
 ## Package map
 
@@ -13,10 +15,10 @@ archives daily. The composition root is plain `Main` today; Spring enters at T6-
   (single consumer, bars-first, peek→write→remove ack-after-apply).
 - **`store`**: `CaptureStore` seam with `PostgresStore` (real path) + `JsonlStore` (evidence);
   `SingleInstanceLock` (dedicated non-pooled session); Flyway migrations; the schema drift gate.
-- **`supervise`** (T5): the pure resilience cores — `StalenessWatchdog`, `StuckSubstateEscalator`,
-  `BackoffPolicy`, `ReconnectClassifier`, `WitnessQuarantine`, `Tuning` — decisions return
-  values; one impure `Supervisor` shell (slice C) executes them.
-- **`coverage`**: `GapDetector` — watermark grid, `missing = minutes − 1`.
+- **`supervise`** (T5, **planned** — on `e1-t5-resilience`, not yet merged): pure resilience
+  cores (`StalenessWatchdog`, `StuckSubstateEscalator`, `BackoffPolicy`, `ReconnectClassifier`,
+  `WitnessQuarantine`, `Tuning`) returning values; one impure `Supervisor` shell executes them.
+- **`coverage`** (T5, **planned**): `GapDetector` — a watermark grid over sealed bars.
 
 ## Boundaries & data
 

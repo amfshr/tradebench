@@ -52,24 +52,49 @@ function insert(nodes: TreeNode[], segments: string[], route: string): void {
   insert(folder.children!, rest, route);
 }
 
-/** Files before folders; the board leaf leads its group; numeric-aware within each. Recursive. */
-function sortNodes(nodes: TreeNode[]): void {
+/**
+ * Explicit ordering, keyed by the parent folder's label: listed labels lead in this order
+ * (after Index); unlisted follow the default (files-before-folders, numeric-aware). Add an
+ * entry to take control of any folder's sequence without renaming files.
+ */
+const ORDER: Record<string, string[]> = {
+  Design: ['Architecture', 'Tech notes', 'Secrets and config', 'Brand'],
+};
+
+function priority(list: string[] | undefined, label: string): number {
+  const i = list?.indexOf(label) ?? -1;
+  return i === -1 ? Infinity : i;
+}
+
+/**
+ * Sibling order: the board leaf leads its group; Index (the folder README) is always next;
+ * then any explicit ORDER for this folder; then files before folders; then numeric-aware.
+ */
+function sortNodes(nodes: TreeNode[], contextLabel: string): void {
+  const order = ORDER[contextLabel];
   nodes.sort((a, b) => {
-    const aBoard = a.route === '/board' ? 0 : 1;
-    const bBoard = b.route === '/board' ? 0 : 1;
-    if (aBoard !== bBoard) {
-      return aBoard - bBoard;
+    const board = (n: TreeNode) => (n.route === '/board' ? 0 : 1);
+    if (board(a) !== board(b)) {
+      return board(a) - board(b);
     }
-    const aFolder = a.children ? 1 : 0;
-    const bFolder = b.children ? 1 : 0;
-    if (aFolder !== bFolder) {
-      return aFolder - bFolder;
+    const index = (n: TreeNode) => (n.label === 'Index' ? 0 : 1);
+    if (index(a) !== index(b)) {
+      return index(a) - index(b);
+    }
+    const pa = priority(order, a.label);
+    const pb = priority(order, b.label);
+    if (pa !== pb) {
+      return pa - pb;
+    }
+    const folder = (n: TreeNode) => (n.children ? 1 : 0);
+    if (folder(a) !== folder(b)) {
+      return folder(a) - folder(b);
     }
     return a.label.localeCompare(b.label, 'en', { numeric: true });
   });
   for (const n of nodes) {
     if (n.children) {
-      sortNodes(n.children);
+      sortNodes(n.children, n.label);
     }
   }
 }
@@ -121,7 +146,7 @@ export function buildTree(repoPaths: string[]): TreeGroup[] {
       const segments = p.slice(spec.root.length).replace(/\.md$/, '').split('/');
       insert(nodes, segments, routeFor(p));
     }
-    sortNodes(nodes);
+    sortNodes(nodes, spec.label);
     return { label: spec.label, nodes };
   }).filter((g) => g.nodes.length > 0);
 }

@@ -20,6 +20,8 @@ const PATHS = [
   'docs/field-manual/02-threads-and-the-callback-boundary.md',
   'docs/field-manual/README.md',
   'docs/design/architecture.md',
+  'docs/design/tech-notes.md',
+  'docs/design/brand.md',
   'docs/design/sessions/2026-09-29-brand.md',
   'docs/design/sessions/2026-09-27-indicators.md',
   'docs/decisions.md',
@@ -35,10 +37,18 @@ describe('buildTree', () => {
     expect(allRoutes).not.toContain('/docs');
   });
 
+  test('explicit ORDER controls the Design sequence (not alphabetical); folder trails files', () => {
+    // ORDER = Architecture, Tech notes, Secrets, Brand → Brand after Tech notes, not before.
+    expect(labelsOf(group('Design')?.nodes)).toEqual([
+      'Architecture',
+      'Tech notes',
+      'Brand',
+      'Sessions',
+    ]);
+  });
+
   test('a subdirectory becomes a nested folder node, not a slash-prefixed leaf', () => {
     const design = group('Design')?.nodes ?? [];
-    // files before folders, so architecture precedes the Sessions folder
-    expect(labelsOf(design)).toEqual(['Architecture', 'Sessions']);
     const sessions = design.find((n) => n.label === 'Sessions');
     expect(sessions?.route).toBeUndefined();
     expect(labelsOf(sessions?.children)).toEqual([
@@ -48,11 +58,11 @@ describe('buildTree', () => {
     expect(sessions?.children?.[0].route).toBe('/docs/design/sessions/2026-09-27-indicators');
   });
 
-  test('chapters sort in numeric order with pretty labels; README becomes Index', () => {
+  test('Index (the README) always leads; then chapters in numeric order', () => {
     expect(labelsOf(group('Field Manual')?.nodes)).toEqual([
+      'Index',
       '2 · Threads and the callback boundary',
       '10 · Imaginary late chapter',
-      'Index',
     ]);
   });
 
@@ -65,17 +75,20 @@ describe('buildTree', () => {
 });
 
 describe('flattenLeaves / neighbours', () => {
-  test('flattenLeaves walks folders depth-first into leaf routes', () => {
+  test('flattenLeaves walks files then folders depth-first into leaf routes', () => {
     const design = group('Design')?.nodes ?? [];
     expect(flattenLeaves(design).map((l) => l.route)).toEqual([
       '/docs/design/architecture',
+      '/docs/design/tech-notes',
+      '/docs/design/brand',
       '/docs/design/sessions/2026-09-27-indicators',
       '/docs/design/sessions/2026-09-29-brand',
     ]);
   });
 
   test('page-turn steps through the group leaves, crossing into a nested folder', () => {
-    expect(neighbours(tree, '/docs/design/architecture').next?.route).toBe(
+    // last top-level file → first leaf inside the Sessions subfolder
+    expect(neighbours(tree, '/docs/design/brand').next?.route).toBe(
       '/docs/design/sessions/2026-09-27-indicators',
     );
     expect(neighbours(tree, '/no/such/route')).toEqual({});
