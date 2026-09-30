@@ -39,14 +39,19 @@ published they are safe forever.
 
 ## Our code path
 
-The running capture process is exactly four threads of ours plus the SDK's own:
+The running capture process is **three threads of ours** — one dormant until Ctrl-C — plus
+the Lightstreamer SDK's own internal pool:
 
 | Thread | Born where | Does |
 |---|---|---|
 | `main` | JVM | builds the object graph (`app/Main.main`), then becomes the heartbeat loop: sleep 60s, check the pump is alive, log honest counters |
-| LS SDK threads | `LightstreamerClient` (inside `LightstreamerTransport.connect`) | own the socket; deliver every `onItemUpdate`/`onStatusChange` — the callback boundary |
 | `capture-pump` | `Main` (`new Thread(pump, "capture-pump")`) | the single consumer: drains queues into the store — chapter 4 |
-| `capture-shutdown` | JVM shutdown hook | orderly close on Ctrl-C |
+| `capture-shutdown` | JVM shutdown hook | dormant until Ctrl-C, then the orderly close |
+| LS SDK threads | `LightstreamerClient` (inside `LightstreamerTransport.connect`) | not ours — a small pool the SDK manages; owns the socket and delivers every `onItemUpdate`/`onStatusChange` — the callback boundary |
+
+So at steady state only **two of ours** are doing work — `main` (the heartbeat) and
+`capture-pump` (the consumer); `capture-shutdown` sleeps until Ctrl-C, and the SDK's pool
+delivers the callbacks from the far side of the boundary.
 
 The boundary crossing, concretely
 (`market-data-service/src/main/java/dev/amfshr/tradebench/marketdata/ingest/Buffers.java`):
