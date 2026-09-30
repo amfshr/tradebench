@@ -28,9 +28,15 @@ data views (coverage map, gaps, catalogue, downloads — the SPA's core job). Th
 
 ---
 
-## T1 — Observability & data-model design ⬜ (the design gate)
+## T1 — Observability & data-model design ✅ (ruled 2026-09-30)
 
-**Type** design · **Branch** `—` · **Started** — · **Blocked by** —
+**Type** design · **Branch** `—` · **Started** 2026-09-30 · **Blocked by** —
+
+**Ruled 2026-09-30 (Alex, R1–R7) → spec: `docs/design/observability-and-data-model.md`; decision
+D25.** Q1 (streaming schedule) folded in and resolved (the three-clock model + generous window +
+expected calendar). Output feeds **E1-T5 slice B** (`service_events` v2 + `bar_gaps` +
+`capture_status`) and **E1-T6** (`archives` + `heal_outcome`). Build tickets T2–T4 detailed from
+this design.
 
 The full design of what the console captures and serves — Claude proposes, Alex rules. Covers
 the whole surface, not just "service stuff": errors, warnings, performance, and data/coverage

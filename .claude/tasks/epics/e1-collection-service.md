@@ -126,6 +126,12 @@ actually needed).
 **Build slices:** A pure cores (supervise/coverage decision logic + scenario tests) →
 B store side (EventLog, V2 bar_gaps, drift regen) → C shell (Supervisor, HealthProbe,
 Main rewiring, heartbeat, pacer discovery).
+**Slice B builds to the E9-T1 data-model spec** (D25, `docs/design/observability-and-data-model.md`):
+the event log = **`service_events` v2** (dimensions + severity + occurrence/recorded split), the
+**`bar_gaps`** table (persist `GapDetector.Gap` + `healed_at`/`heal_outcome`), and a
+**`capture_status`** per-heartbeat UPSERT (the console's health source) — so the collector writes
+the console-ready shapes once. Q1 (streaming schedule) is ruled there too (three clocks; generous
+window; expected `market_calendar`).
 **Post-sweep refinement (2026-09-28, trading-ig comparison):** the REST pacer's budget is
 discovered at service startup from `GET /operations/application` (minus headroom) or
 config-injected — field data shows demo keys enforce 10/min, not the published 30; never
