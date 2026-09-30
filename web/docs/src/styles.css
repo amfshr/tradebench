@@ -1051,7 +1051,18 @@ h3:hover .hanchor {
   text-align: right;
 }
 
-.row-done .tcell-title {
+/* Ticket titles are clickable but read as text, not blue web links. */
+.tcell-title a {
+  color: var(--fg);
+  text-decoration: none;
+}
+
+.tcell-title a:hover {
+  color: var(--accent);
+}
+
+.row-done .tcell-title,
+.row-done .tcell-title a {
   color: var(--fg-muted);
   text-decoration: line-through;
   text-decoration-color: var(--border);
@@ -1077,9 +1088,9 @@ h3:hover .hanchor {
   background: var(--accent);
 }
 
+/* In progress: a small accent dot is the whole signal — no heavy blue text/border. */
 .chip-in-progress {
-  color: var(--accent);
-  border-color: color-mix(in srgb, var(--accent) 40%, var(--border));
+  color: var(--fg);
 }
 
 .chip-done {
