@@ -1,11 +1,16 @@
-# The Tradebench Book
+# The Tradebench Field Manual
 
 A set of learning pages on how this system actually works — the jargon defined, the
 concepts from first principles, and then *our exact code paths* walked with file
 references. Where the [architecture doc](../design/architecture.md) is the spec and
-[decisions.md](../decisions.md) is the why-log, the book is the *teacher*: each chapter
-exists so a reader (present or future — including the users this platform is for) can go
-from "I've heard the word" to "I could defend this design in review".
+[decisions.md](../decisions.md) is the why-log, the Field Manual is the *teacher*: each chapter
+exists so a builder (present or future) can go from "I've heard the word" to "I could defend
+this design in review". This is the **Build track** (D21) — engineering internals, for people
+working *on* Tradebench. People working *with* it want the User Guide (the Use track), not this.
+
+**Scar convention.** Each chapter leads its scars with a callout — a blockquote the site
+renders as a card: `> **Scar** — **<title>** · <dated cost>`, the story, then a
+`> **Lesson.** …` line. No icon, no colour (brand R9); the failure stories get dignity.
 
 Chapters carry their scars deliberately. Almost every rule in this codebase was paid for —
 by the Python prototype (the inherited
@@ -57,7 +62,7 @@ around it.
 Front to back works — Part I is the pipeline in data order. But every chapter stands
 alone: each defines its own jargon and links onward. If one thing is itching, start there.
 
-House rules for the book itself: chapters teach the system *as merged or in review* (they
+House rules for the Field Manual itself: chapters teach the system *as merged or in review* (they
 say so when something is branch-only); code references are repo-relative paths that must
 stay real — a renamed class is a book edit; and new hard-won lessons earn chapters (the
 DSL and the backtest engine will join when E3 builds them).

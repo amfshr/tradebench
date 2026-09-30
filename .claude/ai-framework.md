@@ -55,7 +55,7 @@ Sessions come in three shapes; each has a project skill that carries the protoco
   and what's next; stop for Alex's pick. Run whenever context is cold or stale.
 - **Design → `/design-session`.** Ground in the seed pack first; survey standard practice;
   strawman; structured questions; Alex rules. The answered record is filed under
-  `docs/design-sessions/` **the same day**; decisions go to the log; the board gets touched.
+  `docs/design/sessions/` **the same day**; decisions go to the log; the board gets touched.
   (Question sheets → answered records is the project's calibration-truth pattern, playbook
   §5.2.)
 - **Build → `/start-ticket`.** Ticket-scoped; **design nod before implementation** on any
@@ -81,7 +81,7 @@ may be months away.
   settings.json        ← permissions/hooks (E0-T4 — not yet born)
 docs/
   decisions.md         ← decision log (D1…)
-  design-sessions/     ← dated answered records of design sessions
+  design/sessions/     ← dated answered records of design sessions (nested, D21)
   design/              ← enduring technical design specs (architecture.md, catalogue, grammar…)
   reference/           ← external reference material (e.g. the scraped IG API summary)
   inherited/           ← read-only prototype seed pack (never edit — D1)

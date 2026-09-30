@@ -5,7 +5,7 @@
 > the **E1 target shape** it is growing into; horizon epics (E4+) appear only as reserved
 > seats. **Keep-current duty:** update this doc at the close-out of any ticket that changes
 > the system's shape (new module, new deployable, new boundary, changed dataflow). Rulings
-> trace to `docs/decisions.md`; deep design history to `docs/design-sessions/`.
+> trace to `docs/decisions.md`; deep design history to `docs/design/sessions/`.
 >
 > Status: v2, 2026-09-28 — reflects E1-T1..T4 (all merged; live capture → Postgres).
 

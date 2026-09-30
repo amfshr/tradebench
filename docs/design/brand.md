@@ -1,7 +1,7 @@
 # Tradebench brand & visual identity
 
 Ruled 2026-09-29 (design session
-[2026-09-29-brand-and-visual-identity](../design-sessions/2026-09-29-brand-and-visual-identity.md),
+[2026-09-29-brand-and-visual-identity](sessions/2026-09-29-brand-and-visual-identity.md),
 R1–R11; decision D19). Evidence: Alex's design-tool exploration export in
 [`research/2026-09-29-brand-explorations/`](research/2026-09-29-brand-explorations/README.md)
 — a ten-turn log with its own decision record (D-01…D-09), ratified as rulings. This spec

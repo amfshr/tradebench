@@ -1,6 +1,6 @@
 # Chapter 7 — Clocks: wall time, monotonic time, and what sleep does to both
 
-Part of the Tradebench book. This chapter explains why the platform carries **two**
+Part of the Tradebench Field Manual. This chapter explains why the platform carries **two**
 clocks everywhere, why business logic is forbidden from reading either one directly, and
 how comparing the two detects host sleep and process freezes — the trick the staleness
 watchdog's correctness rests on.
@@ -95,11 +95,14 @@ payoff of the injectable-clock doctrine: timing logic tested at the speed of ari
 
 ## The scars
 
-The prototype once logged a lid-closed gap of sixteen minutes as **"0.4s offline"** — it
-measured the outage on the monotonic clock, which had slept along with the machine. True
-awake-outage: 0.4s. True wall-outage: ~16 minutes of missing market data. Both numbers
-are real answers to *different questions*, which is why `ReconnectClassifier.Reconnect`
-now reports `wallOutage`, `awakeOutage`, and `hostSleptDuring` side by side (chapter 8).
+> **Scar** — **"0.4s offline"** · a 16-minute gap, mis-measured
+>
+> The prototype logged a lid-closed outage of sixteen minutes as **"0.4s offline"** — it
+> measured the gap on the monotonic clock, which had slept along with the machine. Awake-outage:
+> 0.4s. Wall-outage: ~16 minutes of missing market data.
+>
+> **Lesson.** Wall time for stamps, monotonic for spans, and the *pair* for anomaly detection.
+> `ReconnectClassifier` now reports `wallOutage`, `awakeOutage`, and `hostSleptDuring` side by side.
 
 The complementary hazard is hypothetical only because the doctrine forbids it: a watchdog
 measuring staleness against wall time declares every market dead the moment a laptop
@@ -113,5 +116,5 @@ time; a strategy that says "90 seconds" means 90 seconds of *market data time*, 
 bit-for-bit. The capture side's clock hygiene is what keeps that promise honest.
 
 *Previous: [Chapter 6 — The advisory lock and single-instance
-discipline](06-the-advisory-lock-and-single-instance.md) · [Book index](README.md) ·
+discipline](06-the-advisory-lock-and-single-instance.md) · [Field Manual index](README.md) ·
 Next: [Chapter 8 — The resilience belt](08-the-resilience-belt.md)*

@@ -94,7 +94,7 @@ each mark at favicon size (16px) — legibility there is a hard filter. Both mod
 ### P3 — docs landing page
 Landing page for docs.tradebench in the strongest direction (state which): compact hero
 (wordmark, one-liner "the bench you work at", quiet), entry cards for Product overview /
-The Book / Architecture / Decisions / Board, a visible sidebar + reading-column shell so
+The Field Manual / Architecture / Decisions / Board, a visible sidebar + reading-column shell so
 the page structure reads as a docs site, not a marketing splash. Show light AND dark.
 
 ### P4 — the board as a dashboard
@@ -106,7 +106,7 @@ where something needs attention. Both modes.
 ### P5 — book chapter reading page
 Long-form reading specimen for a teaching book chapter: chapter title, h2/h3 rhythm,
 ~66-char measure, a code block, a framed architecture-diagram placeholder, a styled
-"scar" callout (the book tells failure stories — give them a dignified treatment, not a
+"scar" callout (the Field Manual tells failure stories — give them a dignified treatment, not a
 warning-triangle cliché), and a right-hand "on this page" rail. Typography is the whole
 product here. Both modes.
 

@@ -5,7 +5,7 @@ served at `docs.tradebench.amfshr.dev`, housing all static documentation (produc
 architecture, decisions, the board section; later the DSL reference and REST API/
 integration docs). Markdown stays the write model (agents and Alex edit
 files; git stays the history); this small React/TS app renders the board *and* the docs
-tree — the product overview, the book, design specs — as pleasant pages (D11; scope widened
+tree — the product overview, the Field Manual, design specs — as pleasant pages (D11; scope widened
 2026-09-28 to cover `docs/` as Alex's "online book of pages"). It is also the frontend
 warm-up: first exercise of the `web/` toolchain at low stakes, deliberately separate
 from the future product SPA so warm-up choices bind nothing (tech-notes §6).
@@ -28,7 +28,7 @@ E1-T5 without touching it.
 
 **Goal:** `npm run dev` serves the repo's markdown as a reading experience: sidebar
 navigation over `docs/` + the board, GFM tables, **rendered mermaid**, highlighted code,
-working internal links, light/dark, typography that makes the book a pleasure.
+working internal links, light/dark, typography that makes the Field Manual a pleasure.
 
 **Design nod (D13) — Claude proposes, Alex rules:**
 
@@ -45,12 +45,12 @@ working internal links, light/dark, typography that makes the book a pleasure.
   `rehype-slug`/autolink (anchor headings); mermaid fences rendered client-side by a
   lazy-loaded `mermaid` component; code fences via `rehype-highlight` (highlight.js —
   light, good-enough v0; shiki is a swap not a rewrite). Internal `*.md` links rewritten
-  to app routes so the book's prev/next nav just works. *Nod: rec (Alex, 2026-09-28)*
+  to app routes so the Field Manual's prev/next nav just works. *Nod: rec (Alex, 2026-09-28)*
 - **N4 — Styling & navigation.** Hand-rolled CSS with custom-property tokens,
   typography-first (system font stack + a measured reading column), light/dark via
   `prefers-color-scheme`; **no Tailwind or component library in v0** (reversible — a
   warm-up should show us the raw platform first). `react-router` with routes mirroring
-  file paths (`/docs/book/08-…`); sidebar tree derived from the glob. *Nod: rec (Alex, 2026-09-28)*
+  file paths (`/docs/field-manual/08-…`); sidebar tree derived from the glob. *Nod: rec (Alex, 2026-09-28)*
 
 **Build order:** scaffold workspace + app → content glob & routing → markdown pipeline
 (GFM → links → highlight → mermaid last) → sidebar/nav → typography & dark mode pass.
@@ -60,7 +60,7 @@ internal-link rewriter (md path → route, anchors preserved) and the sidebar tr
 get mutation-verified tests; rendering components are exercised by one smoke per page
 kind. No test theatre on divs.
 
-**DoD:** dev server renders the book (mermaid drawn, nav links working), product
+**DoD:** dev server renders the Field Manual (mermaid drawn, nav links working), product
 overview, PRD, decisions, and the board; sidebar covers the docs tree; light/dark honest;
 a doc edit hot-reloads.
 
@@ -85,33 +85,27 @@ test → build with `VITE_BASE` → 404.html SPA fallback → deploy-pages) + `w
 lane). Custom domain **docs.tradebench.amfshr.dev** live (Cloudflare CNAME + `PAGES_BASE=/`,
 HTTPS enforced — 2026-09-29). **DoD:** one command produces the static site; CI builds it green.
 
-## T4 — Docs polish & structure (the final E2 sweep) ⬜
+## T4 — Docs polish & structure (the final E2 sweep) ✅
 
-**Type** docs · **Branch** — · **Started** — · **Blocked by** —
+**Type** docs · **Branch** `e2-t4-docs-sweep` · **Started** 2026-09-30 · **Blocked by** —
 
-The last content/structure pass before E2 closes. Four strands (Alex, 2026-09-30):
+The last content/structure pass before E2 closes. Four strands, all landed (Alex, 2026-09-30):
 
-- **(a) Scar callouts + framed diagrams (design R9/P5).** A markdown convention
-  (`> **Scar** · title · dated cost` blockquote) the renderer styles into the mono-spine
-  SCAR card; a content pass converting the nine chapters' scar sections; framed-diagram
-  treatment. Delayed from T2, not dropped.
-- **(b) Book cleanup + possible rename.** Tighten the chapters where they've drifted;
-  **decide whether "the book" gets a real name** (open question — surface options, Alex
-  rules). Update all references if renamed.
-- **(c) Decision log — visually spiced.** Today it renders as raw markdown (D1–D20 as a
-  long scroll). Turn it into a designed view: D-cards with status + date, area/epic
-  cross-links, and (nice-to-have) filter by status/area. A parsed read model of
-  `decisions.md`, like the board — the parser already exists in part (`decisions.ts`).
-- **(d) Nest design-sessions under design.** Move `docs/design-sessions/` →
-  `docs/design/sessions/`; fix internal links, the sidebar grouping (one **Design** group,
-  not two separate roots), and any references in CLAUDE.md / docs/README.md.
+- **(a) Scar callouts (R9)** ✅ — a `> **Scar** — **<title>** · <cost>` blockquote convention
+  the renderer styles into the mono-labelled card (no icon, no colour); each of the nine
+  chapters now leads its scars with one. (Framed diagrams already shipped in T5.)
+- **(b) Book → Field Manual** ✅ — ruled **D21**: docs split by audience. The book became the
+  **Field Manual** (Build track — engineering internals); a **User Guide** seat is reserved
+  (Use track — end users, DSL). Folder, labels, nav, and all links updated.
+- **(c) Decision log — designed page** ✅ — `DecisionsPage`: D-cards (id, status chip, date,
+  rendered body) newest-first, parsed from `decisions.md` (`parseDecisionLog`); amber for
+  unresolved status.
+- **(d) design-sessions nested** ✅ — `docs/design-sessions/` → `docs/design/sessions/`; one
+  **Design** sidebar group; all links fixed; link-integrity re-checked.
 
-**DoD:** book scars render as R9 cards + chapters tightened + rename ruled; the decision log
-reads as a designed page, not raw md; design-sessions nested under design with links intact.
-
-**Test plan (G5):** the decision-log read model reuses/extends `decisions.ts` (mutation-
-verified); a link-integrity check after the design-sessions move; scar-callout rendering
-exercised by a smoke. Components exempt.
+**DoD met:** scars render as R9 cards; decision log is a designed page; design-sessions nested;
+rename ruled (D21). Note: chapter *prose* was left as-is (already tight) beyond the rename and
+scar leads — a deeper line-edit can be a future pass if wanted.
 
 ## T5 — Ticket-detail pages 🔶
 

@@ -89,6 +89,13 @@ function componentsFor(fromRepoPath: string): Components {
       }
       return <CopyablePre>{children}</CopyablePre>;
     },
+    blockquote({ children }) {
+      // Scar callout (R9): a blockquote led by **Scar** renders as the mono-labelled card.
+      if (/^\s*Scar\b/.test(textOf(children))) {
+        return <div className="scar-card">{children}</div>;
+      }
+      return <blockquote>{children}</blockquote>;
+    },
     h2: heading('h2'),
     h3: heading('h3'),
   };

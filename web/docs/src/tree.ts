@@ -11,7 +11,7 @@ export interface TreeGroup {
   items: TreeItem[];
 }
 
-/** '/docs/book/', '' and '/' all address the docs map at '/docs'. */
+/** '/docs/field-manual/', '' and '/' all address the docs map at '/docs'. */
 export function normalizeRoute(pathname: string): string {
   const trimmed = pathname.replace(/\/+$/, '');
   return trimmed === '' ? '/docs' : trimmed;
@@ -56,9 +56,8 @@ interface GroupSpec {
 
 const GROUPS: GroupSpec[] = [
   { label: 'Product', root: 'docs/product/' },
-  { label: 'The book', root: 'docs/book/' },
+  { label: 'Field Manual', root: 'docs/field-manual/' },
   { label: 'Design', root: 'docs/design/' },
-  { label: 'Design sessions', root: 'docs/design-sessions/' },
   { label: 'Decisions', root: 'docs/', only: 'docs/decisions.md' },
   { label: 'Reference', root: 'docs/reference/' },
   { label: 'Inherited (read-only)', root: 'docs/inherited/' },

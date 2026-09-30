@@ -74,8 +74,8 @@ export function TopNav() {
         <NavLink to="/docs" className={({ isActive }) => (isActive ? 'active' : undefined)}>
           Docs
         </NavLink>
-        <NavLink to="/docs/book" className={({ isActive }) => (isActive ? 'active' : undefined)}>
-          Book
+        <NavLink to="/docs/field-manual" className={({ isActive }) => (isActive ? 'active' : undefined)}>
+          Manual
         </NavLink>
         <NavLink to="/board" className={({ isActive }) => (isActive ? 'active' : undefined)}>
           Board

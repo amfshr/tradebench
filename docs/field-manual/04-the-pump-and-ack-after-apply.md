@@ -103,6 +103,15 @@ injected, which is why `PumpTest` runs in milliseconds with a no-op sleeper.
 
 ## The scars
 
+> **Scar** — **The invariant that breaks invisibly** · playbook §1.4, test audit
+>
+> The prototype's test audit found that **ack-after-apply is the easiest invariant to break
+> invisibly** — a consumer that acks before applying loses events silently, and nothing goes
+> red unless a test pins it.
+>
+> **Lesson.** Pin ack-after-apply with a mutation-verified test on every consumer — intent is
+> not enough. `PumpTest`'s sink-failure test asserts the un-acked bar is still at the queue head.
+
 The prototype's engineering playbook is blunt about consumer loops — §1.4 is titled
 "*At-least-once delivery + idempotent consumers, or silent lies*" — and it carries a
 sharper, subtler finding from the prototype's test audit: **ack-after-apply is the easiest
@@ -115,4 +124,4 @@ but the reasoning is airtight: a retry into a broken sink throws a fresh excepti
 the original cause, and the first error — the only interesting one — is the thing you
 must never bury.
 
-*Previous: [Chapter 3 — Buffers, queues and backpressure](03-buffers-queues-and-backpressure.md) · [Book index](README.md) · Next: [Chapter 5 — The capture store and Postgres](05-the-capture-store-and-postgres.md)*
+*Previous: [Chapter 3 — Buffers, queues and backpressure](03-buffers-queues-and-backpressure.md) · [Field Manual index](README.md) · Next: [Chapter 5 — The capture store and Postgres](05-the-capture-store-and-postgres.md)*

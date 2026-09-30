@@ -1,6 +1,6 @@
 # Chapter 8 — The resilience belt: pure cores, one impure shell
 
-Part of the Tradebench book. T5's supervision layer exists because the prototype ran
+Part of the Tradebench Field Manual. T5's supervision layer exists because the prototype ran
 long enough, unattended enough, to collect real outages — and every class in
 `market-data-service/.../supervise/` and `.../coverage/` is a specific incident with a
 name. This chapter explains the pattern they share, then tours each core.
@@ -167,6 +167,14 @@ supervision, and the heartbeat extended with per-market staleness ages.
 
 ## The scars, in one line each
 
+> **Scar** — **Silent while connected** · 2h56m of lost data
+>
+> The prototype's SDK reported a healthy connection for 2 hours 56 minutes while no data
+> arrived — the socket was up, the feed was dead, and nothing noticed.
+>
+> **Lesson.** A connected socket is not a live feed. The watchdog trusts data freshness over
+> connection status; the stuck-substate escalator forces a rebuild when a substate hangs.
+
 Silent-while-connected (2h56m) → the escalator and the watchdog's worldview. The remedy
 storm risk → episodes, doubling grace, the session guard. IG's login cache → the backoff
 floor. "0.4s offline" → dual-duration reporting. The 17:00 Sunday outage → GapDetector's
@@ -174,5 +182,5 @@ literal test fixture. None of these numbers are guesses; that is why they live i
 `Tuning.playbook()` under version control rather than in anyone's memory.
 
 *Previous: [Chapter 7 — Clocks](07-clocks-wall-monotonic-and-sleep.md) ·
-[Book index](README.md) · Next: [Chapter 9 — Busses and serving data
+[Field Manual index](README.md) · Next: [Chapter 9 — Busses and serving data
 outward](09-busses-and-serving-data-outward.md)*

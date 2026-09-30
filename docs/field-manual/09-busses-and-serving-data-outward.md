@@ -1,6 +1,6 @@
 # Chapter 9 — Busses, and serving the data outward
 
-Part of the Tradebench book. The capture pipeline ends in Postgres — so how do
+Part of the Tradebench Field Manual. The capture pipeline ends in Postgres — so how do
 downstream applications (charts, the backtester, live bots) get the data? This chapter
 explains message busses from first principles, why the platform's answer is *mostly not
 a bus*, and the fan-out plan recorded in architecture §3.5.
@@ -106,6 +106,15 @@ than inventing a third; it is the standard pattern under every event-sourced sys
 
 ## The scars (this time, avoided in advance)
 
+> **Scar** — **One process doing everything** · the prototype's tangle
+>
+> The prototype's capture, serving, and healing concerns grew entangled in a single process;
+> separating them afterwards was expensive — and is part of why Tradebench exists.
+>
+> **Lesson.** Decouple at deployable-artifact boundaries (P7) and build the bus only when its
+> first consumer exists (D4) — but choose the seams (`CaptureStore`, dedupe keys, single-writer)
+> up front so fan-out is a compose, not a rewrite.
+
 None of this is built, and that is a decision, not a gap: **P7** (decoupling is a means;
 the collection service stands alone) and D4's own re-decision gate say the bus is built
 when its *first consumer* exists — infrastructure built speculatively is infrastructure
@@ -121,4 +130,4 @@ When the first live consumer arrives, the order of work is: schema the event con
 under a kill test, and only then let the consumer ship.
 
 *Previous: [Chapter 8 — The resilience belt](08-the-resilience-belt.md) ·
-[Book index](README.md)*
+[Field Manual index](README.md)*

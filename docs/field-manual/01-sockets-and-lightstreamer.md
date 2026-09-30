@@ -119,9 +119,13 @@ flowchart TD
 
 ## The scars
 
-- **The preferred-account trap** (playbook §1.1): stream as the wrong account and PRICE items
-  yield *nothing* — no error, just silence. That silence-is-failure experience shaped the
-  whole resilience design: chapter 8's watchdog trusts data freshness, never connection state.
+> **Scar** — **The preferred-account trap** · playbook §1.1
+>
+> Stream as the wrong account and PRICE items yield *nothing* — no error, just silence.
+>
+> **Lesson.** Silence is a failure mode. Chapter 8's watchdog trusts data freshness, never
+> connection state — this scar is why.
+
 - **Partial candles persisted as bars** — the prototype era learned `CONS_END` the hard way;
   our filter sits in the one place partials can't leak past.
 - **`MARKET:{epic}` no longer exists** (decommissioned May 2026, playbook §2.3): market state
@@ -131,4 +135,4 @@ flowchart TD
   2/3/10/15-minute entirely. Every higher timeframe is aggregated from healed 1m in our own
   code (D15) — the stream can't do it for you.
 
-*Previous: [Book index](README.md) · Next: [Chapter 2 — Threads and the callback boundary](02-threads-and-the-callback-boundary.md)*
+*Previous: [Field Manual index](README.md) · Next: [Chapter 2 — Threads and the callback boundary](02-threads-and-the-callback-boundary.md)*

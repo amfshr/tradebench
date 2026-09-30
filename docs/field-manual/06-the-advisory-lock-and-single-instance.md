@@ -94,6 +94,15 @@ The tests, `SingleInstanceLockTest`, are shaped by the scar below:
 
 ## The scars
 
+> **Scar** — **The pooled lock that lied** · doctrine review F1, 2026-09-28
+>
+> T4's first single-instance lock rode a Hikari **pooled** connection: `close()` returned the
+> connection to the pool still holding the session-level lock, and the release test passed
+> *via re-entrancy* — a green test over a broken release.
+>
+> **Lesson.** A lock whose lifetime must equal a session's must own a dedicated, non-pooled
+> connection; and a test must be able to fail — anchor it independently of the code (G5).
+
 Two, and they compound. Playbook §7 records the prototype's original sin — an observed
 double launch (a restart race, a stray process a kill missed) that caused upsert
 deadlocks, doubled warnings, duplicate stream entries, and two Lightstreamer connections
@@ -107,4 +116,4 @@ session as the lock's identity, and a test rewritten so the defect it exists to 
 would actually turn it red (testing doctrine G5 — anchor expectations independently of
 the code under test).
 
-*Previous: [Chapter 5 — The capture store and Postgres](05-the-capture-store-and-postgres.md) · [Book index](README.md) · Next: [Chapter 7 — Clocks: wall, monotonic and sleep](07-clocks-wall-monotonic-and-sleep.md)*
+*Previous: [Chapter 5 — The capture store and Postgres](05-the-capture-store-and-postgres.md) · [Field Manual index](README.md) · Next: [Chapter 7 — Clocks: wall, monotonic and sleep](07-clocks-wall-monotonic-and-sleep.md)*

@@ -60,8 +60,14 @@ function EpicAside({
           <dd>{open}</dd>
         </div>
         <div className="meta-row">
-          <dt>book</dt>
-          <dd>{epic.book && epic.book !== '—' ? <Link to="/docs/book">{epic.book}</Link> : '—'}</dd>
+          <dt>manual</dt>
+          <dd>
+            {epic.manual && epic.manual !== '—' ? (
+              <Link to="/docs/field-manual">{epic.manual}</Link>
+            ) : (
+              '—'
+            )}
+          </dd>
         </div>
       </dl>
 

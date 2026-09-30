@@ -22,7 +22,7 @@ const FIXTURE = `# Tradebench Board
 
 ## E1 📡 Collection service, deployed 24/7 — ACTIVE
 
-**Since** 2026-09-25 · **Decisions** D2, and TBD, D17 · **Book** ch. 1–9
+**Since** 2026-09-25 · **Decisions** D2, and TBD, D17 · **Manual** ch. 1–9
 
 **Mission:** stream and store market data.
 
@@ -111,11 +111,11 @@ describe('parseBoard', () => {
     expect(board.epics[0].mission).toBe('stream and store market data.');
   });
 
-  test('reads the metadata line: since, decisions (D-numbers only), book', () => {
+  test('reads the metadata line: since, decisions (D-numbers only), manual', () => {
     const e1 = board.epics[0];
     expect(e1.since).toBe('2026-09-25');
     expect(e1.decisions).toEqual(['D2', 'D17']);
-    expect(e1.book).toBe('ch. 1–9');
+    expect(e1.manual).toBe('ch. 1–9');
   });
 
   test('derives "updated" from the latest date in the ticket notes, not "since"', () => {
