@@ -15,14 +15,14 @@ same branch while Alex reads and reviews the accumulated code. E0 only lacks enf
 (T4). E3's language semantics are ruled (D7–D9); its two design-gate tickets are cut and
 plannable. E4–E8 name the horizon; no tickets until their own planning sessions.
 
-**Next-session menu (refreshed 2026-09-30, post E2-T5 merge):** ticket + epic views live on
-docs.tradebench.amfshr.dev. **One ticket left to close E2: T4 — the final docs sweep.**
-① *E2-T4 the docs sweep* (Alex's chosen next) — (a) scar callouts + framed diagrams across the
-nine chapters, (b) book cleanup + rename decision, (c) decision-log designed view,
-(d) nest `design-sessions` under `design`; closes E2. ② *E1-T5 slices B + C* — event log,
+**Next-session menu (refreshed 2026-09-30, post E2-T4 merge — E2 nearly closed):** the docs
+site is fully built and live at **docs.tradebench.amfshr.dev** (Field Manual, decision-log
+page, ticket/epic views, scar callouts). **One ticket to fully close E2: T6.**
+① *E2-T6 nested docs tree + IA* (Alex's chosen next) — recursive nested sidebar; split
+architecture into a folder with a `components/<service>/` reference; record the
+Field-Manual-vs-Architecture split (extends D21). ② *E1-T5 slices B + C* — event log,
 bar_gaps V2, Supervisor shell (main checkout, branch `e1-t5-resilience`; **merge main in
-first** — docs + D18 + brand + board-format). ③ *Finish the Field Manual read* (still owed before
-returning to E1).
+first** — big docs delta). ③ *Finish the Field Manual read* (still owed before returning to E1).
 
 ---
 
@@ -96,6 +96,7 @@ nod N1–N4). **Working shape:** git worktree `.claude/worktrees/e2-docs-reader`
 | T3 | **Build & CI lane.** Static build snapshotting content; `web/**`-keyed CI job; preview story. Hosting ruled **GitHub Pages** (D18); custom domain **live: docs.tradebench.amfshr.dev** (Cloudflare CNAME + PAGES_BASE=/, HTTPS enforced — Alex, 2026-09-29). **DoD:** one command yields the static site; CI green. | ✅ 2026-09-29 (pages.yml deploy + web-ci.yml PR lane; site live on custom domain) |
 | T4 | **Docs polish & structure — the final E2 sweep.** (a) scar callouts (R9) rendered + led across all nine chapters; (b) book → **Field Manual** (D21: docs split by audience — Build track vs a reserved User-Guide Use track); (c) decision log as a designed D-card page (status chips, dates, bodies); (d) `design-sessions` nested under `design` (one Design group). **DoD:** scars render as R9 cards; decision log is a designed page; design-sessions nested; rename ruled. | ✅ 2026-09-30 (branch e2-t4-docs-sweep; D21) |
 | T5 | **Ticket-detail pages.** Clickable `/board/epics/:slug/:ticket` — structured header (breadcrumb, status chip, title), a done-when checklist from the ticket's DoD, the rich plan section, and a lean metadata panel (type · branch · started · blocked-by · epic · PR); board + epic ticket rows link to it. Spawned the board-format spec (D20) + the `board-steward` agent (E0-T5). **DoD:** a ticket opens as its own page with header, checklist, plan body, and lean metadata; rows link to it. | ✅ 2026-09-30 (PR #8; ticket pages + epic-view redesign to the design; 60 tests, doctrine F1–F7 fixed pre-merge; deployed) |
+| T6 | **Nested docs tree + IA for growth.** (a) recursive **nested sidebar** — folders render as collapsible subgroups at any depth (today it's flat: `design/sessions/` shows as slash-labels, not a nested group); (b) split `architecture.md` → an `architecture/` folder with a **`components/<service>/` reference sub-tree** (detailed per-component technical docs); (c) record the split — Field Manual = narrative teaching (chapters/sections), Architecture = spec + component reference — extending D21. **DoD:** the sidebar nests real directories; architecture is a browsable folder with a component reference; the FM-vs-Architecture rule is recorded. | 🔶 (planned 2026-09-30, post E2-T4 merge) |
 
 ## E3 🧪 Indicator DSL v0 + backtest spine — DESIGN-GATED
 
@@ -141,6 +142,14 @@ captured/imported data to chew on (E1 + first Databento decisions).
   #4 half-resolved: Gradle confirmed in practice (D12), tick-lake storage format still open.)
 
 ## Done history
+
+- **2026-09-30 — E2-T4 Docs polish & structure** ✅: the final docs sweep — **D21** (docs
+  split by audience: book → **Field Manual** / Build track, reserved User Guide / Use track);
+  decision log as a designed D-card page (`DecisionsPage` + `parseDecisionLog`); **scar
+  callouts** (R9) rendered + led across all nine chapters; `design-sessions` nested under
+  `design`. 62 tests; doctrine pass-with-findings, F1 (decision-log silently dropping D8 —
+  qualifier-text date) + F1–F7 all fixed pre-merge. Evidence: PR #9 (merged) + live site.
+  E2 tickets T1–T5 done; **T6 (nested tree + component-reference IA) is the last to close E2.**
 
 - **2026-09-30 — E2-T5 Ticket-detail pages + epic-view redesign** ✅: clickable ticket pages
   (`/board/epics/:slug/:ticket`) with done-when checklist + lean metadata; epic view rebuilt to
