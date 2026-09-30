@@ -1,6 +1,7 @@
 import { Route, Routes } from 'react-router-dom';
 
 import { BoardPage } from './BoardPage';
+import { DecisionsPage } from './DecisionsPage';
 import { EpicPage } from './EpicPage';
 import { HomePage } from './HomePage';
 import { MarkdownPage } from './MarkdownPage';
@@ -17,7 +18,8 @@ export function App() {
         <main className="content">
           <Routes>
             <Route path="/" element={<HomePage />} />
-            <Route path="/board" element={<BoardPage />} />
+            <Route path="/docs/decisions" element={<DecisionsPage />} />
+          <Route path="/board" element={<BoardPage />} />
             <Route path="/board/epics/:slug" element={<EpicPage />} />
             <Route path="/board/epics/:slug/:ticket" element={<TicketPage />} />
             <Route path="/*" element={<MarkdownPage />} />

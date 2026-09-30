@@ -1552,3 +1552,64 @@ h3:hover .hanchor {
 .home-card:hover .home-card-arrow {
   color: var(--accent);
 }
+
+/* ---- decisions page (D-cards) ---- */
+
+.decisions-page {
+  max-width: 60rem;
+  margin: 0 auto;
+}
+
+.dcard {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--bg-raised);
+  padding: 1rem 1.3rem 0.5rem;
+  margin-bottom: 1.1rem;
+  scroll-margin-top: 5rem;
+}
+
+.dcard-head {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+}
+
+.dcard-id {
+  font-family: var(--font-mono);
+  font-size: 0.8rem;
+  font-weight: 500;
+  color: var(--fg);
+}
+
+.dcard-date {
+  margin-left: auto;
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  color: var(--fg-muted);
+}
+
+.dcard-title {
+  margin: 0.55rem 0 0;
+  font-size: 1.12rem;
+  line-height: 1.3;
+}
+
+.dcard-body {
+  font-size: 0.9rem;
+}
+
+.dcard-body p:first-child {
+  margin-top: 0.6rem;
+}
+
+/* Accepted is quiet (default chip); unresolved (Provisional/Open) asks with amber. */
+.dstatus-open {
+  color: var(--attention);
+  border-color: color-mix(in srgb, var(--attention) 40%, var(--border));
+}
+
+.dstatus-superseded {
+  opacity: 0.6;
+  text-decoration: line-through;
+}
