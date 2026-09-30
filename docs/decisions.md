@@ -264,3 +264,17 @@ Field Manual; something you'd look up → Architecture. Extends D21. The docs si
 sidebar (E2-T6) renders these sub-trees. **Why:** teaching and reference are different reading
 modes — conflating them (a spec buried in a story, or a story you can't look things up in)
 serves neither; separating them lets each grow in its own shape.
+
+## D23 — Licence: PolyForm Noncommercial 1.0.0 (source-available, commercial rights reserved) — **Accepted** (2026-09-30, Alex)
+
+The public repo carries the **PolyForm Noncommercial License 1.0.0** (`LICENSE.md`), © 2026
+Alexander Fisher. Anyone may read, run, and adapt the code for **non-commercial** purposes
+(study, research, hobby); **all commercial rights are reserved** — no productizing, no
+deploying as a service, no competing use without written permission. The repo is public for
+portfolio and transparency (D3), not as an open-source grant. **Why:** the product is owned by
+one person who may monetise it ("beer money", PRD §3) and the PRD forbids productizing for
+strangers (§12), so a permissive OSS licence is wrong; but strict all-rights-reserved would
+waste the public repo's learning value. PolyForm Noncommercial is a real, lawyer-drafted
+licence that lets learners genuinely use the code while keeping every commercial right —
+the honest fit for a public craft repo. Considered and rejected: MIT/Apache (gives away
+commercial use), bespoke all-rights-reserved (needlessly strict + hand-rolled wording).

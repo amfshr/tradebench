@@ -27,3 +27,11 @@ PostgreSQL · Redis Streams (provisional) · Docker · staging + prod, promoted 
 
 *Predecessor: a private Python prototype (2026) that ran live on IG demo; Tradebench inherits
 its lessons, not its code. Strategy definitions and credentials never enter this repository.*
+
+## Licence
+
+© 2026 Alexander Fisher. Source-available under the **[PolyForm Noncommercial
+License 1.0.0](LICENSE.md)** (D23). You may read, run, and adapt this code for **non-commercial**
+purposes — personal study, research, hobby projects. **All commercial rights are reserved**:
+no productizing, deploying as a service, or competing use without written permission. This
+repository is public for portfolio and transparency, not as an invitation to commercialise it.
