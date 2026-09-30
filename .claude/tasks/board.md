@@ -6,24 +6,24 @@
 > Tickets carry a DoD; ideation that hasn't earned a ticket lives in `docs/` or the inherited
 > ideas, not here.
 
-**Guide (refreshed 2026-09-30):** **E2 is complete** — the docs site is fully built and live at
-docs.tradebench.amfshr.dev (Field Manual, decision-log page, board/epic/ticket views, scar
-callouts, nested sidebar, component reference), and the repo now carries a licence (PolyForm
-Noncommercial, D23). **E1 is the active build epic** — T1–T4 merged (live DAX → Postgres);
-T5 (resilience belt) mid-flight on branch `e1-t5-resilience` (slice A — the pure decision
-cores — built + verified; slices B/C remain). The board-steward agent (E0-T5) now keeps this
-board truthful. E0 only lacks enforcement (T4). E3's language semantics are ruled (D7–D9);
-its design-gate tickets are plannable. E4–E8 name the horizon; no tickets until their own
-planning sessions. **Alex's standing note: finish the Field Manual read before returning to E1.**
+**Guide (refreshed 2026-09-30):** **E2 complete** (docs site live + licensed, D23). **E1 active** —
+T1–T4 merged (live DAX → Postgres); T5 (resilience belt) on `e1-t5-resilience` (slice A — pure
+cores — built + verified; **branch now current with main**; slices B/C remain). **New: E9
+🎛️ Operator console** born from the 2026-09-30 operability design session (D24) — the deployed
+collector observed & its data retrieved *without SSH* (read-model SPA + thin service over the
+`market_data` data product + R2, edge-gated by Cloudflare Tunnel + Access; hosting = a small
+Hetzner VPS + compose, formal host ruling at E1-T7). **Alex is prioritising E9.** Its **T1
+(observability & data-model design) is the immediate next work** — and it feeds E1-T5 slice B
+(the `service_events` v2 shape) before the event log is built. Field Manual read: **done.** E0
+lacks enforcement (T4). E3 language semantics ruled (D7–D9), design-gate tickets plannable.
+E4–E8 name the horizon.
 
-**Next-session menu (refreshed 2026-09-30, E2 COMPLETE):** the docs site is fully built and
-live at **docs.tradebench.amfshr.dev** — Field Manual, decision-log page, ticket/epic/board
-views, scar callouts, nested sidebar, component reference. **E2 closed (T1–T6).** Two threads
-remain open:
-① *Finish the Field Manual read* — still owed before returning to E1 (the manual IS the E1
-codebase explained). ② *E1-T5 slices B + C* — event log, bar_gaps V2, Supervisor shell
-(main checkout, branch `e1-t5-resilience`; **merge main in first** — large docs delta).
-Optional: E0-T4 guardrail enforcement; the User-Guide/DSL Use-track content (E3/E4 era).
+**Next-session menu (refreshed 2026-09-30):** ① **E9-T1 — the observability & data-model design
+session** (the priority): design `service_events` v2, the metric set + Grafana/DIY split, and
+the per-view SQL for the console; it also fixes the right event-log shape for E1-T5 slice B.
+② **E1-T5 slices B + C** — event log (per E9-T1's schema), bar_gaps V2, Supervisor shell
+(branch `e1-t5-resilience`, current with main). Optional: E0-T4 guardrail enforcement; rule
+**Q1** (collector streaming-schedule model — carried from the operability session).
 
 ---
 
@@ -114,6 +114,19 @@ captured/imported data to chew on (E1 + first Databento decisions).
 |---|--------|--------|
 | T1 | **Vocabulary catalogue v0** (design). Every v0 primitive organised by compute family (recursive / rolling-window / session-anchored / composite / whole-window-refit) with signature, semantics, warm-up, volatility class; carries the unit-awareness typing question (session R8). Claude proposes, Alex rules line by line. **DoD:** catalogue at `docs/design/`; every entry ruled; PRD open Q#5 resolved. | ⬜ |
 | T2 | **Acceptance-anchor check** (off-repo — guardrail G1). Walk Pattern 1 (Dad's answered sheet) and the range-bar consolidated spec against the R1–R8 semantics + the T1 catalogue. **DoD:** verdict + any semantic gaps recorded in a session record (no strategy content committed); gaps fed back into catalogue/decisions. | ⬜ (needs T1 first) |
+
+## E9 🎛️ Operator console (Market Data Manager v0) — ACTIVE (born 2026-09-30, design session)
+
+**Since** 2026-09-30 · **Decisions** D24 · **Manual** —
+
+**Mission:** the deployed collection service, observed and its data retrieved **without SSH** — a separate read-model app (a `web/` SPA + a thin read-only service over the `market_data` data product + R2, edge-gated by Cloudflare Tunnel + Access, D24). Health, coverage/gaps map, capture catalogue, errors/warnings log, and Parquet/DB-export download links. First operational slice of PRD §5.1; read-only v1. The collector stays outbound-only and single-purpose (P7) — E9 reads what it produces.
+
+| # | Ticket | Status |
+|---|--------|--------|
+| T1 | **Observability & data-model design.** Full design (Claude proposes, Alex rules) of: the `service_events` v2 schema (lifecycle / resilience / data-quality / heal + **errors & warnings**; severity, dimensions, dataTime + monotonic); the time-series metric set + the **Grafana-vs-DIY split**; and the read-model SQL behind each view (health, coverage map, gaps, catalogue, downloads, event log) + domain/performance views. **DoD:** a design doc + session record with schema, metric set, and per-view queries ruled; fed back to E1-T5 slice B before the event log is built. | ⬜ |
+| T2 | **Read-model service.** Thin Spring Boot read-only service over `market_data` (read-only creds, D17) + R2 pre-signed links; the JSON API + Actuator health; localhost behind the tunnel. **DoD:** cut from T1's per-view queries. | ⬜ (blocked by T1) |
+| T3 | **The console SPA.** Brand-skinned (D19) `web/` app: health, coverage map, gaps, catalogue, downloads, errors/warns log; reuses the E2 read-model + brand patterns. **DoD:** cut from T1. | ⬜ (blocked by T1, T2) |
+| T4 | **Cloudflare edge + deploy.** Tunnel (`cloudflared`, outbound — no inbound ports) + Access (per-person auth) fronting the console; deployed alongside the collector (D24). Optional: a Grafana/Prometheus metrics surface behind the same tunnel. **DoD:** cut from T1 + the E1-T7 host ruling. | ⬜ (blocked by T2, T3, E1-T7) |
 
 ## Horizon epics — named, unplanned (cut from PRD §5/§11 when their time comes)
 
