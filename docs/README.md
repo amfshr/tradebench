@@ -18,7 +18,7 @@ evidence (the prototype's read-only seed pack) — plus the working layer in `.c
 
 - **[`product/`](product/overview.md)** — technical product docs. Today: the overview. A
   named seat waits for the strategy-language reference when E3 makes the DSL real.
-- **[`book/`](field-manual/README.md)** — the learning pages: jargon → first principles → our exact
+- **[`field-manual/`](field-manual/README.md)** — the learning pages: jargon → first principles → our exact
   code paths → the scar that taught it. Nine chapters following the data from IG's socket
   to Postgres and out again.
 - **[`design/`](design/README.md)** — enduring technical specs (*what is*):
@@ -26,7 +26,7 @@ evidence (the prototype's read-only seed pack) — plus the working layer in `.c
   trajectory, fan-out plan), [`tech-notes.md`](design/tech-notes.md) (stack, Java feature
   policy, null-safety, naming and SQL conventions),
   [`secrets-and-config.md`](design/secrets-and-config.md) (the D16 env/credentials design).
-- **[`design-sessions/`](design/sessions/2026-09-27-indicators-and-predicates.md)** — dated
+- **[`design/sessions/`](design/sessions/2026-09-27-indicators-and-predicates.md)** — dated
   *answered records* of how designs got decided (*why*, frozen; they don't evolve).
 - **[`decisions.md`](decisions.md)** — this repo's decision log, D1 onward: each with
   context, ruling, and status. Never re-litigated silently.

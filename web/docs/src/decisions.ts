@@ -15,7 +15,8 @@ export interface DecisionEntry {
   body: string;
 }
 
-const HEADING = /^##\s+(D(\d+))\s+—\s+(.+?)\s+—\s+\*\*([A-Za-z]+)\*\*\s*\((\d{4}-\d{2}-\d{2})/;
+// The date may sit behind qualifier text, e.g. `**Accepted** (ANTLR provisional, 2026-09-27)`.
+const HEADING = /^##\s+(D(\d+))\s+—\s+(.+?)\s+—\s+\*\*([A-Za-z]+)\*\*\s*\([^)]*?(\d{4}-\d{2}-\d{2})/;
 
 export function parseDecisionLog(markdown: string): DecisionEntry[] {
   const lines = markdown.split('\n');

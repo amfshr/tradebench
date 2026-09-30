@@ -11,7 +11,7 @@ export interface TreeGroup {
   items: TreeItem[];
 }
 
-/** '/docs/book/', '' and '/' all address the docs map at '/docs'. */
+/** '/docs/field-manual/', '' and '/' all address the docs map at '/docs'. */
 export function normalizeRoute(pathname: string): string {
   const trimmed = pathname.replace(/\/+$/, '');
   return trimmed === '' ? '/docs' : trimmed;

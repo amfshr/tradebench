@@ -229,7 +229,7 @@ data loudest wins on the product's own logic.
 
 Tickets and epics follow a formal but lean markdown structure (`docs/reference/board-format.md`)
 so the docs site can render them as board/epic/ticket pages: epics carry
-`**Since** · **Decisions** · **Book**`; tickets carry an optional per-section metadata line
+`**Since** · **Decisions** · **Manual**`; tickets carry an optional per-section metadata line
 `**Type** · **Branch** · **Started** · **Blocked by**` in their epic plan file. The
 **`board-steward` agent** (E0-T5) owns authoring and keeping this truthful. Field set is
 deliberately **lean** — information that serves a decision (what kind of work, which branch,
@@ -242,7 +242,7 @@ read model needs and no more — and an agent enforcing one template beats hand-
 
 The docs site serves two distinct audiences and must not conflate them. **Build track**
 (builder/contributor-facing): the engineering internals — how the app works and why, with
-scars — renamed from "the Field Manual" to **The Field Manual** (`docs/field-manual/`), alongside
+scars — renamed from "the book" to **The Field Manual** (`docs/field-manual/`), alongside
 Architecture and Decisions. **Use track** (end-user-facing: Dad, brother): the Product
 overview, a future **User Guide** (`docs/guide/`, reserved seat), and the **DSL /
 strategy-language reference** — task-oriented, assuming no knowledge of Java, buffers, or

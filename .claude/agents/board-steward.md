@@ -24,7 +24,7 @@ planning markdown only; you never write product, service, or frontend code.
 - **Author tickets/epics to the template.** Every new ticket gets id, title, a DoD, a
   status, and (in its epic-file section) the metadata line: `**Type** · **Branch** ·
   **Started** · **Blocked by**`. Every new epic gets its `**Since** · **Decisions** ·
-  **Book**` line. Follow `board-format.md` exactly so the site parses it.
+  **Manual**` line. Follow `board-format.md` exactly so the site parses it.
 - **Keep it truthful.** When work starts, is merged, is blocked, or is deferred, update the
   status emoji, the note (dates, `PR #n`), the metadata line, and — on completion — add a
   `## Done history` bullet tagged `E<n>-T<m>`. Statuses must match reality; if you cannot

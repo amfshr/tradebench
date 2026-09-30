@@ -19,7 +19,7 @@ export function App() {
           <Routes>
             <Route path="/" element={<HomePage />} />
             <Route path="/docs/decisions" element={<DecisionsPage />} />
-          <Route path="/board" element={<BoardPage />} />
+            <Route path="/board" element={<BoardPage />} />
             <Route path="/board/epics/:slug" element={<EpicPage />} />
             <Route path="/board/epics/:slug/:ticket" element={<TicketPage />} />
             <Route path="/*" element={<MarkdownPage />} />

@@ -17,6 +17,10 @@ const MD = [
   '',
   'Second paragraph of eighteen.',
   '',
+  '## D8 — Compiler shape — **Accepted** (ANTLR provisional, 2026-09-27)',
+  '',
+  'Date sits behind qualifier text; must still parse.',
+  '',
   '## Some non-decision section',
   '',
   'this ends D18 and is not itself an entry.',
@@ -25,8 +29,12 @@ const MD = [
 describe('parseDecisionLog', () => {
   const log = parseDecisionLog(MD);
 
+  test('a date behind qualifier text (e.g. "(ANTLR provisional, 2026-09-27)") still parses', () => {
+    expect(log.find((e) => e.id === 'D8')).toMatchObject({ status: 'Accepted', date: '2026-09-27' });
+  });
+
   test('parses each decision in document order with id, num, title, status, date', () => {
-    expect(log.map((e) => e.id)).toEqual(['D17', 'D18']);
+    expect(log.map((e) => e.id)).toEqual(['D17', 'D18', 'D8']);
     expect(log[1]).toMatchObject({
       id: 'D18',
       num: 18,
@@ -51,6 +59,6 @@ describe('parseDecisions', () => {
     const map = parseDecisions(MD);
     expect(map.get('D17')?.title).toBe('Database topology: one instance per env; DB per service');
     expect(map.get('D17')?.date).toBe('2026-09-28');
-    expect(map.size).toBe(2);
+    expect(map.size).toBe(3);
   });
 });

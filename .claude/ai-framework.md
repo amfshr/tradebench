@@ -81,7 +81,7 @@ may be months away.
   settings.json        ← permissions/hooks (E0-T4 — not yet born)
 docs/
   decisions.md         ← decision log (D1…)
-  design-sessions/     ← dated answered records of design sessions
+  design/sessions/     ← dated answered records of design sessions (nested, D21)
   design/              ← enduring technical design specs (architecture.md, catalogue, grammar…)
   reference/           ← external reference material (e.g. the scraped IG API summary)
   inherited/           ← read-only prototype seed pack (never edit — D1)
