@@ -85,33 +85,27 @@ test → build with `VITE_BASE` → 404.html SPA fallback → deploy-pages) + `w
 lane). Custom domain **docs.tradebench.amfshr.dev** live (Cloudflare CNAME + `PAGES_BASE=/`,
 HTTPS enforced — 2026-09-29). **DoD:** one command produces the static site; CI builds it green.
 
-## T4 — Docs polish & structure (the final E2 sweep) ⬜
+## T4 — Docs polish & structure (the final E2 sweep) ✅
 
-**Type** docs · **Branch** — · **Started** — · **Blocked by** —
+**Type** docs · **Branch** `e2-t4-docs-sweep` · **Started** 2026-09-30 · **Blocked by** —
 
-The last content/structure pass before E2 closes. Four strands (Alex, 2026-09-30):
+The last content/structure pass before E2 closes. Four strands, all landed (Alex, 2026-09-30):
 
-- **(a) Scar callouts + framed diagrams (design R9/P5).** A markdown convention
-  (`> **Scar** · title · dated cost` blockquote) the renderer styles into the mono-spine
-  SCAR card; a content pass converting the nine chapters' scar sections; framed-diagram
-  treatment. Delayed from T2, not dropped.
-- **(b) Book cleanup + possible rename.** Tighten the chapters where they've drifted;
-  **decide whether "the Field Manual" gets a real name** (open question — surface options, Alex
-  rules). Update all references if renamed.
-- **(c) Decision log — visually spiced.** Today it renders as raw markdown (D1–D20 as a
-  long scroll). Turn it into a designed view: D-cards with status + date, area/epic
-  cross-links, and (nice-to-have) filter by status/area. A parsed read model of
-  `decisions.md`, like the board — the parser already exists in part (`decisions.ts`).
-- **(d) Nest design-sessions under design.** Move `docs/design/sessions/` →
-  `docs/design/sessions/`; fix internal links, the sidebar grouping (one **Design** group,
-  not two separate roots), and any references in CLAUDE.md / docs/README.md.
+- **(a) Scar callouts (R9)** ✅ — a `> **Scar** — **<title>** · <cost>` blockquote convention
+  the renderer styles into the mono-labelled card (no icon, no colour); each of the nine
+  chapters now leads its scars with one. (Framed diagrams already shipped in T5.)
+- **(b) Book → Field Manual** ✅ — ruled **D21**: docs split by audience. The book became the
+  **Field Manual** (Build track — engineering internals); a **User Guide** seat is reserved
+  (Use track — end users, DSL). Folder, labels, nav, and all links updated.
+- **(c) Decision log — designed page** ✅ — `DecisionsPage`: D-cards (id, status chip, date,
+  rendered body) newest-first, parsed from `decisions.md` (`parseDecisionLog`); amber for
+  unresolved status.
+- **(d) design-sessions nested** ✅ — `docs/design-sessions/` → `docs/design/sessions/`; one
+  **Design** sidebar group; all links fixed; link-integrity re-checked.
 
-**DoD:** book scars render as R9 cards + chapters tightened + rename ruled; the decision log
-reads as a designed page, not raw md; design-sessions nested under design with links intact.
-
-**Test plan (G5):** the decision-log read model reuses/extends `decisions.ts` (mutation-
-verified); a link-integrity check after the design-sessions move; scar-callout rendering
-exercised by a smoke. Components exempt.
+**DoD met:** scars render as R9 cards; decision log is a designed page; design-sessions nested;
+rename ruled (D21). Note: chapter *prose* was left as-is (already tight) beyond the rename and
+scar leads — a deeper line-edit can be a future pass if wanted.
 
 ## T5 — Ticket-detail pages 🔶
 
