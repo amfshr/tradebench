@@ -200,3 +200,81 @@ service's alone, and everything that isn't the shared data product integrates vi
 that protection where it matters (operational state) while admitting honestly that the
 capture record IS the platform's shared asset, and treating its schema as an API with a
 CI-enforced contract is stronger than pretending consumers won't need it.
+
+## D18 — Web naming: one docs site; `web/` workspace; apps named for their domains — **Accepted** (2026-09-28, Alex)
+
+All static documentation is ONE site — `web/docs`, served at `docs.tradebench.amfshr.dev`
+(public; the Cloudflare-gated platform SPA at `tradebench.amfshr.dev` links to it): product
+docs, the Field Manual, architecture, decisions, the board section, and later the DSL reference and
+REST API/integration docs. No second docs site until something real forces it (P7). The
+workspace root is `web/` (supersedes `frontend/` — D3's monorepo ruling unchanged), and web
+apps are named for the subdomain they serve: `web/docs` live, `web/platform` seat reserved.
+**Why:** one static build, one deploy, one place to look; dir↔domain symmetry keeps naming
+honest; "frontend" names a layer, `web/` names the artifact family.
+
+## D19 — Brand & visual identity: Quiet Terminal — **Accepted** (2026-09-29, Alex)
+
+Ruled via the 2026-09-29 design session (R1–R11): dark-first Quiet Terminal direction;
+token palette (brand.md) with blue accent; Inter + JetBrains Mono; `tradebench▊` wordmark;
+two-candles mark; amber attention used at most once per screen; scar callouts with mono
+spine and Lesson line. **Standing doctrine from R8: green/red exist only as the market's
+up/down + P&L pair — strategy elements use the brand accent; the market and the strategy
+never share a colour** (binds all chart UI, E4+). Evidence: Alex's design-tool exploration
+(self-documenting decision log, archived under docs/design/research/). Spec:
+`docs/design/brand.md`. **Why:** with red/green reserved for market semantics, attention
+must be amber, and a brass/amber *brand* would collide with it — restraint that leaves
+data loudest wins on the product's own logic.
+
+## D20 — Board & ticket format: a lean template, maintained by an agent — **Accepted** (2026-09-30, Alex)
+
+Tickets and epics follow a formal but lean markdown structure (`docs/reference/board-format.md`)
+so the docs site can render them as board/epic/ticket pages: epics carry
+`**Since** · **Decisions** · **Manual**`; tickets carry an optional per-section metadata line
+`**Type** · **Branch** · **Started** · **Blocked by**` in their epic plan file. The
+**`board-steward` agent** (E0-T5) owns authoring and keeping this truthful. Field set is
+deliberately **lean** — information that serves a decision (what kind of work, which branch,
+when it started, what blocks it), not data for its own sake (Alex); new fields are proposed,
+not invented. Existing tickets are retrofitted over time; the site renders whatever is
+present, degrading gracefully. **Why:** the write model must carry exactly the structure the
+read model needs and no more — and an agent enforcing one template beats hand-kept drift.
+
+## D21 — Docs split by audience: the Field Manual (build) vs the User Guide (use) — **Accepted** (2026-09-30, Alex)
+
+The docs site serves two distinct audiences and must not conflate them. **Build track**
+(builder/contributor-facing): the engineering internals — how the app works and why, with
+scars — renamed from "the book" to **The Field Manual** (`docs/field-manual/`), alongside
+Architecture and Decisions. **Use track** (end-user-facing: Dad, brother): the Product
+overview, a future **User Guide** (`docs/guide/`, reserved seat), and the **DSL /
+strategy-language reference** — task-oriented, assuming no knowledge of Java, buffers, or
+threads. The DSL explainer belongs in the Use track, never the Field Manual. Site nav groups
+by these two tracks once the Use track has real content (E3/E4 era). **Why:** a single "book"
+serves neither reader — an end user hitting "ack-after-apply" is lost, a builder wading
+through "click New Bot" is annoyed; audience is the right top-level axis for docs.
+
+## D22 — Within the Build track: Field Manual teaches, Architecture specs — **Accepted** (2026-09-30, Alex)
+
+The two Build-track docs have distinct jobs and grow differently. **The Field Manual** is
+*narrative teaching* — how it works and why, with scars, read front-to-back; it grows by
+adding chapters (and sections within a chapter). **Architecture** is *spec + reference* —
+the system shape (`architecture/README.md`) plus a **component reference**
+(`architecture/components/<module>.md`), one page per built module, read by lookup; it grows
+a sub-tree as modules are added. Detailed per-component technical docs live in the component
+reference, never the Field Manual; the two cross-link. Rule of thumb: a plot and a scar →
+Field Manual; something you'd look up → Architecture. Extends D21. The docs site's nested
+sidebar (E2-T6) renders these sub-trees. **Why:** teaching and reference are different reading
+modes — conflating them (a spec buried in a story, or a story you can't look things up in)
+serves neither; separating them lets each grow in its own shape.
+
+## D23 — Licence: PolyForm Noncommercial 1.0.0 (source-available, commercial rights reserved) — **Accepted** (2026-09-30, Alex)
+
+The public repo carries the **PolyForm Noncommercial License 1.0.0** (`LICENSE.md`), © 2026
+Alexander Fisher. Anyone may read, run, and adapt the code for **non-commercial** purposes
+(study, research, hobby); **all commercial rights are reserved** — no productizing, no
+deploying as a service, no competing use without written permission. The repo is public for
+portfolio and transparency (D3), not as an open-source grant. **Why:** the product is owned by
+one person who may monetise it ("beer money", PRD §3) and the PRD forbids productizing for
+strangers (§12), so a permissive OSS licence is wrong; but strict all-rights-reserved would
+waste the public repo's learning value. PolyForm Noncommercial is a real, lawyer-drafted
+licence that lets learners genuinely use the code while keeping every commercial right —
+the honest fit for a public craft repo. Considered and rejected: MIT/Apache (gives away
+commercial use), bespoke all-rights-reserved (needlessly strict + hand-rolled wording).

@@ -22,7 +22,7 @@ streaming, Postgres persistence; live data flowing locally); next: T5 resilience
 2. `.claude/tasks/board.md` — the board: the single source of truth for epics/tickets. GitHub is
    for PRs only, never issues.
 3. `docs/decisions.md` — this repo's decision log (why + status). Add to it when a real decision
-   lands; never re-litigate silently. Design truth: `docs/design-sessions/` (dated answered
+   lands; never re-litigate silently. Design truth: `docs/design/sessions/` (dated answered
    records) and `docs/design/` (enduring technical specs).
 4. `.claude/ai-framework.md` — **how AI works here**: roles (Claude proposes, Alex rules),
    guardrails G1–G8, session protocols, directory standard, and the agents/skills inventory.
@@ -30,7 +30,7 @@ streaming, Postgres persistence; live data flowing locally); next: T5 resilience
    `docs/inherited/prototype-engineering-playbook.md`. For why a prototype decision does/doesn't
    apply here: `docs/inherited/decisions-triage.md`.
 6. `docs/README.md` — the documentation map: the product overview (`docs/product/`), the
-   teaching book (`docs/book/` — jargon + code paths + scars, per chapter), and reference
+   teaching book (`docs/field-manual/` — jargon + code paths + scars, per chapter), and reference
    digests. Human-readable docs live there; keep them true when the code they cite moves.
 
 `docs/inherited/` is a **read-only snapshot** of the Python prototype's seed pack (2026-09-25).
@@ -51,13 +51,13 @@ stands alone) · P8 data collected forever, source-attributed always · P9 fail 
 ## Engineering conventions
 
 - **Java 21+, Spring Boot, Gradle multi-module** (services); **React/TypeScript** in
-  `frontend/` with its own toolchain. PostgreSQL via Flyway migrations. Redis Streams for
+  `web/` with its own toolchain (`web/docs` = the docs site; `web/platform` = the future SPA). PostgreSQL via Flyway migrations. Redis Streams for
   inter-service messaging (provisional — decisions.md D4). Docker; Linux targets only.
 - **Injectable clocks everywhere**; distinguish monotonic/awake time from wall time. Business
   logic on in-memory state; the DB is downstream of decisions, never upstream.
 - Language/stack conventions: `docs/design/tech-notes.md` — Java 25 LTS feature policy,
   **JSpecify `@NullMarked` packages from birth** (D14), BigDecimal-for-prices, dependency
-  policy. System shape: `docs/design/architecture.md`.
+  policy. System shape: `docs/design/architecture/README.md`.
 - Cheap work only on transport callback threads; queue the rest. At-least-once consumers,
   idempotent by key, ack-after-apply.
 - **User and data-source are first-class dimensions in every schema/API from day one** (the

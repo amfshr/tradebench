@@ -1,0 +1,26 @@
+# PR lane for web/** — test + typecheck + build. Not a required check yet
+# (protection requires the Java `build`); promote once E2 merges and proves stable.
+name: web
+
+on:
+  pull_request:
+    paths:
+      - 'web/**'
+      - '.github/workflows/web-ci.yml'
+
+jobs:
+  web:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - run: npm ci
+        working-directory: web
+      - run: npm test -w docs
+        working-directory: web
+      - run: npm run build -w docs
+        working-directory: web

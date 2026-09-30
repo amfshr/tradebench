@@ -4,8 +4,8 @@
 > the build — in prose. The authoritative requirements live in the PRD
 > ([`docs/inherited/product-requirements.md`](../inherited/product-requirements.md)); this
 > page is the readable front door and stays current as the build moves. For how any given
-> piece *works inside*, see [the book](../book/README.md); for system shape, see
-> [`docs/design/architecture.md`](../design/architecture.md).
+> piece *works inside*, see [the Field Manual](../field-manual/README.md); for system shape, see
+> [`docs/design/architecture/README.md`](../design/architecture/README.md).
 
 ## The one-paragraph version
 
@@ -88,7 +88,7 @@ Five sub-platforms of one web product (PRD §5) — each is raw material for an 
 The product's centre of gravity is a custom DSL — think *our own Pine Script, built to our
 rules* — in which indicators and strategies are data, never platform code. Its core
 semantics are already ruled (decisions D7–D9, design session
-[2026-09-27](../design-sessions/2026-09-27-indicators-and-predicates.md)): one expression
+[2026-09-27](../design/sessions/2026-09-27-indicators-and-predicates.md)): one expression
 grammar for indicators and predicates (a predicate is just a boolean-typed indicator);
 declarative dataflow compiled EBNF → AST → visitors → a DAG; relative bar indexing where
 `[0]` is the *forming* bar and history counts backwards; look-ahead rejected at compile
@@ -137,7 +137,7 @@ anyone's strategy, ever** (PRD §12).
 
 ## Where to go next
 
-- **How each piece works, explained properly** — [the book](../book/README.md).
-- **System shape and component boundaries** — [`docs/design/architecture.md`](../design/architecture.md).
+- **How each piece works, explained properly** — [the Field Manual](../field-manual/README.md).
+- **System shape and component boundaries** — [`docs/design/architecture/README.md`](../design/architecture/README.md).
 - **Why things are the way they are** — [`docs/decisions.md`](../decisions.md).
 - **What's being built right now** — [`.claude/tasks/board.md`](../../.claude/tasks/board.md).

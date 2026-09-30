@@ -6,7 +6,7 @@ sessions and code. First expected residents (spawned 2026-09-27): the indicator/
 
 Distinct from:
 
-- `docs/design-sessions/` — dated *answered records* of how a design got decided (the
+- `docs/design/sessions/` — dated *answered records* of how a design got decided (the
   calibration truth; they don't evolve).
 - `/design` (repo root) — UX/page designs and wireframes for the web surfaces.
 

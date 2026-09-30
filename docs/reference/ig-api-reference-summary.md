@@ -91,7 +91,7 @@ CHART:{epic}:{scale}                       (MERGE)
   {scale} = SECOND | 1MINUTE | 5MINUTE | HOUR
 ```
 **Only four native scales exist.** No `2MINUTE`/`3MINUTE`/`10MINUTE`/
-`15MINUTE` — confirms our design (D3/architecture.md §3.2): higher timeframes
+`15MINUTE` — confirms our design (D3/architecture/README.md §3.2): higher timeframes
 (10-minute etc.) **must** be aggregated in Python from `1MINUTE` bars; IG has
 no native subscription for them. There never was a shortcut we missed.
 

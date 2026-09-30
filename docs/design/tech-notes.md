@@ -1,6 +1,6 @@
 # Tech Notes — language, stack, and code conventions
 
-> **What this is.** The technical-choices companion to `architecture.md`: what we build
+> **What this is.** The technical-choices companion to `architecture/README.md`: what we build
 > with, which language features we use and avoid, and the code conventions that don't fit
 > in CLAUDE.md's short form. Each section links its ruling (D-numbers). Living document —
 > grows a section per settled area; **frontend section reserved** (Alex has ideas; written
@@ -18,7 +18,7 @@
 | Testing | JUnit 6, fakes-first; Testcontainers (T4+); golden wire fixtures | doctrine: playbook §2 / G5 |
 | DB | PostgreSQL + Flyway from V1 | PRD §10; user + source columns from day one |
 | Messaging | Redis Streams (provisional) | D4 — Kafka is a gated re-decision |
-| Frontend | React/TypeScript SPA, own toolchain in `frontend/` | D3/D11; conventions TBD with E2 *(reserved)* |
+| Web | React/TypeScript apps, own toolchain in `web/` (`docs` live, `platform` seat) | D3/D11/D18; §6 |
 | Deploy | Docker, Linux only; staging + prod by release tag | PRD §10 — no Windows target, ever |
 
 ## 2. Java language & feature policy
@@ -115,12 +115,15 @@ versions; wrapper pins Gradle; toolchain pins Java.
 
 ## 6. Frontend — reserved (provisional shape agreed 2026-09-28)
 
-Full conventions (component architecture, state model, build/CI lane) get written with E2
-planning — Alex has ideas queued. **Provisional structure, confirmed in principle:**
-`frontend/` is a workspace root (own lockfile/toolchain; CI job keyed on `frontend/**`)
-containing **one product SPA** (`platform/` — PRD sub-platforms as feature folders/routes,
-never micro-frontends: P7 applies to JS too) and the **E2 board viewer as a separate tiny
-app** (`board-viewer/` — dev tool, different stakes/lifecycle; keeps warm-up choices from
-prematurely binding the product app). `shared/` is born only when both apps prove a need.
+Structure ruled 2026-09-28 (D18, supersedes the provisional `frontend/` naming):
+**`web/` is the workspace root** (own lockfile/toolchain; CI job keyed on `web/**`),
+its apps named for the domains they serve: **`web/docs/`** — the one docs site, live at
+`docs.tradebench.amfshr.dev` (all static documentation: product, book, architecture,
+decisions, the board section, later DSL + API references — one site, never a second until
+something real forces it) — and **`web/platform/`** (seat) — the product SPA at
+`tradebench.amfshr.dev` (PRD sub-platforms as feature folders/routes, never
+micro-frontends: P7 applies to JS too). `shared/` is born only when both apps prove a
+need. The pleasing symmetry is deliberate: `/docs` is the words, `web/docs` the site that
+renders them.
 Docs split by altitude: frontend design truth in `docs/design/`, component-level docs with
 the code.

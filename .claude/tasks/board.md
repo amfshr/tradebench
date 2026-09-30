@@ -6,27 +6,30 @@
 > Tickets carry a DoD; ideation that hasn't earned a ticket lives in `docs/` or the inherited
 > ideas, not here.
 
-**Guide (refreshed 2026-09-28):** E1 is the active build epic and its spine is real — T1–T4
-merged, live DAX data flowing into Postgres locally; the deploy-first ruling (D2) stands.
-T5 (resilience belt) is mid-flight: slice A (the pure decision cores) is built and verified
-on branch `e1-t5-resilience`; slices B (event log + gap rows) and C (the Supervisor shell)
-remain. A docs pass (product overview, the book, docs map — see `docs/README.md`) rides the
-same branch while Alex reads and reviews the accumulated code. E0 only lacks enforcement
-(T4). E3's language semantics are ruled (D7–D9); its two design-gate tickets are cut and
-plannable. E4–E8 name the horizon; no tickets until their own planning sessions.
+**Guide (refreshed 2026-09-30):** **E2 is complete** — the docs site is fully built and live at
+docs.tradebench.amfshr.dev (Field Manual, decision-log page, board/epic/ticket views, scar
+callouts, nested sidebar, component reference), and the repo now carries a licence (PolyForm
+Noncommercial, D23). **E1 is the active build epic** — T1–T4 merged (live DAX → Postgres);
+T5 (resilience belt) mid-flight on branch `e1-t5-resilience` (slice A — the pure decision
+cores — built + verified; slices B/C remain). The board-steward agent (E0-T5) now keeps this
+board truthful. E0 only lacks enforcement (T4). E3's language semantics are ruled (D7–D9);
+its design-gate tickets are plannable. E4–E8 name the horizon; no tickets until their own
+planning sessions. **Alex's standing note: finish the Field Manual read before returning to E1.**
 
-**Next-session menu (refreshed 2026-09-28, mid E1-T5):**
-① *Alex reads* — the new `docs/` front door (`docs/README.md` → product overview → the
-book) alongside an IDE review of `market-data-service` + slice A; tweaks land as review
-feedback on the branch. ② *E1-T5 slices B + C* — event log, `bar_gaps` V2, Supervisor
-shell, Main rewiring, pacer budget discovery; then doctrine review → PR. ③ *Docs/pages app*
-— git worktree + own branch: plan E2 (board + docs read model — D11). ④ *E0-T4 guardrail
-enforcement* (CI exists; fold GitGuardian in) or *E3-T1 vocabulary catalogue v0*. Nothing
-else blocks: Databento scoping and PRD open Qs #7/#11 are E3-era.
+**Next-session menu (refreshed 2026-09-30, E2 COMPLETE):** the docs site is fully built and
+live at **docs.tradebench.amfshr.dev** — Field Manual, decision-log page, ticket/epic/board
+views, scar callouts, nested sidebar, component reference. **E2 closed (T1–T6).** Two threads
+remain open:
+① *Finish the Field Manual read* — still owed before returning to E1 (the manual IS the E1
+codebase explained). ② *E1-T5 slices B + C* — event log, bar_gaps V2, Supervisor shell
+(main checkout, branch `e1-t5-resilience`; **merge main in first** — large docs delta).
+Optional: E0-T4 guardrail enforcement; the User-Guide/DSL Use-track content (E3/E4 era).
 
 ---
 
 ## E0 🤖 AI operating framework — ACTIVE (born urgent 2026-09-27)
+
+**Since** 2026-09-27 · **Decisions** D10, D13 · **Manual** —
 
 **Mission:** make AI a reliable standing development partner (PRD §9's AI-workable NFR):
 explicit roles, hard guardrails, session protocols, and a standardized `.claude/` + `docs/`
@@ -41,8 +44,11 @@ testing doctrine G5 binds to) · PRD §9.
 | T2 | **Project agents v1.** `doctrine-reviewer` (pre-PR diff review against conventions, testing doctrine, guardrails) + `seed-pack-librarian` (prototype knowledge with citations + triage status). **DoD:** both defined and invocable; proven in anger on first real use (E1-era). | ✅ 2026-09-27 (`doctrine-reviewer` proven on PR #1; `db-admin` added 2026-09-28) |
 | T3 | **Project skills v1.** `/sanity-lap`, `/design-session`, `/start-ticket` — each protocol codified from a session that actually worked. **DoD:** each skill invocable and produces its artifact. | ✅ 2026-09-27 (all three proven same day; `/start-ticket` drove E1-T1 → PR #1) |
 | T4 | **Guardrail enforcement.** Pre-commit + CI scan for credentials and strategy-content patterns (a seeded fake-secret fixture must go red — mutation-verified, per doctrine); `.claude/settings.json` permissions baseline; hooks only if a real need shows. **DoD:** planted violations caught in CI; permissions documented in the framework doc. | ⬜ (pairs with E1-T1's CI) |
+| T5 | **`board-steward` agent.** Authors/maintains tickets & epics to the formal template (`docs/reference/board-format.md`, D20 — type · branch · started · blocked-by; epic since/decisions/book) and keeps the board truthful (statuses, dates, done-history vs reality); planning-markdown only, never product code; never fabricates, never self-marks ✅. **DoD:** agent defined + invocable; board-format spec written; proven by authoring/retrofitting real tickets. | ✅ 2026-09-30 (agent + board-format.md spec written, D20; retrofitted E2 tickets; in the ai-framework inventory) |
 
 ## E1 📡 Collection service, deployed 24/7 — ACTIVE
+
+**Since** 2026-09-27 · **Decisions** D2, D14, D15, D16, D17 · **Manual** ch. 1–9
 
 **Mission:** Tradebench's first deployed artifact: a standalone Spring Boot service streaming
 IG **ticks + 1-minute bars** for DAX into Postgres, resilient and self-reporting, with the
@@ -69,22 +75,38 @@ CHART:1MINUTE sealed bars only) · engineering playbook §1–§4.
 | T7 | **Deploy.** Dockerfiles + compose; staging + prod configs with separate DBs (promote by release tag); cloud host selection (revisit the phase-1 doc's Lightsail analysis against the ~£20/mo envelope); secrets injection; deploy runbook. **DoD:** staging runs 24/7 for 3 consecutive days unattended with daily digests arriving. | ⬜ |
 | T8 | **Acceptance: shadow-diff week vs the Python appliance.** Both systems capture the same DAX sessions for a week; diff tick coverage, 1m bars, and own-aggregated 10m vs the prototype's; write the report; rule on making Tradebench the primary capture. **DoD:** the diff report with every delta explained + Alex's ruling recorded in `docs/decisions.md`. | ⬜ |
 
-## E2 🧰 Board viewer web app — STUB
+## E2 🧰 The docs site (`web/docs` → docs.tradebench) — ✅ COMPLETE (T1–T6 merged; live at docs.tradebench.amfshr.dev)
+
+**Since** 2026-09-28 · **Decisions** D11, D18, D19 · **Manual** —
 
 The first frontend warm-up: a small locally-served React/TS app rendering this markdown board
 (and the epics/vision docs) as pages — MD stays the write model for agents, the app is the read
 model for humans. **Shape confirmed by Alex 2026-09-27 (D11; PRD open Q#10 resolved).** Scope
 grew naturally 2026-09-28: the read model now also renders `docs/` — the product overview and
-the book — as Alex's "online book of pages". Low stakes, real daily value, exercises the
-frontend toolchain + backend-streaming shape before the charting UI. **Plan when:** the
-docs-pass read is done — intended as a git-worktree side branch alongside E1-T5.
+the Field Manual — as Alex's "online book of pages". Low stakes, real daily value, exercises the
+frontend toolchain before the charting UI.
+
+**Ticket plans:** `.claude/tasks/epics/e2-docs-site.md` (T1 carries the frontend design
+nod N1–N4). **Working shape:** git worktree `.claude/worktrees/e2-docs-reader`, branch
+`e2-t1-docs-reader` (main + the docs-only commits cherry-picked), alongside E1-T5.
+
+| # | Ticket | Status |
+|---|--------|--------|
+| T1 | **Docs & board reader v0.** Vite/React/TS app at `web/docs` (tech-notes §6 shape as ruled by D18): sidebar over `docs/` + the board, GFM, rendered mermaid, highlighted code, rewritten internal links, light/dark, reading-first typography; content via dev-server glob of the repo's markdown — no backend; doc edits hot-reload. **DoD:** the Field Manual, product overview, PRD, decisions and board all render pleasantly with working nav. | ✅ 2026-09-28 (PR #6; 21 behavioural tests, 9 mutations killed incl. review F1's deletion mutant; doctrine F1–F6 all fixed pre-open; v0.2 chrome + lightbox + theme toggle per Alex's iterative rulings; D18 renames rode the PR) |
+| T2 | **Board read model + designed pages.** Parse board + epic files into epic cards, status chips, attention-first tickets, done-history timeline, epic pages with metadata/decisions/history rails (board.md enriched with per-epic since/decisions/book; updated derived); designed landing page; top nav + ⌘K search; brand-themed mermaid + framed lightbox; sidebar section dividers; graceful raw-markdown fallback; parser mutation-verified. Design intent (R11b): the brand exploration's board/epic IA. **DoD:** the board page reads as a dashboard. | ✅ 2026-09-29 (PR #7; 42 tests, ~10 mutations killed across two campaigns + doctrine F1/F2; brand re-skin D19 + D18 renames rode along; **deferred: ticket-detail pages → T5, book scar-callouts → T4**) |
+| T3 | **Build & CI lane.** Static build snapshotting content; `web/**`-keyed CI job; preview story. Hosting ruled **GitHub Pages** (D18); custom domain **live: docs.tradebench.amfshr.dev** (Cloudflare CNAME + PAGES_BASE=/, HTTPS enforced — Alex, 2026-09-29). **DoD:** one command yields the static site; CI green. | ✅ 2026-09-29 (pages.yml deploy + web-ci.yml PR lane; site live on custom domain) |
+| T4 | **Docs polish & structure — the final E2 sweep.** (a) scar callouts (R9) rendered + led across all nine chapters; (b) book → **Field Manual** (D21: docs split by audience — Build track vs a reserved User-Guide Use track); (c) decision log as a designed D-card page (status chips, dates, bodies); (d) `design-sessions` nested under `design` (one Design group). **DoD:** scars render as R9 cards; decision log is a designed page; design-sessions nested; rename ruled. | ✅ 2026-09-30 (branch e2-t4-docs-sweep; D21) |
+| T5 | **Ticket-detail pages.** Clickable `/board/epics/:slug/:ticket` — structured header (breadcrumb, status chip, title), a done-when checklist from the ticket's DoD, the rich plan section, and a lean metadata panel (type · branch · started · blocked-by · epic · PR); board + epic ticket rows link to it. Spawned the board-format spec (D20) + the `board-steward` agent (E0-T5). **DoD:** a ticket opens as its own page with header, checklist, plan body, and lean metadata; rows link to it. | ✅ 2026-09-30 (PR #8; ticket pages + epic-view redesign to the design; 60 tests, doctrine F1–F7 fixed pre-merge; deployed) |
+| T6 | **Nested docs tree + IA for growth.** (a) recursive **nested sidebar** — folders render as collapsible subgroups at any depth (today it's flat: `design/sessions/` shows as slash-labels, not a nested group); (b) split `architecture/README.md` → an `architecture/` folder with a **`components/<service>/` reference sub-tree** (detailed per-component technical docs); (c) record the split — Field Manual = narrative teaching (chapters/sections), Architecture = spec + component reference — extending D21. **DoD:** the sidebar nests real directories; architecture is a browsable folder with a component reference; the FM-vs-Architecture rule is recorded. | ✅ 2026-09-30 (branch e2-t6-nested-tree; recursive nested sidebar; architecture → folder + components/<module> reference; D22) |
 
 ## E3 🧪 Indicator DSL v0 + backtest spine — DESIGN-GATED
+
+**Since** 2026-09-27 · **Decisions** D7, D8, D9 · **Manual** —
 
 The rest of PRD §11 phase 1: basic chart over stored data → indicator DSL v0 (look-ahead
 rejection from day one) → backtest job runner v0 (default FLAT⇄IN_POSITION machine) → first
 results page. **Language semantics ruled 2026-09-27**
-(`docs/design-sessions/2026-09-27-indicators-and-predicates.md`, decisions D7–D9; PRD Q#6
+(`docs/design/sessions/2026-09-27-indicators-and-predicates.md`, decisions D7–D9; PRD Q#6
 resolved). Build tickets get cut after the two design gates below land — plus enough
 captured/imported data to chew on (E1 + first Databento decisions).
 
@@ -112,6 +134,9 @@ captured/imported data to chew on (E1 + first Databento decisions).
 
 ## Waits / externals
 
+- CI pipeline stages design (PR lane / main lane / release lane; artifact naming, required
+  checks) — sketch proposed 2026-09-28; draft `docs/design/ci-pipeline.md` when E1-T7 or
+  E0-T4 planning starts.
 - E3 design gates: vocabulary catalogue v0 (E3-T1) → off-repo acceptance-anchor check (E3-T2).
 - Databento initial purchase scoping (≥2yr DAX+NASDAQ ticks — PRD §7) — needed by E3, not E1.
 - PRD open questions #7–#11 — none block E0/E1. (#6 and #10 resolved 2026-09-27; #5 = E3-T1;
@@ -119,10 +144,44 @@ captured/imported data to chew on (E1 + first Databento decisions).
 
 ## Done history
 
+- **2026-09-30 — E2-T6 Nested docs tree + IA** ✅ (**closes E2**): recursive **nested sidebar**
+  (folders → collapsible subgroups at any depth; `buildTree` builds a real hierarchy,
+  `flattenLeaves` powers the page-turn); **architecture** split into a folder with a
+  `components/<module>` reference (core, ig-client, market-data-service); **D22** (Field Manual
+  teaches / Architecture specs, extends D21). 62 tests, tree logic mutation-verified; docs
+  link-integrity clean after the move. Evidence: PR #10 (pending). **E2 is complete: T1–T6.**
+
+- **2026-09-30 — E2-T4 Docs polish & structure** ✅: the final docs sweep — **D21** (docs
+  split by audience: book → **Field Manual** / Build track, reserved User Guide / Use track);
+  decision log as a designed D-card page (`DecisionsPage` + `parseDecisionLog`); **scar
+  callouts** (R9) rendered + led across all nine chapters; `design-sessions` nested under
+  `design`. 62 tests; doctrine pass-with-findings, F1 (decision-log silently dropping D8 —
+  qualifier-text date) + F1–F7 all fixed pre-merge. Evidence: PR #9 (merged) + live site.
+  E2 tickets T1–T5 done; **T6 (nested tree + component-reference IA) is the last to close E2.**
+
+- **2026-09-30 — E2-T5 Ticket-detail pages + epic-view redesign** ✅: clickable ticket pages
+  (`/board/epics/:slug/:ticket`) with done-when checklist + lean metadata; epic view rebuilt to
+  the design (id+status chips, WHY THIS EPIC, Open/Done counts + dates, dated+described decisions
+  rail); boxy shaded chips + de-blued rows. Write-model infra: board-format spec (D20) + the
+  `board-steward` agent (E0-T5) that keeps the board truthful. 60 tests, ~13 mutations verified;
+  doctrine pass-with-findings, F1 (market-green on a non-market element) + F1–F7 fixed pre-merge.
+  Evidence: PR #8 (merged) + live site. Only T4 remains to close E2.
+
+- **2026-09-29 — E2-T2 The docs read model** ✅: `web/docs` grew from a markdown reader into
+  a read model — board.md parsed into a dashboard (epic cards, attention-first tickets,
+  done-history timeline) + epic pages with real-data metadata/decisions/history rails
+  (board.md enriched with per-epic since/decisions/book, updated derived); designed landing;
+  top nav + ⌘K search palette; Quiet Terminal re-skin (D19); brand-themed mermaid + framed
+  fit-to-viewport lightbox; themed scrollbars. 42 tests, ~10 mutations killed; doctrine
+  review pass-with-findings, F1 (surviving history-boundary mutation) + F1–F6 all fixed
+  pre-merge. D18 renames + custom domain (docs.tradebench.amfshr.dev, HTTPS) rode along;
+  T3 closed. Evidence: PR #7 (merged) + live site. Deferred, tracked: T4 (scar callouts),
+  T5 (ticket-detail pages).
+
 - **2026-09-27 — Sanity lap** (menu ①): cold-start playback proved the handoff self-sufficient;
   no contradictions found.
 - **2026-09-27 — Indicators & predicates design session** (menu ②): answered record filed
-  (`docs/design-sessions/2026-09-27-indicators-and-predicates.md`); rulings R1–R8; decisions
+  (`docs/design/sessions/2026-09-27-indicators-and-predicates.md`); rulings R1–R8; decisions
   D7–D9; PRD open Q#6 resolved; spawned E3-T1/T2. Evidence: commit `b0387d0`.
 - **2026-09-27 — E0-T1/T2/T3 + board/epics/docs pass**: AI operating framework v1 (contract,
   2 agents, 3 skills, directory standard), CLAUDE.md/task-workflow wiring, `docs/design/`
@@ -138,7 +197,7 @@ captured/imported data to chew on (E1 + first Databento decisions).
   throws, T6's healer classifies), injectable timeouts, exact BigDecimals. 15 mutations
   killed; doctrine-review F1–F5 fixed; wire fixtures cross-checked against the prototype's
   scraped labs.ig.com reference (now at `docs/reference/`) + field-proven backfill code.
-  D13 (design nod) born from this ticket's feedback; architecture.md v1 seeded. Evidence:
+  D13 (design nod) born from this ticket's feedback; architecture/README.md v1 seeded. Evidence:
   PR #2 (merged).
 - **2026-09-28 — E1-T3 Streaming + capture pipeline** ✅: core domain/time SPIs (D15 mid
   discipline, D38 dataTime), StreamTransport seam + Lightstreamer wrapper (capability-split
@@ -155,6 +214,23 @@ captured/imported data to chew on (E1 + first Databento decisions).
   live DAX rows in market_data. Deferred by ruling: D22 roles + schema/public design → T6.
 - **2026-09-28 — Docs pass** (on branch `e1-t5-resilience`, rides the T5 PR): `docs/`
   front door (`docs/README.md` map), `docs/product/overview.md` (technical product doc;
-  seat named for the strategy-language reference), `docs/book/` (nine teaching chapters,
+  seat named for the strategy-language reference), `docs/field-manual/` (nine teaching chapters,
   socket → Postgres → outward), architecture §3.4 trajectory + §3.5 fan-out plan, board
   refresh. Purpose: Alex's read/review checkpoint before T5 slices B/C.
+- **2026-09-28 — E2-T1 The docs site v0** ✅: `web/docs` (Vite/React/TS, npm workspaces) —
+  repo markdown as pages: sidebar tree, GFM, client-rendered mermaid + lightbox, highlighted
+  code + copy, rewritten internal links, scroll-spied ToC, prev/next, breadcrumbs,
+  Inter/JetBrains Mono, light/dark + persisted toggle; no backend (dev-server glob,
+  hot-reload). 21 behavioural tests, 9 mutations killed; doctrine review F1–F6 fixed
+  pre-open (F1 caught an overstated mutation claim — deletion mutant now dies). T3 lanes:
+  web-ci.yml PR check + pages.yml → **first GitHub Pages deploy green, site live**. D18
+  ruled in-review (one docs site; `web/` naming). Evidence: PR #6 (merged) +
+  amfshr.github.io/tradebench/.
+- **2026-09-29 — Brand & visual identity design session** ✅ (same-day close): Alex ran a
+  ten-turn exploration in Claude's design tool that produced its own decision log
+  (D-01…D-09); Claude audited (full WCAG AA pass computed; red/green reservation
+  verified) and proposed R1–R11; Alex ruled all as recommended. Quiet Terminal direction,
+  token palette, Inter+JBM, `tradebench▊` wordmark, two-candles mark, amber-once
+  attention, market-vs-strategy colour doctrine (R8, standing), scar callout treatment.
+  Artifacts: `docs/design/brand.md` (spec) · D19 · session record CLOSED · exploration
+  export archived under `docs/design/research/`. Re-skin rides the T2 PR.

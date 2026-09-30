@@ -34,7 +34,7 @@ question, find what the pack actually says and report it faithfully, with citati
 - Quote or tightly paraphrase; cite as `file §section` for every claim. Never present your
   own inference as the pack's content — mark inference explicitly.
 - Check whether the topic was **superseded in Tradebench's own docs** (`docs/decisions.md`,
-  `docs/design-sessions/`) and say so if it was — the pack is history, not always current
+  `docs/design/sessions/`) and say so if it was — the pack is history, not always current
   truth.
 - Links inside the pack that point outside it refer to the private prototype repo
   (`FisherNE/ig-algorithmic-trader`) and won't resolve here. When the real answer lives there

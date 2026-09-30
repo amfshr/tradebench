@@ -55,7 +55,7 @@ Sessions come in three shapes; each has a project skill that carries the protoco
   and what's next; stop for Alex's pick. Run whenever context is cold or stale.
 - **Design → `/design-session`.** Ground in the seed pack first; survey standard practice;
   strawman; structured questions; Alex rules. The answered record is filed under
-  `docs/design-sessions/` **the same day**; decisions go to the log; the board gets touched.
+  `docs/design/sessions/` **the same day**; decisions go to the log; the board gets touched.
   (Question sheets → answered records is the project's calibration-truth pattern, playbook
   §5.2.)
 - **Build → `/start-ticket`.** Ticket-scoped; **design nod before implementation** on any
@@ -81,8 +81,8 @@ may be months away.
   settings.json        ← permissions/hooks (E0-T4 — not yet born)
 docs/
   decisions.md         ← decision log (D1…)
-  design-sessions/     ← dated answered records of design sessions
-  design/              ← enduring technical design specs (architecture.md, catalogue, grammar…)
+  design/sessions/     ← dated answered records of design sessions (nested, D21)
+  design/              ← enduring technical design specs (architecture/README.md, catalogue, grammar…)
   reference/           ← external reference material (e.g. the scraped IG API summary)
   inherited/           ← read-only prototype seed pack (never edit — D1)
 design/                ← UX/page designs and wireframes (human-facing surfaces)
@@ -97,6 +97,8 @@ New AI artifacts go in these seats — never invent parallel structures.
 |---|---|---|
 | `doctrine-reviewer` | agent | Before any PR: review the diff against conventions, the testing doctrine (G5), and guardrails (G1). |
 | `seed-pack-librarian` | agent | Any "what did the prototype decide/learn about X?" — searches `docs/inherited/`, answers with citations. |
+| `db-admin` | agent | Read/inspect the live capture Postgres; DML only on explicit ask with SQL shown; never ad-hoc DDL (Flyway only). |
+| `board-steward` | agent | Author/maintain tickets & epics to the board-format template (D20) and keep the board truthful; planning markdown only, never fabricates, never self-marks ✅. |
 | `/sanity-lap` | skill | Cold start or stale context. |
 | `/design-session` | skill | Running a design deep-dive with Alex. |
 | `/start-ticket` | skill | Starting build work on a board ticket. |
