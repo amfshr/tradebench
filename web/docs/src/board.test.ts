@@ -183,6 +183,23 @@ describe('epicStatus', () => {
     const allDone = { ...board.epics[0], done: 4, total: 4, tickets: board.epics[0].tickets.map((t) => ({ ...t, status: 'done' as const })) };
     expect(epicStatus(allDone)).toBe('done');
   });
+  test('queued when tickets exist, none in progress, and not all done', () => {
+    const mixed = {
+      ...board.epics[0],
+      done: 1,
+      total: 3,
+      tickets: [
+        { ...board.epics[0].tickets[0], status: 'done' as const },
+        { ...board.epics[0].tickets[0], id: 'T2', status: 'queued' as const },
+        { ...board.epics[0].tickets[0], id: 'T3', status: 'iced' as const },
+      ],
+    };
+    expect(epicStatus(mixed)).toBe('queued');
+  });
+  test('an empty epic (no tickets) is queued, never done', () => {
+    const empty = { ...board.epics[0], done: 0, total: 0, tickets: [] };
+    expect(epicStatus(empty)).toBe('queued');
+  });
 });
 
 describe('historyForEpic', () => {

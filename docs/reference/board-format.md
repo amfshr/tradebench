@@ -34,11 +34,13 @@ Per-ticket rich detail. Each ticket has a section:
 ```
 ## T<n> — <Title> <status emoji + short state>
 
-**Type** <build | test | design | docs | ops | spike> · **Branch** `<git-branch>` ·
-**Started** <YYYY-MM-DD | —> · **Blocked by** <T<m> | E<n>-T<m> | —>
+**Type** <build | test | design | docs | ops | spike> · **Branch** `<git-branch>` · **Started** <YYYY-MM-DD | —> · **Blocked by** <T<m> | E<n>-T<m> | —>
 
 <approach, build order, test plan, DoD — free markdown; the ticket-detail page renders it>
 ```
+
+**The metadata line is a single physical line** — the parser reads one line only; a wrapped
+second line (e.g. starting `**Started**`) would fall into the plan body instead.
 
 The **ticket metadata line** is the new template field set (D20). All fields are optional
 and degrade gracefully — a missing field simply doesn't render. Field meanings:

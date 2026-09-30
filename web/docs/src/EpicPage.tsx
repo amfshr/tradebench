@@ -4,6 +4,7 @@ import { Link, useParams } from 'react-router-dom';
 import { epicStatus, historyForEpic, ticketDate, type Epic, type ParsedBoard, type Ticket } from './board';
 import { docByRoute, epicDocByNum, ticketRoute } from './content';
 import { parseDecisions, type DecisionEntry } from './decisions';
+import { GITHUB_BLOB } from './links';
 import { StatusChip } from './StatusChip';
 import { useBoard } from './useBoard';
 
@@ -57,10 +58,6 @@ function EpicAside({
         <div className="meta-row">
           <dt>open</dt>
           <dd>{open}</dd>
-        </div>
-        <div className="meta-row">
-          <dt>blocked by</dt>
-          <dd>—</dd>
         </div>
         <div className="meta-row">
           <dt>book</dt>
@@ -198,7 +195,7 @@ export function EpicPage() {
           {planRoute && (
             <p className="epic-planlink">
               <a
-                href={`https://github.com/amfshr/tradebench/blob/main/${epicDocByNum.get(num)?.repoPath}`}
+                href={`${GITHUB_BLOB}${epicDocByNum.get(num)?.repoPath}`}
                 target="_blank"
                 rel="noreferrer"
               >

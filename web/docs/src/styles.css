@@ -1354,7 +1354,7 @@ h3:hover .hanchor {
   font-size: 0.75rem;
   line-height: 1rem;
   text-align: center;
-  color: var(--up);
+  color: var(--accent);
 }
 
 .donewhen li.checked {
@@ -1362,7 +1362,7 @@ h3:hover .hanchor {
 }
 
 .donewhen li.checked .donewhen-box {
-  border-color: var(--up);
+  border-color: var(--accent);
 }
 
 .ticket-plan {
@@ -1430,27 +1430,6 @@ h3:hover .hanchor {
 
 .aside-block {
   margin-bottom: 1.5rem;
-}
-
-.aside-list {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  font-family: var(--font-mono);
-  font-size: 0.78rem;
-}
-
-.aside-list li {
-  padding: 0.15rem 0;
-}
-
-.aside-list a {
-  color: var(--accent);
-  text-decoration: none;
-}
-
-.aside-list a:hover {
-  text-decoration: underline;
 }
 
 /* ---- home / landing (design P3) ---- */
