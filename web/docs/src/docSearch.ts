@@ -1,4 +1,5 @@
 import { sidebarTree } from './content';
+import { flattenLeaves } from './tree';
 
 export interface SearchItem {
   route: string;
@@ -6,9 +7,9 @@ export interface SearchItem {
   group: string;
 }
 
-/** Flat search corpus: every sidebar item, tagged with its group for context. */
+/** Flat search corpus: every leaf doc (folders flattened), tagged with its group. */
 export const searchIndex: SearchItem[] = sidebarTree.flatMap((g) =>
-  g.items.map((i) => ({ route: i.route, label: i.label, group: g.label })),
+  flattenLeaves(g.nodes).map((l) => ({ route: l.route!, label: l.label, group: g.label })),
 );
 
 /** Subsequence match (fuzzy): every query char appears in order. Scored by compactness. */
