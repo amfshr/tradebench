@@ -1175,6 +1175,119 @@ h3:hover .hanchor {
   border-top: 1px solid var(--border);
 }
 
+/* ---- ticket page ---- */
+
+.ticket-page {
+  max-width: 62rem;
+  margin: 0 auto;
+}
+
+.ticket-page .crumbs {
+  font-family: var(--font-mono);
+  font-size: 0.78rem;
+  color: var(--fg-muted);
+  margin-bottom: 1.2rem;
+}
+
+.ticket-page .crumbs a {
+  color: var(--fg-muted);
+  text-decoration: none;
+}
+
+.ticket-page .crumbs a:hover {
+  color: var(--accent);
+}
+
+.ticket-head {
+  margin-bottom: 2rem;
+}
+
+.ticket-eyebrow {
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+  margin-bottom: 0.6rem;
+}
+
+.ticket-epic-tag {
+  font-family: var(--font-mono);
+  font-size: 0.78rem;
+  color: var(--fg-muted);
+}
+
+.ticket-head h1 {
+  margin: 0 0 0.6rem;
+  font-size: 1.7rem;
+}
+
+.ticket-what {
+  color: var(--fg-muted);
+  margin: 0;
+  max-width: 42rem;
+  line-height: 1.6;
+}
+
+.ticket-cols {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 14rem;
+  gap: 2.5rem;
+  align-items: start;
+}
+
+@media (max-width: 60rem) {
+  .ticket-cols {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .ticket-page .epic-aside {
+    order: -1;
+  }
+}
+
+.ticket-page section {
+  margin-bottom: 2rem;
+}
+
+.donewhen {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.donewhen li {
+  display: flex;
+  gap: 0.6rem;
+  align-items: baseline;
+  padding: 0.35rem 0;
+  border-bottom: 1px solid var(--border);
+  font-size: 0.92rem;
+}
+
+.donewhen-box {
+  flex-shrink: 0;
+  width: 1.05rem;
+  height: 1.05rem;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  font-size: 0.75rem;
+  line-height: 1rem;
+  text-align: center;
+  color: var(--up);
+}
+
+.donewhen li.checked {
+  color: var(--fg-muted);
+}
+
+.donewhen li.checked .donewhen-box {
+  border-color: var(--up);
+}
+
+.ticket-plan {
+  margin-top: 2.5rem;
+  padding-top: 1.5rem;
+  border-top: 1px solid var(--border);
+}
+
 .epic-cols {
   display: grid;
   grid-template-columns: minmax(0, 1fr) 14rem;

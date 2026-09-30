@@ -224,3 +224,16 @@ never share a colour** (binds all chart UI, E4+). Evidence: Alex's design-tool e
 `docs/design/brand.md`. **Why:** with red/green reserved for market semantics, attention
 must be amber, and a brass/amber *brand* would collide with it — restraint that leaves
 data loudest wins on the product's own logic.
+
+## D20 — Board & ticket format: a lean template, maintained by an agent — **Accepted** (2026-09-30, Alex)
+
+Tickets and epics follow a formal but lean markdown structure (`docs/reference/board-format.md`)
+so the docs site can render them as board/epic/ticket pages: epics carry
+`**Since** · **Decisions** · **Book**`; tickets carry an optional per-section metadata line
+`**Type** · **Branch** · **Started** · **Blocked by**` in their epic plan file. The
+**`board-steward` agent** (E0-T5) owns authoring and keeping this truthful. Field set is
+deliberately **lean** — information that serves a decision (what kind of work, which branch,
+when it started, what blocks it), not data for its own sake (Alex); new fields are proposed,
+not invented. Existing tickets are retrofitted over time; the site renders whatever is
+present, degrading gracefully. **Why:** the write model must carry exactly the structure the
+read model needs and no more — and an agent enforcing one template beats hand-kept drift.

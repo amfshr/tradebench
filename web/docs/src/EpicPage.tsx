@@ -2,7 +2,7 @@ import { useEffect, useState, type ReactNode } from 'react';
 import { Link, useParams } from 'react-router-dom';
 
 import { historyForEpic, type Epic, type Ticket } from './board';
-import { epicDocByNum } from './content';
+import { epicDocByNum, ticketRoute } from './content';
 import { MarkdownBody } from './MarkdownBody';
 import { StatusChip } from './StatusChip';
 import { useBoard } from './useBoard';
@@ -68,21 +68,25 @@ function EpicAside({ epic, board }: { epic: Epic; board: ParsedBoard }) {
   );
 }
 
-function TicketTable({ tickets }: { tickets: Ticket[] }) {
+function TicketTable({ tickets, epicNum }: { tickets: Ticket[]; epicNum: number }) {
   return (
     <table className="ticket-table">
       <tbody>
-        {tickets.map((t) => (
-          <tr key={t.id} className={`row-${t.status}`}>
-            <td className="tcell-id">{t.id}</td>
-            <td className="tcell-title">
-              {t.title && <b>{t.title}</b>} {t.summary}
-            </td>
-            <td className="tcell-status">
-              <StatusChip status={t.status} />
-            </td>
-          </tr>
-        ))}
+        {tickets.map((t) => {
+          const route = ticketRoute(epicNum, t.id);
+          const title = t.title ? <b>{t.title}</b> : null;
+          return (
+            <tr key={t.id} className={`row-${t.status}`}>
+              <td className="tcell-id">{t.id}</td>
+              <td className="tcell-title">
+                {route ? <Link to={route}>{title ?? t.summary}</Link> : <>{title} {t.summary}</>}
+              </td>
+              <td className="tcell-status">
+                <StatusChip status={t.status} />
+              </td>
+            </tr>
+          );
+        })}
       </tbody>
     </table>
   );
@@ -149,13 +153,13 @@ export function EpicPage() {
           {open.length > 0 && (
             <section>
               <p className="section-label">Open</p>
-              <TicketTable tickets={open} />
+              <TicketTable tickets={open} epicNum={epic.num} />
             </section>
           )}
           {done.length > 0 && (
             <section>
               <p className="section-label">Done</p>
-              <TicketTable tickets={done} />
+              <TicketTable tickets={done} epicNum={epic.num} />
             </section>
           )}
           {plan && (

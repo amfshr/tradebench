@@ -5,6 +5,7 @@ import { EpicPage } from './EpicPage';
 import { HomePage } from './HomePage';
 import { MarkdownPage } from './MarkdownPage';
 import { Sidebar } from './Sidebar';
+import { TicketPage } from './TicketPage';
 import { TopNav } from './TopNav';
 
 export function App() {
@@ -18,6 +19,7 @@ export function App() {
             <Route path="/" element={<HomePage />} />
             <Route path="/board" element={<BoardPage />} />
             <Route path="/board/epics/:slug" element={<EpicPage />} />
+            <Route path="/board/epics/:slug/:ticket" element={<TicketPage />} />
             <Route path="/*" element={<MarkdownPage />} />
           </Routes>
         </main>
