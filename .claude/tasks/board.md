@@ -6,14 +6,15 @@
 > Tickets carry a DoD; ideation that hasn't earned a ticket lives in `docs/` or the inherited
 > ideas, not here.
 
-**Guide (refreshed 2026-09-28):** E1 is the active build epic and its spine is real — T1–T4
-merged, live DAX data flowing into Postgres locally; the deploy-first ruling (D2) stands.
-T5 (resilience belt) is mid-flight: slice A (the pure decision cores) is built and verified
-on branch `e1-t5-resilience`; slices B (event log + gap rows) and C (the Supervisor shell)
-remain. A docs pass (product overview, the Field Manual, docs map — see `docs/README.md`) rides the
-same branch while Alex reads and reviews the accumulated code. E0 only lacks enforcement
-(T4). E3's language semantics are ruled (D7–D9); its two design-gate tickets are cut and
-plannable. E4–E8 name the horizon; no tickets until their own planning sessions.
+**Guide (refreshed 2026-09-30):** **E2 is complete** — the docs site is fully built and live at
+docs.tradebench.amfshr.dev (Field Manual, decision-log page, board/epic/ticket views, scar
+callouts, nested sidebar, component reference), and the repo now carries a licence (PolyForm
+Noncommercial, D23). **E1 is the active build epic** — T1–T4 merged (live DAX → Postgres);
+T5 (resilience belt) mid-flight on branch `e1-t5-resilience` (slice A — the pure decision
+cores — built + verified; slices B/C remain). The board-steward agent (E0-T5) now keeps this
+board truthful. E0 only lacks enforcement (T4). E3's language semantics are ruled (D7–D9);
+its design-gate tickets are plannable. E4–E8 name the horizon; no tickets until their own
+planning sessions. **Alex's standing note: finish the Field Manual read before returning to E1.**
 
 **Next-session menu (refreshed 2026-09-30, E2 COMPLETE):** the docs site is fully built and
 live at **docs.tradebench.amfshr.dev** — Field Manual, decision-log page, ticket/epic/board
