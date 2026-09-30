@@ -14,11 +14,14 @@ ALTER TABLE service_events
     ADD COLUMN correlation_id  text,
     ADD COLUMN recorded_at_utc timestamptz NOT NULL DEFAULT now();
 
--- Backfill any pre-v2 rows (dev only) so the NOT NULLs can be enforced.
+-- Backfill any pre-v2 rows (dev only) so the NOT NULLs can be enforced. Pre-v2 the only event
+-- written was the DLG_FLAG change (event_type 'market_state'); rename it to the v2 token so a
+-- console query on the new vocabulary surfaces historical dev rows too.
 UPDATE service_events SET
-    user_id  = (SELECT id FROM users WHERE name = 'default-user'),
-    category = 'data_liveness',
-    severity = 'info'
+    user_id    = (SELECT id FROM users WHERE name = 'default-user'),
+    category   = 'data_liveness',
+    severity   = 'info',
+    event_type = 'market_state_change'
     WHERE user_id IS NULL;
 
 ALTER TABLE service_events

@@ -8,6 +8,7 @@ import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
 import java.time.Instant;
+import java.time.OffsetDateTime;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -34,8 +35,10 @@ class PostgresObservabilityStoreTest extends PostgresTestBase {
             s.execute("TRUNCATE service_events, bar_gaps, capture_status, instruments"
                     + " RESTART IDENTITY CASCADE");
         }
+        // 'ig-stream-live' seeds to id 2 (default-user is id 1), so a user/source swap or a
+        // dropped dimension is value-detectable, not hidden by an id collision.
         store = new PostgresObservabilityStore(database.dataSource(), "default-user",
-                "ig-stream-demo", "test-run");
+                "ig-stream-live", "test-run");
     }
 
     @Test
@@ -46,39 +49,47 @@ class PostgresObservabilityStoreTest extends PostgresTestBase {
 
         try (Connection c = database.dataSource().getConnection();
                 Statement s = c.createStatement();
-                ResultSet r = s.executeQuery("SELECT event_type, category, severity, instance,"
-                        + " instrument_id IS NOT NULL AS has_market, detail->>'attempt',"
-                        + " event_time_utc FROM service_events")) {
+                ResultSet r = s.executeQuery("SELECT e.event_type, e.category, e.severity,"
+                        + " e.instance, u.name AS usr, src.name AS source, i.epic AS market,"
+                        + " e.detail->>'attempt' AS attempt, e.event_time_utc"
+                        + " FROM service_events e JOIN users u ON e.user_id = u.id"
+                        + " LEFT JOIN sources src ON e.source_id = src.id"
+                        + " LEFT JOIN instruments i ON e.instrument_id = i.id")) {
             r.next();
             // Expectations hand-derived from the ruled catalogue (D25), not from the enum.
-            assertEquals("reconnect", r.getString(1));
-            assertEquals("resilience", r.getString(2));
-            assertEquals("warn", r.getString(3));
-            assertEquals("test-run", r.getString(4));
-            assertEquals(true, r.getBoolean(5));
-            assertEquals("3", r.getString(6));
-            assertEquals(Instant.parse("2026-09-28T09:15:00Z"),
-                    r.getObject(7, java.time.OffsetDateTime.class).toInstant());
+            assertEquals("reconnect", r.getString("event_type"));
+            assertEquals("resilience", r.getString("category"));
+            assertEquals("warn", r.getString("severity"));
+            assertEquals("test-run", r.getString("instance"));
+            assertEquals("default-user", r.getString("usr"));
+            assertEquals("ig-stream-live", r.getString("source"));
+            assertEquals(DAX, r.getString("market"));
+            assertEquals("3", r.getString("attempt"));
+            assertEquals(Instant.parse("2026-09-28T09:15:00Z"), instant(r, "event_time_utc"));
         }
     }
 
     @Test
-    void globalEventHasNoMarket() throws SQLException {
+    void globalEventHasNoMarketButKeepsUserAndSource() throws SQLException {
         store.write(ServiceEvent.of(EventType.DB_ERROR, Instant.parse("2026-09-28T09:16:00Z")));
 
         try (Connection c = database.dataSource().getConnection();
                 Statement s = c.createStatement();
-                ResultSet r = s.executeQuery(
-                        "SELECT category, severity, instrument_id FROM service_events")) {
+                ResultSet r = s.executeQuery("SELECT e.category, e.severity, u.name AS usr,"
+                        + " src.name AS source, e.instrument_id FROM service_events e"
+                        + " JOIN users u ON e.user_id = u.id"
+                        + " LEFT JOIN sources src ON e.source_id = src.id")) {
             r.next();
-            assertEquals("error", r.getString(1));
-            assertEquals("error", r.getString(2));
-            assertNull(r.getObject(3));
+            assertEquals("error", r.getString("category"));
+            assertEquals("error", r.getString("severity"));
+            assertEquals("default-user", r.getString("usr"));
+            assertEquals("ig-stream-live", r.getString("source"));
+            assertNull(r.getObject("instrument_id"));
         }
     }
 
     @Test
-    void gapPersistsOpenAndDedupesBySpan() throws SQLException {
+    void gapPersistsOpenWithSpanDimensionsAndDedupes() throws SQLException {
         GapDetector.Gap gap = new GapDetector.Gap(DAX, Instant.parse("2026-09-28T09:01:00Z"),
                 Instant.parse("2026-09-28T09:03:00Z"), 3);
         store.record(gap);
@@ -86,34 +97,68 @@ class PostgresObservabilityStoreTest extends PostgresTestBase {
 
         try (Connection c = database.dataSource().getConnection();
                 Statement s = c.createStatement();
-                ResultSet r = s.executeQuery("SELECT count(*), max(missing_minutes),"
-                        + " count(*) FILTER (WHERE healed_at_utc IS NULL) FROM bar_gaps")) {
+                ResultSet r = s.executeQuery("SELECT count(*) AS n, max(missing_minutes) AS mins,"
+                        + " count(*) FILTER (WHERE healed_at_utc IS NULL) AS open,"
+                        + " min(gap_from_utc) AS gfrom, min(gap_to_utc) AS gto,"
+                        + " max(u.name) AS usr, max(src.name) AS source FROM bar_gaps g"
+                        + " JOIN users u ON g.user_id = u.id JOIN sources src ON g.source_id = src.id")) {
             r.next();
-            assertEquals(1, r.getInt(1));
-            assertEquals(3, r.getInt(2));
-            assertEquals(1, r.getInt(3)); // open — healing is T6's
+            assertEquals(1, r.getInt("n"));
+            assertEquals(3, r.getInt("mins"));
+            assertEquals(1, r.getInt("open")); // healing is T6's
+            assertEquals(Instant.parse("2026-09-28T09:01:00Z"), instant(r, "gfrom"));
+            assertEquals(Instant.parse("2026-09-28T09:03:00Z"), instant(r, "gto"));
+            assertEquals("default-user", r.getString("usr"));
+            assertEquals("ig-stream-live", r.getString("source"));
         }
     }
 
     @Test
-    void statusUpsertKeepsOneRowLatestWins() throws SQLException {
-        store.upsert(status(10, StreamState.CONNECTED_STREAMING, "DEAL"));
-        store.upsert(status(25, StreamState.RECONNECTING, "CLOSED"));
+    void statusUpsertReplacesEveryFieldLatestWins() throws SQLException {
+        // Two snapshots differing in EVERY field, so each DO UPDATE SET column is load-bearing.
+        store.upsert(new CaptureStatus("test-run", DAX, Instant.parse("2026-09-28T09:20:00Z"),
+                StreamState.CONNECTED_STREAMING, "DEAL", Instant.parse("2026-09-28T09:19:59Z"),
+                Instant.parse("2026-09-28T09:19:00Z"), 10, 2, 1, 0, 0, 5));
+        store.upsert(new CaptureStatus("test-run", DAX, Instant.parse("2026-09-28T09:21:00Z"),
+                StreamState.RECONNECTING, "CLOSED", Instant.parse("2026-09-28T09:20:30Z"),
+                Instant.parse("2026-09-28T09:20:00Z"), 25, 4, 3, 1, 2, 7));
 
         try (Connection c = database.dataSource().getConnection();
                 Statement s = c.createStatement();
-                ResultSet r = s.executeQuery("SELECT count(*), max(ticks_total),"
-                        + " max(stream_state), max(market_state) FROM capture_status")) {
+                ResultSet r = s.executeQuery("SELECT count(*) OVER () AS n, updated_at_utc,"
+                        + " stream_state, market_state, last_tick_at_utc, last_bar_at_utc,"
+                        + " ticks_total, bars_total, dropped_ticks, malformed, reconnects_total,"
+                        + " db_pending FROM capture_status")) {
             r.next();
-            assertEquals(1, r.getInt(1)); // one row — the upsert replaced, not appended
-            assertEquals(25, r.getLong(2));
-            assertEquals("reconnecting", r.getString(3));
-            assertEquals("CLOSED", r.getString(4));
+            assertEquals(1, r.getInt("n")); // the upsert replaced, not appended
+            assertEquals(Instant.parse("2026-09-28T09:21:00Z"), instant(r, "updated_at_utc"));
+            assertEquals("reconnecting", r.getString("stream_state"));
+            assertEquals("CLOSED", r.getString("market_state"));
+            assertEquals(Instant.parse("2026-09-28T09:20:30Z"), instant(r, "last_tick_at_utc"));
+            assertEquals(Instant.parse("2026-09-28T09:20:00Z"), instant(r, "last_bar_at_utc"));
+            assertEquals(25, r.getLong("ticks_total"));
+            assertEquals(4, r.getLong("bars_total"));
+            assertEquals(3, r.getLong("dropped_ticks"));
+            assertEquals(1, r.getLong("malformed"));
+            assertEquals(2, r.getLong("reconnects_total"));
+            assertEquals(7, r.getInt("db_pending"));
         }
     }
 
-    private static CaptureStatus status(long ticks, StreamState state, String marketState) {
-        return new CaptureStatus("test-run", DAX, Instant.parse("2026-09-28T09:20:00Z"), state,
-                marketState, Instant.parse("2026-09-28T09:19:59Z"), null, ticks, 4, 0, 0, 1, 0);
+    @Test
+    void statusUpsertStoresNullDbPending() throws SQLException {
+        store.upsert(new CaptureStatus("test-run", DAX, Instant.parse("2026-09-28T09:22:00Z"),
+                StreamState.WINDOW_CLOSED, null, null, null, 0, 0, 0, 0, 0, null));
+
+        try (Connection c = database.dataSource().getConnection();
+                Statement s = c.createStatement();
+                ResultSet r = s.executeQuery("SELECT db_pending FROM capture_status")) {
+            r.next();
+            assertNull(r.getObject("db_pending"));
+        }
+    }
+
+    private static Instant instant(ResultSet r, String column) throws SQLException {
+        return r.getObject(column, OffsetDateTime.class).toInstant();
     }
 }
