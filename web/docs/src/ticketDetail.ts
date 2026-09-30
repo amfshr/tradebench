@@ -45,11 +45,11 @@ function parseTicketMeta(line: string): TicketMeta {
   const meta: TicketMeta = {};
   const type = line.match(/\*\*Type\*\*\s+([A-Za-z]+)/)?.[1];
   const branch = line.match(/\*\*Branch\*\*\s+`([^`]+)`/)?.[1];
-  const started = line.match(/\*\*Started\*\*\s+([\d-]+)/)?.[1];
+  const started = line.match(/\*\*Started\*\*\s+(\d[\d-]*)/)?.[1];
   const blockedBy = line.match(/\*\*Blocked by\*\*\s+([^·\n]+)/)?.[1]?.trim();
   if (type) meta.type = type;
   if (branch) meta.branch = branch;
-  if (started && started !== '—') meta.started = started;
+  if (started) meta.started = started;
   if (blockedBy && blockedBy !== '—') meta.blockedBy = blockedBy;
   return meta;
 }
