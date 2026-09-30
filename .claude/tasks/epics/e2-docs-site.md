@@ -129,3 +129,27 @@ per-ticket section+metadata extractor get mutation-verified tests; components ex
 
 **DoD:** a ticket opens as its own page with a structured header, DoD checklist, plan body,
 and lean metadata; board/epic ticket rows link to it.
+
+## T6 — Nested docs tree + IA for growth ✅ (closes E2)
+
+**Type** build · **Branch** `e2-t6-nested-tree` · **Started** 2026-09-30 · **Blocked by** —
+
+Three strands, all landed (Alex, 2026-09-30):
+
+- **(a) Recursive nested sidebar** ✅ — `buildTree` builds a real folder hierarchy (was flat
+  slash-labels); the `Sidebar` renders collapsible subgroups at any depth, auto-opening the
+  active path; `flattenLeaves` gives the page-turn its depth-first order; date-prefixed
+  session files get clean labels.
+- **(b) Architecture → folder + component reference** ✅ — `architecture.md` →
+  `architecture/README.md` (route preserved) with a `components/<module>.md` reference tree
+  (core, ig-client, market-data-service): responsibilities, package map, boundaries, config,
+  each cross-linking its Field Manual chapter.
+- **(c) D22** ✅ — within the Build track: **Field Manual teaches** (narrative, chapters),
+  **Architecture specs** (reference, component sub-tree). Extends D21.
+
+**Test plan (G5):** the nested `buildTree`/`flattenLeaves`/`prettyName`/`sortNodes` are pure
+and mutation-verified (files-before-folders order, date-prefix labels); component pages are
+content. Full docs link-integrity re-checked after the architecture move.
+
+**DoD met:** the sidebar nests real directories to any depth; architecture is a browsable
+folder with a component reference; the FM-vs-Architecture rule is recorded (D22). **E2 done.**

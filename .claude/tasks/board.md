@@ -15,14 +15,14 @@ same branch while Alex reads and reviews the accumulated code. E0 only lacks enf
 (T4). E3's language semantics are ruled (D7–D9); its two design-gate tickets are cut and
 plannable. E4–E8 name the horizon; no tickets until their own planning sessions.
 
-**Next-session menu (refreshed 2026-09-30, post E2-T4 merge — E2 nearly closed):** the docs
-site is fully built and live at **docs.tradebench.amfshr.dev** (Field Manual, decision-log
-page, ticket/epic views, scar callouts). **One ticket to fully close E2: T6.**
-① *E2-T6 nested docs tree + IA* (Alex's chosen next) — recursive nested sidebar; split
-architecture into a folder with a `components/<service>/` reference; record the
-Field-Manual-vs-Architecture split (extends D21). ② *E1-T5 slices B + C* — event log,
-bar_gaps V2, Supervisor shell (main checkout, branch `e1-t5-resilience`; **merge main in
-first** — big docs delta). ③ *Finish the Field Manual read* (still owed before returning to E1).
+**Next-session menu (refreshed 2026-09-30, E2 COMPLETE):** the docs site is fully built and
+live at **docs.tradebench.amfshr.dev** — Field Manual, decision-log page, ticket/epic/board
+views, scar callouts, nested sidebar, component reference. **E2 closed (T1–T6).** Two threads
+remain open:
+① *Finish the Field Manual read* — still owed before returning to E1 (the manual IS the E1
+codebase explained). ② *E1-T5 slices B + C* — event log, bar_gaps V2, Supervisor shell
+(main checkout, branch `e1-t5-resilience`; **merge main in first** — large docs delta).
+Optional: E0-T4 guardrail enforcement; the User-Guide/DSL Use-track content (E3/E4 era).
 
 ---
 
@@ -74,7 +74,7 @@ CHART:1MINUTE sealed bars only) · engineering playbook §1–§4.
 | T7 | **Deploy.** Dockerfiles + compose; staging + prod configs with separate DBs (promote by release tag); cloud host selection (revisit the phase-1 doc's Lightsail analysis against the ~£20/mo envelope); secrets injection; deploy runbook. **DoD:** staging runs 24/7 for 3 consecutive days unattended with daily digests arriving. | ⬜ |
 | T8 | **Acceptance: shadow-diff week vs the Python appliance.** Both systems capture the same DAX sessions for a week; diff tick coverage, 1m bars, and own-aggregated 10m vs the prototype's; write the report; rule on making Tradebench the primary capture. **DoD:** the diff report with every delta explained + Alex's ruling recorded in `docs/decisions.md`. | ⬜ |
 
-## E2 🧰 The docs site (`web/docs` → docs.tradebench) — ACTIVE (planned 2026-09-28, runs alongside E1-T5)
+## E2 🧰 The docs site (`web/docs` → docs.tradebench) — ✅ COMPLETE (T1–T6 merged; live at docs.tradebench.amfshr.dev)
 
 **Since** 2026-09-28 · **Decisions** D11, D18, D19 · **Manual** —
 
@@ -96,7 +96,7 @@ nod N1–N4). **Working shape:** git worktree `.claude/worktrees/e2-docs-reader`
 | T3 | **Build & CI lane.** Static build snapshotting content; `web/**`-keyed CI job; preview story. Hosting ruled **GitHub Pages** (D18); custom domain **live: docs.tradebench.amfshr.dev** (Cloudflare CNAME + PAGES_BASE=/, HTTPS enforced — Alex, 2026-09-29). **DoD:** one command yields the static site; CI green. | ✅ 2026-09-29 (pages.yml deploy + web-ci.yml PR lane; site live on custom domain) |
 | T4 | **Docs polish & structure — the final E2 sweep.** (a) scar callouts (R9) rendered + led across all nine chapters; (b) book → **Field Manual** (D21: docs split by audience — Build track vs a reserved User-Guide Use track); (c) decision log as a designed D-card page (status chips, dates, bodies); (d) `design-sessions` nested under `design` (one Design group). **DoD:** scars render as R9 cards; decision log is a designed page; design-sessions nested; rename ruled. | ✅ 2026-09-30 (branch e2-t4-docs-sweep; D21) |
 | T5 | **Ticket-detail pages.** Clickable `/board/epics/:slug/:ticket` — structured header (breadcrumb, status chip, title), a done-when checklist from the ticket's DoD, the rich plan section, and a lean metadata panel (type · branch · started · blocked-by · epic · PR); board + epic ticket rows link to it. Spawned the board-format spec (D20) + the `board-steward` agent (E0-T5). **DoD:** a ticket opens as its own page with header, checklist, plan body, and lean metadata; rows link to it. | ✅ 2026-09-30 (PR #8; ticket pages + epic-view redesign to the design; 60 tests, doctrine F1–F7 fixed pre-merge; deployed) |
-| T6 | **Nested docs tree + IA for growth.** (a) recursive **nested sidebar** — folders render as collapsible subgroups at any depth (today it's flat: `design/sessions/` shows as slash-labels, not a nested group); (b) split `architecture/README.md` → an `architecture/` folder with a **`components/<service>/` reference sub-tree** (detailed per-component technical docs); (c) record the split — Field Manual = narrative teaching (chapters/sections), Architecture = spec + component reference — extending D21. **DoD:** the sidebar nests real directories; architecture is a browsable folder with a component reference; the FM-vs-Architecture rule is recorded. | 🔶 (planned 2026-09-30, post E2-T4 merge) |
+| T6 | **Nested docs tree + IA for growth.** (a) recursive **nested sidebar** — folders render as collapsible subgroups at any depth (today it's flat: `design/sessions/` shows as slash-labels, not a nested group); (b) split `architecture/README.md` → an `architecture/` folder with a **`components/<service>/` reference sub-tree** (detailed per-component technical docs); (c) record the split — Field Manual = narrative teaching (chapters/sections), Architecture = spec + component reference — extending D21. **DoD:** the sidebar nests real directories; architecture is a browsable folder with a component reference; the FM-vs-Architecture rule is recorded. | ✅ 2026-09-30 (branch e2-t6-nested-tree; recursive nested sidebar; architecture → folder + components/<module> reference; D22) |
 
 ## E3 🧪 Indicator DSL v0 + backtest spine — DESIGN-GATED
 
@@ -142,6 +142,13 @@ captured/imported data to chew on (E1 + first Databento decisions).
   #4 half-resolved: Gradle confirmed in practice (D12), tick-lake storage format still open.)
 
 ## Done history
+
+- **2026-09-30 — E2-T6 Nested docs tree + IA** ✅ (**closes E2**): recursive **nested sidebar**
+  (folders → collapsible subgroups at any depth; `buildTree` builds a real hierarchy,
+  `flattenLeaves` powers the page-turn); **architecture** split into a folder with a
+  `components/<module>` reference (core, ig-client, market-data-service); **D22** (Field Manual
+  teaches / Architecture specs, extends D21). 62 tests, tree logic mutation-verified; docs
+  link-integrity clean after the move. Evidence: PR #10 (pending). **E2 is complete: T1–T6.**
 
 - **2026-09-30 — E2-T4 Docs polish & structure** ✅: the final docs sweep — **D21** (docs
   split by audience: book → **Field Manual** / Build track, reserved User Guide / Use track);
