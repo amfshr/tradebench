@@ -167,6 +167,14 @@ supervision, and the heartbeat extended with per-market staleness ages.
 
 ## The scars, in one line each
 
+> **Scar** — **Silent while connected** · 2h56m of lost data
+>
+> The prototype's SDK reported a healthy connection for 2 hours 56 minutes while no data
+> arrived — the socket was up, the feed was dead, and nothing noticed.
+>
+> **Lesson.** A connected socket is not a live feed. The watchdog trusts data freshness over
+> connection status; the stuck-substate escalator forces a rebuild when a substate hangs.
+
 Silent-while-connected (2h56m) → the escalator and the watchdog's worldview. The remedy
 storm risk → episodes, doubling grace, the session guard. IG's login cache → the backoff
 floor. "0.4s offline" → dual-duration reporting. The 17:00 Sunday outage → GapDetector's

@@ -1613,3 +1613,37 @@ h3:hover .hanchor {
   opacity: 0.6;
   text-decoration: line-through;
 }
+
+/* ---- scar callout (R9): mono label, no icon, no colour ---- */
+
+.scar-card {
+  margin: 1.6em 0;
+  padding: 0.9rem 1.2rem;
+  background: var(--bg-raised);
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--fg-muted);
+  border-radius: 0 8px 8px 0;
+}
+
+.scar-card p {
+  margin: 0.5em 0;
+}
+
+.scar-card p:first-child {
+  margin-top: 0;
+}
+
+.scar-card p:last-child {
+  margin-bottom: 0;
+}
+
+/* The leading **Scar** becomes the mono SCAR label. */
+.scar-card p:first-child > strong:first-child {
+  font-family: var(--font-mono);
+  font-size: 0.68rem;
+  font-weight: 500;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--fg-muted);
+  margin-right: 0.15rem;
+}

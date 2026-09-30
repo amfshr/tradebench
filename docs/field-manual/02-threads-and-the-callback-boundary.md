@@ -91,10 +91,15 @@ ownership structural.
 
 ## The scars
 
-- **The prototype's anti-pattern** (playbook §2.4): SQL batches built and committed **on the
-  library's thread**. A locked DB write blocked the very thread IG needed to deliver updates;
-  a DB exception surfaced inside library machinery. Every seam in this chapter exists so that
-  cannot be re-created.
+> **Scar** — **DB work on the library's thread** · playbook §2.4
+>
+> The prototype built and committed SQL batches **on the Lightstreamer callback thread**. A
+> locked DB write blocked the very thread IG needed to deliver updates; a DB exception
+> surfaced inside library machinery.
+>
+> **Lesson.** Cheap, non-throwing work on transport callbacks; queue everything slow. Every
+> seam in this chapter exists so that cannot be re-created.
+
 - **The debugger scar (this repo, T3 live testing).** Alex set a breakpoint inside the stream
   path while capturing live — and the stream stalled. Obvious in hindsight: a breakpoint
   *pauses the thread that hit it*, and in a callback that thread **is** the LS delivery

@@ -95,11 +95,14 @@ payoff of the injectable-clock doctrine: timing logic tested at the speed of ari
 
 ## The scars
 
-The prototype once logged a lid-closed gap of sixteen minutes as **"0.4s offline"** — it
-measured the outage on the monotonic clock, which had slept along with the machine. True
-awake-outage: 0.4s. True wall-outage: ~16 minutes of missing market data. Both numbers
-are real answers to *different questions*, which is why `ReconnectClassifier.Reconnect`
-now reports `wallOutage`, `awakeOutage`, and `hostSleptDuring` side by side (chapter 8).
+> **Scar** — **"0.4s offline"** · a 16-minute gap, mis-measured
+>
+> The prototype logged a lid-closed outage of sixteen minutes as **"0.4s offline"** — it
+> measured the gap on the monotonic clock, which had slept along with the machine. Awake-outage:
+> 0.4s. Wall-outage: ~16 minutes of missing market data.
+>
+> **Lesson.** Wall time for stamps, monotonic for spans, and the *pair* for anomaly detection.
+> `ReconnectClassifier` now reports `wallOutage`, `awakeOutage`, and `hostSleptDuring` side by side.
 
 The complementary hazard is hypothetical only because the doctrine forbids it: a watchdog
 measuring staleness against wall time declares every market dead the moment a laptop

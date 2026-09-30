@@ -109,6 +109,15 @@ JUnit-extension dependency — fewer moving parts between a red test and its cau
 
 ## The scars
 
+> **Scar** — **Duplicate rows from replay** · playbook §4.1
+>
+> IG re-sends completed candles and Lightstreamer replays after reconnects — so naive inserts
+> duplicate. But over-eager dedupe is worse: it can flatten same-millisecond ticks that are
+> real, distinct market events.
+>
+> **Lesson.** Idempotency lives in the schema, not the code: `ON CONFLICT` upserts for bars, a
+> price-inclusive unique key for ticks (T4 Q2) — dedupe that never flattens the finest truth.
+
 Redelivery is not hypothetical: IG genuinely re-sends completed candles (playbook §4.1 —
 "dedupe on start-time per epic"), and Lightstreamer replays after reconnects. The
 engineering playbook's §1.4 answer — at-least-once plus idempotent-by-key, carried into

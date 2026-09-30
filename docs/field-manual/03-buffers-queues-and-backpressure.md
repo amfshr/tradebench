@@ -92,11 +92,14 @@ were persistence would be the plumbing grading its own homework.
 
 ## The scars
 
-- **The counted-shed doctrine is a direct playbook port** (§2.4) — the queue design arrived
-  in this repo as settled rules, reasoning baked in: an unbounded tick queue merely converts
-  a consumer stall into an eventual OOM kill, and *uncounted* shedding is indistinguishable
-  from a healthy quiet market. The counter is the difference between "degraded, and telling
-  you" and "lying".
+> **Scar** — **Unbounded queues and uncounted drops** · playbook §2.4
+>
+> An unbounded tick queue merely converts a consumer stall into an eventual OOM kill; and
+> *uncounted* shedding is indistinguishable from a healthy quiet market.
+>
+> **Lesson.** Bound what you can lose and count every drop — the counter is the difference
+> between "degraded, and telling you" and "lying".
+
 - **Bars-unbounded earns its keep at heal time**: T6's healer exists because bars are
   recoverable — but every self-inflicted bar loss becomes a REST heal charged against a
   metered weekly allowance (playbook §4.3). The unbounded queue is cheaper than the heal.

@@ -106,6 +106,15 @@ than inventing a third; it is the standard pattern under every event-sourced sys
 
 ## The scars (this time, avoided in advance)
 
+> **Scar** — **One process doing everything** · the prototype's tangle
+>
+> The prototype's capture, serving, and healing concerns grew entangled in a single process;
+> separating them afterwards was expensive — and is part of why Tradebench exists.
+>
+> **Lesson.** Decouple at deployable-artifact boundaries (P7) and build the bus only when its
+> first consumer exists (D4) — but choose the seams (`CaptureStore`, dedupe keys, single-writer)
+> up front so fan-out is a compose, not a rewrite.
+
 None of this is built, and that is a decision, not a gap: **P7** (decoupling is a means;
 the collection service stands alone) and D4's own re-decision gate say the bus is built
 when its *first consumer* exists — infrastructure built speculatively is infrastructure
