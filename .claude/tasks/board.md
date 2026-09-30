@@ -15,16 +15,14 @@ same branch while Alex reads and reviews the accumulated code. E0 only lacks enf
 (T4). E3's language semantics are ruled (D7–D9); its two design-gate tickets are cut and
 plannable. E4–E8 name the horizon; no tickets until their own planning sessions.
 
-**Next-session menu (refreshed 2026-09-29 EOD, post E2-T2 merge):** the docs site is live
-at **docs.tradebench.amfshr.dev** with the full brand. Alex's standing preference: **no
-return to E1 until he has fully read the book lessons** (now readable on the live site).
-① *Read the book* (chapters 1–9) — Alex's chosen next, on the live site. ② *E2-T4 book
-polish* — scar-callout treatment (design R9) across the nine chapters + framed diagrams;
-pairs naturally with the read. ③ *E2-T5 ticket-detail pages* — `/board/epics/:slug/:ticket`
-(needs a richer ticket write-model). ④ *E1-T5 slices B + C* — event log, bar_gaps V2,
-Supervisor shell (main checkout, branch `e1-t5-resilience`; **merge main in first** — docs +
-D18 renames + brand). ⑤ optional: SPA deep-link 404 on Pages (cosmetic — 404.html serves
-the app, browser routes fine; a note, not a bug), E0-T4 enforcement.
+**Next-session menu (refreshed 2026-09-30, post E2-T5 merge):** ticket + epic views live on
+docs.tradebench.amfshr.dev. **One ticket left to close E2: T4 — the final docs sweep.**
+① *E2-T4 the docs sweep* (Alex's chosen next) — (a) scar callouts + framed diagrams across the
+nine chapters, (b) book cleanup + rename decision, (c) decision-log designed view,
+(d) nest `design-sessions` under `design`; closes E2. ② *E1-T5 slices B + C* — event log,
+bar_gaps V2, Supervisor shell (main checkout, branch `e1-t5-resilience`; **merge main in
+first** — docs + D18 + brand + board-format). ③ *Finish the book read* (still owed before
+returning to E1).
 
 ---
 
@@ -45,7 +43,7 @@ testing doctrine G5 binds to) · PRD §9.
 | T2 | **Project agents v1.** `doctrine-reviewer` (pre-PR diff review against conventions, testing doctrine, guardrails) + `seed-pack-librarian` (prototype knowledge with citations + triage status). **DoD:** both defined and invocable; proven in anger on first real use (E1-era). | ✅ 2026-09-27 (`doctrine-reviewer` proven on PR #1; `db-admin` added 2026-09-28) |
 | T3 | **Project skills v1.** `/sanity-lap`, `/design-session`, `/start-ticket` — each protocol codified from a session that actually worked. **DoD:** each skill invocable and produces its artifact. | ✅ 2026-09-27 (all three proven same day; `/start-ticket` drove E1-T1 → PR #1) |
 | T4 | **Guardrail enforcement.** Pre-commit + CI scan for credentials and strategy-content patterns (a seeded fake-secret fixture must go red — mutation-verified, per doctrine); `.claude/settings.json` permissions baseline; hooks only if a real need shows. **DoD:** planted violations caught in CI; permissions documented in the framework doc. | ⬜ (pairs with E1-T1's CI) |
-| T5 | **`board-steward` agent.** Authors/maintains tickets & epics to the formal template (`docs/reference/board-format.md`, D20 — type · branch · started · blocked-by; epic since/decisions/book) and keeps the board truthful (statuses, dates, done-history vs reality); planning-markdown only, never product code; never fabricates, never self-marks ✅. **DoD:** agent defined + invocable; board-format spec written; proven by authoring/retrofitting real tickets. | 🔶 (born with E2-T5 2026-09-30; agent + spec written, retrofit ongoing) |
+| T5 | **`board-steward` agent.** Authors/maintains tickets & epics to the formal template (`docs/reference/board-format.md`, D20 — type · branch · started · blocked-by; epic since/decisions/book) and keeps the board truthful (statuses, dates, done-history vs reality); planning-markdown only, never product code; never fabricates, never self-marks ✅. **DoD:** agent defined + invocable; board-format spec written; proven by authoring/retrofitting real tickets. | ✅ 2026-09-30 (agent + board-format.md spec written, D20; retrofitted E2 tickets; in the ai-framework inventory) |
 
 ## E1 📡 Collection service, deployed 24/7 — ACTIVE
 
@@ -97,7 +95,7 @@ nod N1–N4). **Working shape:** git worktree `.claude/worktrees/e2-docs-reader`
 | T2 | **Board read model + designed pages.** Parse board + epic files into epic cards, status chips, attention-first tickets, done-history timeline, epic pages with metadata/decisions/history rails (board.md enriched with per-epic since/decisions/book; updated derived); designed landing page; top nav + ⌘K search; brand-themed mermaid + framed lightbox; sidebar section dividers; graceful raw-markdown fallback; parser mutation-verified. Design intent (R11b): the brand exploration's board/epic IA. **DoD:** the board page reads as a dashboard. | ✅ 2026-09-29 (PR #7; 42 tests, ~10 mutations killed across two campaigns + doctrine F1/F2; brand re-skin D19 + D18 renames rode along; **deferred: ticket-detail pages → T5, book scar-callouts → T4**) |
 | T3 | **Build & CI lane.** Static build snapshotting content; `web/**`-keyed CI job; preview story. Hosting ruled **GitHub Pages** (D18); custom domain **live: docs.tradebench.amfshr.dev** (Cloudflare CNAME + PAGES_BASE=/, HTTPS enforced — Alex, 2026-09-29). **DoD:** one command yields the static site; CI green. | ✅ 2026-09-29 (pages.yml deploy + web-ci.yml PR lane; site live on custom domain) |
 | T4 | **Docs polish & structure — the final E2 sweep.** (a) **Scar callouts** (design R9): a `> **Scar** …` convention the renderer styles into the mono-spine card + a content pass over the nine chapters; framed diagrams. (b) **Book cleanup** — tighten the chapters; *decide a rename* (open Q — "the book" vs a real name). (c) **Decision log** — a structured, visually spiced view (not raw md): D-cards with status/date, cross-links, filterable by area. (d) **Nest design-sessions under design** — move `docs/design-sessions/` → `docs/design/sessions/`, fix links + sidebar grouping (one Design group, not two roots). **DoD:** scars render as R9 cards; decision log reads as a designed page; design-sessions nested; book rename ruled. | ⬜ |
-| T5 | **Ticket-detail pages.** Clickable `/board/epics/:slug/:ticket` — structured header (breadcrumb, status chip, title), a done-when checklist from the ticket's DoD, the rich plan section, and a lean metadata panel (type · branch · started · blocked-by · epic · PR); board + epic ticket rows link to it. Spawned the board-format spec (D20) + the `board-steward` agent (E0-T5). **DoD:** a ticket opens as its own page with header, checklist, plan body, and lean metadata; rows link to it. | 🔶 (nod ruled 2026-09-30; branch `e2-t5-ticket-views`) |
+| T5 | **Ticket-detail pages.** Clickable `/board/epics/:slug/:ticket` — structured header (breadcrumb, status chip, title), a done-when checklist from the ticket's DoD, the rich plan section, and a lean metadata panel (type · branch · started · blocked-by · epic · PR); board + epic ticket rows link to it. Spawned the board-format spec (D20) + the `board-steward` agent (E0-T5). **DoD:** a ticket opens as its own page with header, checklist, plan body, and lean metadata; rows link to it. | ✅ 2026-09-30 (PR #8; ticket pages + epic-view redesign to the design; 60 tests, doctrine F1–F7 fixed pre-merge; deployed) |
 
 ## E3 🧪 Indicator DSL v0 + backtest spine — DESIGN-GATED
 
@@ -143,6 +141,14 @@ captured/imported data to chew on (E1 + first Databento decisions).
   #4 half-resolved: Gradle confirmed in practice (D12), tick-lake storage format still open.)
 
 ## Done history
+
+- **2026-09-30 — E2-T5 Ticket-detail pages + epic-view redesign** ✅: clickable ticket pages
+  (`/board/epics/:slug/:ticket`) with done-when checklist + lean metadata; epic view rebuilt to
+  the design (id+status chips, WHY THIS EPIC, Open/Done counts + dates, dated+described decisions
+  rail); boxy shaded chips + de-blued rows. Write-model infra: board-format spec (D20) + the
+  `board-steward` agent (E0-T5) that keeps the board truthful. 60 tests, ~13 mutations verified;
+  doctrine pass-with-findings, F1 (market-green on a non-market element) + F1–F7 fixed pre-merge.
+  Evidence: PR #8 (merged) + live site. Only T4 remains to close E2.
 
 - **2026-09-29 — E2-T2 The docs read model** ✅: `web/docs` grew from a markdown reader into
   a read model — board.md parsed into a dashboard (epic cards, attention-first tickets,
