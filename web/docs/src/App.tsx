@@ -3,6 +3,7 @@ import { Route, Routes } from 'react-router-dom';
 import { BoardPage } from './BoardPage';
 import { DecisionsPage } from './DecisionsPage';
 import { EpicPage } from './EpicPage';
+import { Footer } from './Footer';
 import { HomePage } from './HomePage';
 import { MarkdownPage } from './MarkdownPage';
 import { Sidebar } from './Sidebar';
@@ -24,6 +25,7 @@ export function App() {
             <Route path="/board/epics/:slug/:ticket" element={<TicketPage />} />
             <Route path="/*" element={<MarkdownPage />} />
           </Routes>
+          <Footer />
         </main>
       </div>
     </div>

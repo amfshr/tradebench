@@ -5,7 +5,7 @@
 > ([`docs/inherited/product-requirements.md`](../inherited/product-requirements.md)); this
 > page is the readable front door and stays current as the build moves. For how any given
 > piece *works inside*, see [the Field Manual](../field-manual/README.md); for system shape, see
-> [`docs/design/architecture.md`](../design/architecture.md).
+> [`docs/design/architecture/README.md`](../design/architecture/README.md).
 
 ## The one-paragraph version
 
@@ -138,6 +138,6 @@ anyone's strategy, ever** (PRD §12).
 ## Where to go next
 
 - **How each piece works, explained properly** — [the Field Manual](../field-manual/README.md).
-- **System shape and component boundaries** — [`docs/design/architecture.md`](../design/architecture.md).
+- **System shape and component boundaries** — [`docs/design/architecture/README.md`](../design/architecture/README.md).
 - **Why things are the way they are** — [`docs/decisions.md`](../decisions.md).
 - **What's being built right now** — [`.claude/tasks/board.md`](../../.claude/tasks/board.md).

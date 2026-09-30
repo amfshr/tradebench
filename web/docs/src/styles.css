@@ -364,11 +364,12 @@ body {
 /* ---- sidebar ---- */
 
 /* Design R6/turn-6: uppercase mono section dividers (START · THE BOOK · SYSTEM feel). */
-.sidebar details {
+.sidebar > details {
   margin-bottom: 1rem;
 }
 
-.sidebar summary {
+/* Top-level group headers only (direct summaries): uppercase mono dividers. */
+.sidebar > details > summary {
   cursor: pointer;
   font-family: var(--font-mono);
   font-size: 0.7rem;
@@ -385,7 +386,33 @@ body {
   display: none;
 }
 
-.sidebar summary:hover {
+.sidebar > details > summary:hover {
+  color: var(--fg);
+}
+
+/* Nested folders (T6): a normal-case row with a disclosure caret, not a divider. */
+.sidebar .tree-folder {
+  cursor: pointer;
+  list-style: none;
+  padding: 0.16rem 0.45rem;
+  font-size: 0.86rem;
+  color: var(--fg-muted);
+  user-select: none;
+}
+
+.sidebar .tree-folder::before {
+  content: '▸';
+  display: inline-block;
+  width: 0.9em;
+  font-size: 0.7em;
+  color: var(--fg-muted);
+}
+
+.sidebar details[open] > .tree-folder::before {
+  content: '▾';
+}
+
+.sidebar .tree-folder:hover {
   color: var(--fg);
 }
 
@@ -1646,4 +1673,27 @@ h3:hover .hanchor {
   text-transform: uppercase;
   color: var(--fg-muted);
   margin-right: 0.15rem;
+}
+
+/* ---- site licence footer (D23) ---- */
+
+/* Full-width page footer (content column), centred text — aligns under any page's
+   content regardless of that page's measure. */
+.site-footer {
+  margin-top: 4rem;
+  padding: 1.25rem 0 0;
+  border-top: 1px solid var(--border);
+  font-size: 0.78rem;
+  color: var(--fg-muted);
+  line-height: 1.5;
+  text-align: center;
+}
+
+.site-footer a {
+  color: var(--accent);
+  text-decoration: none;
+}
+
+.site-footer a:hover {
+  text-decoration: underline;
 }

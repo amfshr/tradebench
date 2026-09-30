@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'vitest';
 
-import { buildTree, neighbours, normalizeRoute } from './tree';
+import { buildTree, flattenLeaves, neighbours, normalizeRoute, type TreeNode } from './tree';
 
 describe('normalizeRoute', () => {
   test('the root and trailing slashes normalise to canonical routes', () => {
@@ -11,78 +11,86 @@ describe('normalizeRoute', () => {
   });
 });
 
+const PATHS = [
+  '.claude/tasks/epics/e1-collection-service.md',
+  '.claude/tasks/00-inbox.md',
+  '.claude/tasks/board.md',
+  'docs/README.md',
+  'docs/field-manual/10-imaginary-late-chapter.md',
+  'docs/field-manual/02-threads-and-the-callback-boundary.md',
+  'docs/field-manual/README.md',
+  'docs/design/architecture.md',
+  'docs/design/tech-notes.md',
+  'docs/design/brand.md',
+  'docs/design/sessions/2026-09-29-brand.md',
+  'docs/design/sessions/2026-09-27-indicators.md',
+  'docs/decisions.md',
+];
+const tree = buildTree(PATHS);
+const group = (label: string) => tree.find((g) => g.label === label);
+const labelsOf = (nodes: TreeNode[] | undefined) => (nodes ?? []).map((n) => n.label);
+
 describe('buildTree', () => {
-  const paths = [
-    '.claude/tasks/epics/e1-collection-service.md',
-    // Sorts BEFORE board.md: proves the board leads by rule, not by alphabet (review F1).
-    '.claude/tasks/00-inbox.md',
-    '.claude/tasks/board.md',
-    'docs/README.md',
-    'docs/field-manual/10-imaginary-late-chapter.md',
-    'docs/field-manual/02-threads-and-the-callback-boundary.md',
-    'docs/field-manual/README.md',
-    'docs/decisions.md',
-    'docs/inherited/grill/session-1-vision.md',
-    'docs/product/overview.md',
-  ];
-  const tree = buildTree(paths);
-
-  test('groups appear in fixed order and empty groups vanish', () => {
-    expect(tree.map((g) => g.label)).toEqual([
-      'Product',
-      'Field Manual',
-      'Decisions',
-      'Inherited (read-only)',
-      'Board',
-    ]);
-  });
-
-  test('the docs map itself belongs to no group (it is the home page)', () => {
-    const allRoutes = tree.flatMap((g) => g.items.map((i) => i.route));
+  test('groups appear in fixed order; empty groups vanish; the docs map is not a leaf', () => {
+    expect(tree.map((g) => g.label)).toEqual(['Field Manual', 'Design', 'Decisions', 'Board']);
+    const allRoutes = tree.flatMap((g) => flattenLeaves(g.nodes).map((l) => l.route));
     expect(allRoutes).not.toContain('/docs');
   });
 
-  test('book chapters sort in chapter order with pretty labels', () => {
-    const book = tree.find((g) => g.label === 'Field Manual');
-    expect(book?.items).toEqual([
-      {
-        route: '/docs/field-manual/02-threads-and-the-callback-boundary',
-        label: '2 · Threads and the callback boundary',
-      },
-      { route: '/docs/field-manual/10-imaginary-late-chapter', label: '10 · Imaginary late chapter' },
-      { route: '/docs/field-manual', label: 'Index' },
+  test('explicit ORDER controls the Design sequence (not alphabetical); folder trails files', () => {
+    // ORDER = Architecture, Tech notes, Secrets, Brand → Brand after Tech notes, not before.
+    expect(labelsOf(group('Design')?.nodes)).toEqual([
+      'Architecture',
+      'Tech notes',
+      'Brand',
+      'Sessions',
     ]);
   });
 
-  test('the board leads its group even when another file sorts before it', () => {
-    const board = tree.find((g) => g.label === 'Board');
-    expect(board?.items).toEqual([
-      { route: '/board', label: 'Board' },
-      { route: '/.claude/tasks/00-inbox', label: '0 · Inbox' },
-      { route: '/board/epics/e1-collection-service', label: 'epics/E1 collection service' },
+  test('a subdirectory becomes a nested folder node, not a slash-prefixed leaf', () => {
+    const design = group('Design')?.nodes ?? [];
+    const sessions = design.find((n) => n.label === 'Sessions');
+    expect(sessions?.route).toBeUndefined();
+    expect(labelsOf(sessions?.children)).toEqual([
+      '2026-09-27 · Indicators',
+      '2026-09-29 · Brand',
+    ]);
+    expect(sessions?.children?.[0].route).toBe('/docs/design/sessions/2026-09-27-indicators');
+  });
+
+  test('Index (the README) always leads; then chapters in numeric order', () => {
+    expect(labelsOf(group('Field Manual')?.nodes)).toEqual([
+      'Index',
+      '2 · Threads and the callback boundary',
+      '10 · Imaginary late chapter',
     ]);
   });
 
-  test('neighbours page-turn stays inside the current group', () => {
-    expect(neighbours(tree, '/docs/field-manual/10-imaginary-late-chapter')).toEqual({
-      prev: {
-        route: '/docs/field-manual/02-threads-and-the-callback-boundary',
-        label: '2 · Threads and the callback boundary',
-      },
-      next: { route: '/docs/field-manual', label: 'Index' },
-    });
-    // Product has one item: no wrap into the next group, no phantom neighbours.
-    expect(neighbours(tree, '/docs/product/overview')).toEqual({
-      prev: undefined,
-      next: undefined,
-    });
+  test('the board leaf leads its group even when a file sorts before it; epics nest', () => {
+    const board = group('Board')?.nodes ?? [];
+    expect(labelsOf(board)).toEqual(['Board', '0 · Inbox', 'Epics']);
+    const epics = board.find((n) => n.label === 'Epics');
+    expect(labelsOf(epics?.children)).toEqual(['E1 collection service']);
+  });
+});
+
+describe('flattenLeaves / neighbours', () => {
+  test('flattenLeaves walks files then folders depth-first into leaf routes', () => {
+    const design = group('Design')?.nodes ?? [];
+    expect(flattenLeaves(design).map((l) => l.route)).toEqual([
+      '/docs/design/architecture',
+      '/docs/design/tech-notes',
+      '/docs/design/brand',
+      '/docs/design/sessions/2026-09-27-indicators',
+      '/docs/design/sessions/2026-09-29-brand',
+    ]);
+  });
+
+  test('page-turn steps through the group leaves, crossing into a nested folder', () => {
+    // last top-level file → first leaf inside the Sessions subfolder
+    expect(neighbours(tree, '/docs/design/brand').next?.route).toBe(
+      '/docs/design/sessions/2026-09-27-indicators',
+    );
     expect(neighbours(tree, '/no/such/route')).toEqual({});
-  });
-
-  test('nested inherited files keep their directory in the label', () => {
-    const inherited = tree.find((g) => g.label === 'Inherited (read-only)');
-    expect(inherited?.items).toEqual([
-      { route: '/docs/inherited/grill/session-1-vision', label: 'grill/Session 1 vision' },
-    ]);
   });
 });

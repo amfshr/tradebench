@@ -11,7 +11,7 @@ export function PageFooter({ route }: { route: string }) {
   }
   return (
     <nav className="page-turn">
-      {prev ? (
+      {prev?.route ? (
         <Link className="turn-card turn-prev" to={prev.route}>
           <span className="turn-hint">← Previous</span>
           <span className="turn-label">{prev.label}</span>
@@ -19,7 +19,7 @@ export function PageFooter({ route }: { route: string }) {
       ) : (
         <span />
       )}
-      {next ? (
+      {next?.route ? (
         <Link className="turn-card turn-next" to={next.route}>
           <span className="turn-hint">Next →</span>
           <span className="turn-label">{next.label}</span>

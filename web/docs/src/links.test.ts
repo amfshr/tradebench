@@ -7,7 +7,7 @@ const REPO = new Set([
   'docs/README.md',
   'docs/field-manual/04-the-pump-and-ack-after-apply.md',
   'docs/field-manual/05-the-capture-store-and-postgres.md',
-  'docs/design/architecture.md',
+  'docs/design/architecture/README.md',
   '.claude/tasks/board.md',
 ]);
 const exists = (p: string) => REPO.has(p);
@@ -42,7 +42,7 @@ describe('resolveLink', () => {
   });
 
   test('.. climbs out of the current directory', () => {
-    expect(resolveLink('docs/field-manual/README.md', '../design/architecture.md', exists)).toEqual({
+    expect(resolveLink('docs/field-manual/README.md', '../design/architecture/README.md', exists)).toEqual({
       kind: 'internal',
       to: '/docs/design/architecture',
     });
@@ -87,7 +87,7 @@ describe('resolveLink', () => {
   });
 
   test('a non-markdown file links to GitHub at its resolved path', () => {
-    expect(resolveLink('docs/design/architecture.md', '../../compose.yaml', exists)).toEqual({
+    expect(resolveLink('docs/design/architecture/README.md', '../../../compose.yaml', exists)).toEqual({
       kind: 'external',
       href: 'https://github.com/amfshr/tradebench/blob/main/compose.yaml',
     });
