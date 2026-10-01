@@ -3,8 +3,8 @@
 > The single source of truth for work. GitHub is for PRs only — never issues (until outside
 > collaborators exist). Ways of working: `.claude/task-workflow.md` · AI operating contract:
 > `.claude/ai-framework.md`. Legend: ⬜ queued · 🔶 in progress · ✅ done · 🧊 iced/blocked.
-> Tickets carry a DoD; ideation that hasn't earned a ticket lives in `docs/` or the inherited
-> ideas, not here.
+> Tickets carry a DoD; ideation that hasn't earned a ticket lives in `backlog.md` (this dir) —
+> the pre-ticket staging area — and enduring design lives in `docs/`, not here.
 
 **Guide (refreshed 2026-09-30):** **E2 complete** (docs site live + licensed, D23). **E1 active** —
 T1–T4 merged (live DAX → Postgres); T5 (resilience belt) on `e1-t5-resilience` (slice A — pure

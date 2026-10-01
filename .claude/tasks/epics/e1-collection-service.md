@@ -132,6 +132,20 @@ the event log = **`service_events` v2** (dimensions + severity + occurrence/reco
 **`capture_status`** per-heartbeat UPSERT (the console's health source) — so the collector writes
 the console-ready shapes once. Q1 (streaming schedule) is ruled there too (three clocks; generous
 window; expected `market_calendar`).
+**Slice B — ✅ done** (PR #11, 2026-09-30): `service_events` v2 + `bar_gaps` + `capture_status` +
+the `marketdata.events` vocabulary + the `EventLog`/`GapStore`/`StatusStore` seam over
+`PostgresObservabilityStore`; 8 mutations verified; doctrine review pass-with-findings (F1–F4 fixed).
+**Slice C — design nod ruled (Alex, 2026-09-30):** the Supervisor is a **per-session `CaptureJob`
+unit** (not a global singleton) so multi-user later = run N (backlog B1); observations cheap on the
+LS callback, remedies on a dedicated `capture-supervisor` thread composing the five slice-A cores;
+**per-item subscribe/unsubscribe built into the transport** (surgical `RESUBSCRIBE` + quarantine,
+§3.5 — never a full rebuild for one market's hiccup; also the primitive B1's dynamic reload reuses);
+`GapDetector` fed on the pump thread → `GapStore.record` + a `bar_gap` event (DB work off the
+callback); decision #1 completed — the pump gains an `EventLog` and emits `market_state_change`
+(events are **db-only**; jsonl stays market-data-only); the watchdog reads per-market last-seen
+times exposed by `Buffers`; `RequestPacer` gains `setPerMinute(int)` for post-login pacer discovery.
+Out of scope → **backlog B1** (stream-jobs): the config/profiles DB, multi-user job manager, dynamic
+reload.
 **Post-sweep refinement (2026-09-28, trading-ig comparison):** the REST pacer's budget is
 discovered at service startup from `GET /operations/application` (minus headroom) or
 config-injected — field data shows demo keys enforce 10/min, not the published 30; never
