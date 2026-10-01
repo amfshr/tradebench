@@ -7,8 +7,10 @@
 > the pre-ticket staging area — and enduring design lives in `docs/`, not here.
 
 **Guide (refreshed 2026-09-30):** **E2 complete** (docs site live + licensed, D23). **E1 active** —
-T1–T4 merged (live DAX → Postgres); T5 (resilience belt) on `e1-t5-resilience` (slice A — pure
-cores — built + verified; **branch now current with main**; slices B/C remain). **New: E9
+T1–T4 merged (live DAX → Postgres); T5 (resilience belt) **slices A + B merged (PR #11)** — the
+pure cores + the observability store (`service_events` v2, `bar_gaps`, `capture_status`) now on
+main; **slice C (the Supervisor shell) is next, on branch `e1-t5c-supervisor-shell`** (design ruled
+in the E1 plan). **New: E9
 🎛️ Operator console** born from the 2026-09-30 operability design session (D24) — the deployed
 collector observed & its data retrieved *without SSH* (read-model SPA + thin service over the
 `market_data` data product + R2, edge-gated by Cloudflare Tunnel + Access; hosting = a small
@@ -19,12 +21,14 @@ split, the per-view SQL, and the streaming-schedule (Q1 resolved: generous windo
 calendar). Field Manual read: **done.** E0 lacks enforcement (T4). E3 language semantics ruled
 (D7–D9), design-gate tickets plannable. E4–E8 name the horizon.
 
-**Next-session menu (refreshed 2026-09-30):** ① **E1-T5 slices B + C** — the collector-side build
-that now has its target schema (D25): the event log = `service_events` v2, `bar_gaps` (persist
-`GapDetector.Gap`), `capture_status` heartbeat, then the Supervisor shell (branch
-`e1-t5-resilience`, current with main). ② **E9 build tickets** — T2 read-model service, T3 the
-SPA, T4 Cloudflare edge + deploy (cut from the E9-T1 spec; T2/T3 need some captured data + can
-run after E1-T5). Optional: E0-T4 guardrail enforcement; the formal E1-T7 host ruling.
+**Next-session menu (refreshed 2026-10-01):** ① **E1-T5 slice C — the Supervisor shell** (branch
+`e1-t5c-supervisor-shell`, checked out, current with main): the Supervisor composing the five
+slice-A cores on a control thread, HealthProbe/heartbeat → `capture_status`, **per-item
+subscribe/unsubscribe** (surgical recovery, §3.5), gap persistence + `market_state_change` via
+`EventLog`, `Main` rewiring, pacer discovery. Design ruled in the E1 plan (T5 §). ② **E9 build
+tickets** — T2 read-model service, T3 SPA, T4 Cloudflare edge (cut from the E9-T1 spec; can run
+after E1-T5). Optional: E0-T4 guardrail enforcement; formal E1-T7 host ruling. Backlog: B1
+stream-jobs (multi-user).
 
 ---
 
@@ -71,7 +75,7 @@ CHART:1MINUTE sealed bars only) · engineering playbook §1–§4.
 | T2 | **`ig-client`: session + REST core behind the provider port.** REST login/refresh (demo + live envs), typed config (no code defaults; secrets via env beside config — never committed), request pacing guard (IG session rate limits are real — playbook + engineering playbook §4.6), typed errors. **DoD:** unit suite on fakes; one integration-gated smoke that logs into demo. | ✅ 2026-09-27 (PR #2; smoke run clean vs live demo 2026-09-28 — switch path unexercised, profile prefers the configured account) |
 | T3 | **Streaming: ticks + sealed 1m bars.** Lightstreamer Java SDK: PRICE (ticks) + CHART:1MINUTE (accept `CONS_END=1` only) per market; cheap-work-only on callback threads, everything queued to one consumer; per-market subscriptions (identity-vs-addressing per triage D16). **DoD:** a live demo session captures a full DAX day of ticks + 1m bars locally. | ✅ 2026-09-28 (PR #4; Alex's ruling: Sunday's live capture — 500+ ticks, 4 sealed bars, 0 dropped/malformed — suffices; the multi-day local soak moves to T7's pre-cloud runway) |
 | T4 | **Persistence.** Flyway from birth: `instruments`, `ticks`, `bars_1m` (user + source columns from day one), `service_events`, `job_runs`; least-privilege roles (triage D22); testcontainers suite; generated schema render + CI drift gate (triage D23). **DoD:** captured data lands via the real write path; drift gate green. | ✅ 2026-09-28 (PR #5; live DAX → Postgres via the real path, all dimension-attributed; drift gate green) |
-| T5 | **Resilience belt.** Reconnect stack; staleness watchdog on injectable clocks — should-be-ticking derived from the stream itself, monotonic/awake vs wall time split, escalation ladder (triage D25); gap detection writing gap rows; structured `service_events` + quiet-is-healthy warnings stream. **DoD:** scripted failure scenarios (dead socket, silent-while-connected, host suspend) pass on fakes — each test mutation-verified. | 🔶 (nod ruled 2026-09-28; live outage 17:00–17:15 is the motivating specimen. Slice A ✅ on branch: 7 pure cores + scenario suites, 23 mutations verified. Slices B/C remain) |
+| T5 | **Resilience belt.** Reconnect stack; staleness watchdog on injectable clocks — should-be-ticking derived from the stream itself, monotonic/awake vs wall time split, escalation ladder (triage D25); gap detection writing gap rows; structured `service_events` + quiet-is-healthy warnings stream. **DoD:** scripted failure scenarios (dead socket, silent-while-connected, host suspend) pass on fakes — each test mutation-verified. | 🔶 (nod ruled 2026-09-28; live outage 17:00–17:15 is the motivating specimen. **Slices A + B ✅ merged (PR #11)** — 7 pure cores (23 mutations) + the observability store (`service_events` v2 / `bar_gaps` / `capture_status`, 8 mutations); slice C (Supervisor shell) on branch `e1-t5c-supervisor-shell`, design ruled) |
 | T6 | **Daily completeness + archive + digest (decisions D6).** `@Scheduled` end-of-day job: 1m-bar REST heal (window-clipped, paced, allowance-aware; outcomes classified healed / tickless-at-source / failed — ticks are stream-only, the job never claims otherwise), day's Parquet export to object storage (pick R2 vs B2 in-ticket), digest email (counts, gaps, heal outcomes, archive path). Audited `job_runs` row every run, clean or not. **DoD:** staging produces archive + digest end-to-end; a suppressed digest is detectable (absence = alarm documented in the runbook). | ⬜ |
 | T7 | **Deploy.** Dockerfiles + compose; staging + prod configs with separate DBs (promote by release tag); cloud host selection (revisit the phase-1 doc's Lightsail analysis against the ~£20/mo envelope); secrets injection; deploy runbook. **DoD:** staging runs 24/7 for 3 consecutive days unattended with daily digests arriving. | ⬜ |
 | T8 | **Acceptance: shadow-diff week vs the Python appliance.** Both systems capture the same DAX sessions for a week; diff tick coverage, 1m bars, and own-aggregated 10m vs the prototype's; write the report; rule on making Tradebench the primary capture. **DoD:** the diff report with every delta explained + Alex's ruling recorded in `docs/decisions.md`. | ⬜ |
@@ -157,6 +161,13 @@ captured/imported data to chew on (E1 + first Databento decisions).
   #4 half-resolved: Gradle confirmed in practice (D12), tick-lake storage format still open.)
 
 ## Done history
+
+- **2026-10-01 — E1-T5 slices A + B merged (PR #11)** ✅: the resilience belt's foundation on main —
+  slice A's 7 pure decision cores (`supervise/` + `coverage/`, 23 mutations) and slice B's
+  observability store (migration V2: `service_events` v2 / `bar_gaps` / `capture_status`; the
+  `marketdata.events` vocabulary; the `EventLog`/`GapStore`/`StatusStore` seam over
+  `PostgresObservabilityStore`; 8 mutations; doctrine review pass-with-findings, F1–F4 fixed). Slice
+  C (the Supervisor shell) continues on branch `e1-t5c-supervisor-shell`, design ruled (E1 plan T5 §).
 
 - **2026-09-30 — Operability design session + E9-T1** ✅: two same-day design sessions on the
   deployed collector's operability. (1) *Architecture/access* → **D24** + record
