@@ -88,6 +88,10 @@ Rules of thumb:
   policy instead of silent defaults.
 - **Never guess about ambiguous wire data** — a candle without `snapshotTimeUTC`, a price
   point without bid/ask: throw naming the field (P9). Callers own blast-radius policy.
+- **Wire DTO records carry no validating constructors** — the stream parsers' never-throw
+  contract depends on it: an odd-but-well-formed update (ask < bid, high < low) must parse
+  and flow; judging market data is a consumer concern, never the wire layer's. Validation
+  in a wire record = a hidden throw inside "never throws".
 - **Golden fixtures carry provenance** (`ig-client/src/test/resources/wire/README.md`):
   playbook-anchored vs authored vs corroborated, re-goldened at first live contact.
 - External API knowledge lives in `docs/reference/` (e.g. the scraped IG reference), never

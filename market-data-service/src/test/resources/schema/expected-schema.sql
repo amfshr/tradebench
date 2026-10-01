@@ -1,3 +1,23 @@
+CREATE TABLE public.bar_gaps (
+    id bigint NOT NULL,
+    user_id smallint NOT NULL,
+    source_id smallint NOT NULL,
+    instrument_id smallint NOT NULL,
+    gap_from_utc timestamp with time zone NOT NULL,
+    gap_to_utc timestamp with time zone NOT NULL,
+    missing_minutes integer NOT NULL,
+    detected_at_utc timestamp with time zone DEFAULT now() NOT NULL,
+    healed_at_utc timestamp with time zone,
+    heal_outcome text
+);
+ALTER TABLE public.bar_gaps ALTER COLUMN id ADD GENERATED ALWAYS AS IDENTITY (
+    SEQUENCE NAME public.bar_gaps_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1
+);
 CREATE TABLE public.bars_1m (
     user_id smallint NOT NULL,
     source_id smallint NOT NULL,
@@ -12,6 +32,21 @@ CREATE TABLE public.bars_1m (
     ask_l numeric NOT NULL,
     ask_c numeric NOT NULL,
     ltv bigint
+);
+CREATE TABLE public.capture_status (
+    instance text NOT NULL,
+    instrument_id smallint NOT NULL,
+    updated_at_utc timestamp with time zone NOT NULL,
+    stream_state text NOT NULL,
+    market_state text,
+    last_tick_at_utc timestamp with time zone,
+    last_bar_at_utc timestamp with time zone,
+    ticks_total bigint NOT NULL,
+    bars_total bigint NOT NULL,
+    dropped_ticks bigint NOT NULL,
+    malformed bigint NOT NULL,
+    reconnects_total bigint NOT NULL,
+    db_pending integer
 );
 CREATE TABLE public.flyway_schema_history (
     installed_rank integer NOT NULL,
@@ -59,8 +94,15 @@ CREATE TABLE public.service_events (
     id bigint NOT NULL,
     instance text NOT NULL,
     event_type text NOT NULL,
-    at_utc timestamp with time zone NOT NULL,
-    payload jsonb
+    event_time_utc timestamp with time zone NOT NULL,
+    detail jsonb,
+    user_id smallint NOT NULL,
+    source_id smallint,
+    instrument_id smallint,
+    category text NOT NULL,
+    severity text NOT NULL,
+    correlation_id text,
+    recorded_at_utc timestamp with time zone DEFAULT now() NOT NULL
 );
 ALTER TABLE public.service_events ALTER COLUMN id ADD GENERATED ALWAYS AS IDENTITY (
     SEQUENCE NAME public.service_events_id_seq
@@ -111,8 +153,14 @@ ALTER TABLE public.users ALTER COLUMN id ADD GENERATED ALWAYS AS IDENTITY (
     NO MAXVALUE
     CACHE 1
 );
+ALTER TABLE ONLY public.bar_gaps
+    ADD CONSTRAINT bar_gaps_pkey PRIMARY KEY (id);
+ALTER TABLE ONLY public.bar_gaps
+    ADD CONSTRAINT bar_gaps_span UNIQUE (user_id, source_id, instrument_id, gap_from_utc, gap_to_utc);
 ALTER TABLE ONLY public.bars_1m
     ADD CONSTRAINT bars_1m_pkey PRIMARY KEY (user_id, source_id, instrument_id, start_utc);
+ALTER TABLE ONLY public.capture_status
+    ADD CONSTRAINT capture_status_pkey PRIMARY KEY (instance, instrument_id);
 ALTER TABLE ONLY public.flyway_schema_history
     ADD CONSTRAINT flyway_schema_history_pk PRIMARY KEY (installed_rank);
 ALTER TABLE ONLY public.instruments
@@ -135,15 +183,32 @@ ALTER TABLE ONLY public.users
     ADD CONSTRAINT users_name_key UNIQUE (name);
 ALTER TABLE ONLY public.users
     ADD CONSTRAINT users_pkey PRIMARY KEY (id);
+CREATE INDEX bar_gaps_open_idx ON public.bar_gaps USING btree (instrument_id) WHERE (healed_at_utc IS NULL);
 CREATE INDEX flyway_schema_history_s_idx ON public.flyway_schema_history USING btree (success);
-CREATE INDEX service_events_type_idx ON public.service_events USING btree (event_type, at_utc);
+CREATE INDEX service_events_feed_idx ON public.service_events USING btree (event_time_utc DESC);
+CREATE INDEX service_events_mkt_idx ON public.service_events USING btree (instrument_id, event_time_utc DESC);
+CREATE INDEX service_events_sev_idx ON public.service_events USING btree (severity, event_time_utc DESC);
 CREATE INDEX ticks_series_idx ON public.ticks USING btree (instrument_id, source_id, user_id, ts_utc);
+ALTER TABLE ONLY public.bar_gaps
+    ADD CONSTRAINT bar_gaps_instrument_id_fkey FOREIGN KEY (instrument_id) REFERENCES public.instruments(id);
+ALTER TABLE ONLY public.bar_gaps
+    ADD CONSTRAINT bar_gaps_source_id_fkey FOREIGN KEY (source_id) REFERENCES public.sources(id);
+ALTER TABLE ONLY public.bar_gaps
+    ADD CONSTRAINT bar_gaps_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.users(id);
 ALTER TABLE ONLY public.bars_1m
     ADD CONSTRAINT bars_1m_instrument_id_fkey FOREIGN KEY (instrument_id) REFERENCES public.instruments(id);
 ALTER TABLE ONLY public.bars_1m
     ADD CONSTRAINT bars_1m_source_id_fkey FOREIGN KEY (source_id) REFERENCES public.sources(id);
 ALTER TABLE ONLY public.bars_1m
     ADD CONSTRAINT bars_1m_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.users(id);
+ALTER TABLE ONLY public.capture_status
+    ADD CONSTRAINT capture_status_instrument_id_fkey FOREIGN KEY (instrument_id) REFERENCES public.instruments(id);
+ALTER TABLE ONLY public.service_events
+    ADD CONSTRAINT service_events_instrument_id_fkey FOREIGN KEY (instrument_id) REFERENCES public.instruments(id);
+ALTER TABLE ONLY public.service_events
+    ADD CONSTRAINT service_events_source_id_fkey FOREIGN KEY (source_id) REFERENCES public.sources(id);
+ALTER TABLE ONLY public.service_events
+    ADD CONSTRAINT service_events_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.users(id);
 ALTER TABLE ONLY public.ticks
     ADD CONSTRAINT ticks_instrument_id_fkey FOREIGN KEY (instrument_id) REFERENCES public.instruments(id);
 ALTER TABLE ONLY public.ticks

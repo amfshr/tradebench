@@ -155,12 +155,14 @@ class PostgresStoreTest extends PostgresTestBase {
 
         try (Connection c = database.dataSource().getConnection();
                 Statement s = c.createStatement();
-                ResultSet r = s.executeQuery(
-                        "SELECT event_type, instance, payload->>'dealFlag' FROM service_events")) {
+                ResultSet r = s.executeQuery("SELECT event_type, category, severity, instance,"
+                        + " detail->>'dealFlag' FROM service_events")) {
             r.next();
-            assertEquals("market_state", r.getString(1));
-            assertEquals("test-run", r.getString(2));
-            assertEquals("CLOSED", r.getString(3));
+            assertEquals("market_state_change", r.getString(1));
+            assertEquals("data_liveness", r.getString(2));
+            assertEquals("info", r.getString(3));
+            assertEquals("test-run", r.getString(4));
+            assertEquals("CLOSED", r.getString(5));
         }
     }
 

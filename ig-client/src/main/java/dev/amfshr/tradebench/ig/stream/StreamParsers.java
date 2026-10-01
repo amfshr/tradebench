@@ -51,14 +51,8 @@ public final class StreamParsers {
     }
 
     private static @Nullable Instant epochMs(@Nullable String value) {
-        if (value == null || value.isBlank()) {
-            return null;
-        }
-        try {
-            return Instant.ofEpochMilli(Long.parseLong(value.strip()));
-        } catch (NumberFormatException e) {
-            return null;
-        }
+        Long ms = longOrNull(value);
+        return ms == null ? null : Instant.ofEpochMilli(ms);
     }
 
     private static @Nullable BigDecimal decimal(@Nullable String value) {

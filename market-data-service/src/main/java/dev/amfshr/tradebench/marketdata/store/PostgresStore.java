@@ -17,6 +17,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import dev.amfshr.tradebench.core.domain.Bar1m;
 import dev.amfshr.tradebench.core.domain.OhlcPrices;
 import dev.amfshr.tradebench.core.domain.Tick;
+import dev.amfshr.tradebench.marketdata.events.EventType;
 import dev.amfshr.tradebench.marketdata.ingest.Buffers;
 import dev.amfshr.tradebench.marketdata.store.CaptureStore;
 
@@ -45,8 +46,9 @@ public final class PostgresStore implements CaptureStore {
                 ask_l = EXCLUDED.ask_l, ask_c = EXCLUDED.ask_c,
                 ltv = EXCLUDED.ltv""";
     private static final String INSERT_EVENT = """
-            INSERT INTO service_events (instance, event_type, at_utc, payload)
-            VALUES (?, ?, ?, ?::jsonb)""";
+            INSERT INTO service_events (instance, user_id, source_id, instrument_id, category,
+                event_type, severity, event_time_utc, detail)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?::jsonb)""";
 
     private final Connection connection;
     private final PreparedStatement tickInsert;
@@ -114,11 +116,18 @@ public final class PostgresStore implements CaptureStore {
 
     @Override
     public void write(Buffers.StateChange stateChange) {
+        // A DLG_FLAG transition is a market_state_change event (v2, D25). Slice C unifies this
+        // onto the EventLog seam when it rewires Main; here it rides the pump's existing path.
         try {
             eventInsert.setString(1, instance);
-            eventInsert.setString(2, "market_state");
-            eventInsert.setObject(3, utc(stateChange.atUtc()));
-            eventInsert.setString(4, mapper.createObjectNode()
+            eventInsert.setShort(2, userId);
+            eventInsert.setShort(3, sourceId);
+            eventInsert.setShort(4, instrumentId(stateChange.epic()));
+            eventInsert.setString(5, EventType.MARKET_STATE_CHANGE.category().db());
+            eventInsert.setString(6, EventType.MARKET_STATE_CHANGE.db());
+            eventInsert.setString(7, EventType.MARKET_STATE_CHANGE.defaultSeverity().db());
+            eventInsert.setObject(8, utc(stateChange.atUtc()));
+            eventInsert.setString(9, mapper.createObjectNode()
                     .put("epic", stateChange.epic())
                     .put("dealFlag", stateChange.dealFlag()).toString());
             eventInsert.executeUpdate();
