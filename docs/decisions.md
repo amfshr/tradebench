@@ -278,3 +278,56 @@ waste the public repo's learning value. PolyForm Noncommercial is a real, lawyer
 licence that lets learners genuinely use the code while keeping every commercial right —
 the honest fit for a public craft repo. Considered and rejected: MIT/Apache (gives away
 commercial use), bespoke all-rights-reserved (needlessly strict + hand-rolled wording).
+
+## D24 — Operator console: a read-model surface, edge-gated; mTLS reserved for machines — **Accepted** (2026-09-30, Alex)
+
+The deployed collection service is observed and its data retrieved **without SSH** by a
+**separate read-model app** — a static SPA + a thin (Spring Boot) read-only service over the
+`market_data` data product (D17 read-only creds) + R2 object storage (pre-signed download
+links) — **never by an inbound surface on the collector**, which stays outbound-only and
+single-purpose (P7) and merely *produces* everything observable into its own DB
+(`service_events` v2, status/heartbeat rows, gap rows) and R2. **Human access is edge-gated by
+Cloudflare Tunnel + Access:** `cloudflared` dials out (zero inbound ports on the box — the
+inherited outbound-only posture survives), Cloudflare authenticates per person (email/SSO, free
+< 50 users) at the edge. **mTLS/service-tokens are reserved for future machine clients**
+(Access can enforce client certs there). **v1 is read-only** (observe + download); control
+actions are deferred to the event/command plane, never REST-into-the-collector. Hosting: a
+single small VPS (**Hetzner** leading, ~€4–7/mo) running docker-compose (collector + Postgres +
+`cloudflared` + nightly `pg_dump → R2`); owned-hardware migration deferred and trivial (compose
+is portable); the **formal host ruling lands in E1-T7**. **Why:** it delivers no-SSH
+observability while *preserving* the outbound-only posture the seed pack mandated; matches the
+D11 read-model and D17 data-product patterns; and is the lowest-toil, best-auth option
+(per-person identity, instant revoke, zero install) for a three-person tool. **Considered and
+reserved:** mTLS + a baked-cert Electron app — set aside for humans because it is
+"possession = access" (extractable from the build), can't revoke one person without rotating
+all, and drags a signed-desktop-app pipeline onto non-technical family, all to avoid a free
+edge that also seals the box; it remains the right tool for machine consumers. **Spawns epic
+E9** (Operator Console / Market Data Manager v0); its **T1** designs the event/metric/data
+model, which feeds E1-T5 slice B before the event log is built. (Design session
+`docs/design/sessions/2026-09-30-collection-service-operability.md`.)
+
+## D25 — Observability & data model: `service_events` v2, `capture_status`, `bar_gaps`, `archives`; metrics/Grafana split; generous window + expected calendar — **Accepted** (2026-09-30, Alex)
+
+The collection service's self-record and the Operator Console's read model, ruled at E9-T1
+(spec: `docs/design/observability-and-data-model.md`, rulings R1–R7). **`service_events` v2**
+supersedes the V1 first pass: user/source/instrument dimensions, a stored `category`, `severity`
+(info/warn/error), an occurrence-vs-recorded time split (D38 doctrine), `correlation_id`, and
+`jsonb` detail; `event_type` is free text governed by a Java enum (no DB enum — new types must
+not need a migration). New tables: **`bar_gaps`** (GapDetector.Gap persisted,
+`healed_at`/`heal_outcome` for T6), **`capture_status`** (per-heartbeat UPSERT — the console's
+near-live health source; a stale `updated_at_utc` *is* the box-down signal), **`archives`**
+(manifest of Parquet/`pg_dump` files the console pre-signs). **Grafana/DIY split:** the
+SPA-over-DB owns current status + domain views and ships in v1; Prometheus/Grafana owns
+time-series trends + alerting and is additive; a healthchecks.io dead-man's-switch is the v1
+serious-tier alarm. **Scheduling (resolves the carried Q1):** three clocks — a per-market
+**stream window** (config, venue-local, subscribe/unsubscribe only; DAX defaults *generous*
+~06:00–22:00, not a tight 06:00–17:00), the **`DLG_FLAG` watchdog** (alarms on silence, no
+calendar), and an **expected trading calendar** (`market_calendar`, XETRA sessions + German
+holidays) that — not the window — defines a real gap. **Timeframe scope:** monitoring stays 1m +
+tick scoped because higher timeframes are *derived on read* (D15/D9), never separately captured
+(a 10m "gap" is a 1m gap); a broker-TF oracle, if ever wanted, arrives as a new `source_id` with
+a `timeframe` dimension added then. **Why:** the first `service_events` was a provisional pass;
+designing v2 before E1-T5 slice B builds the event log means the collector writes the right shape
+once, and the console reads a data product built for it — not one worked around. **Feeds:**
+E1-T5 slice B (writes `service_events` v2 + `bar_gaps` + `capture_status`), E1-T6 (writes
+`archives` + `heal_outcome`), E9-T2/T3 (read model + SPA).
