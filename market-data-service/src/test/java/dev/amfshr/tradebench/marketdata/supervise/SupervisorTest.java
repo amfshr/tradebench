@@ -7,11 +7,14 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.jspecify.annotations.Nullable;
 
 import dev.amfshr.tradebench.core.time.Clock;
 import dev.amfshr.tradebench.ig.time.Sleeper;
@@ -25,10 +28,13 @@ class SupervisorTest {
     private static final String STREAMING = "CONNECTED:WS-STREAMING";
     private static final String WILL_RETRY = "DISCONNECTED:WILL-RETRY";
     private static final String TRYING_RECOVERY = "DISCONNECTED:TRYING-RECOVERY";
+    private static final String DAX = "IX.D.DAX.DAILY.IP";
+    private static final String NASDAQ = "IX.D.NASDAQ.CASH.IP";
 
     private FakeClock clock;
     private RecordingEvents events;
     private FakeStream stream;
+    private FakeFreshness freshness;
     private AtomicBoolean exhausted;
     private Supervisor supervisor;
 
@@ -37,9 +43,10 @@ class SupervisorTest {
         clock = new FakeClock(Instant.parse("2026-09-28T09:00:00Z"));
         events = new RecordingEvents();
         stream = new FakeStream();
+        freshness = new FakeFreshness();
         exhausted = new AtomicBoolean();
         // jitter = 1.0 → deterministic backoff; Sleeper/interval unused (tests drive sweep() directly).
-        supervisor = new Supervisor(clock, Tuning.playbook(), () -> 1.0, events, stream,
+        supervisor = new Supervisor(clock, Tuning.playbook(), () -> 1.0, events, stream, freshness,
                 () -> exhausted.set(true), Sleeper.SYSTEM, Duration.ofSeconds(1));
     }
 
@@ -142,7 +149,91 @@ class SupervisorTest {
         assertTrue(reconnect.detail().get("replayed").asBoolean());
     }
 
+    @Test
+    void openMarketGoneTickSilentIsResubscribed() {
+        supervisor.watch(DAX);
+        freshness.flag.put(DAX, "DEAL");
+        supervisor.sweep(); // baseline the watchdog's per-round clock
+        advanceAndSweep(Duration.ofSeconds(95)); // past the 90s tick-silent window, market still open
+
+        assertEquals(List.of(DAX), stream.resubscribed);
+        assertEquals(0, stream.rebuilds);
+        assertEquals(1, count(EventType.WATCHDOG_STALE));
+    }
+
+    @Test
+    void closedMarketSilenceStandsDown() {
+        supervisor.watch(DAX);
+        freshness.flag.put(DAX, "CLOSED");
+        supervisor.sweep();
+        advanceAndSweep(Duration.ofSeconds(95));
+
+        assertTrue(stream.resubscribed.isEmpty()); // quiet because shut, not a dead feed
+        assertEquals(0, stream.rebuilds);
+        assertTrue(ofType(EventType.WATCHDOG_STALE).isEmpty());
+    }
+
+    @Test
+    void hostSleepRebaselinesRatherThanAlarming() {
+        supervisor.watch(DAX);
+        freshness.flag.put(DAX, "DEAL");
+        supervisor.sweep();
+        clock.advanceWallOnly(Duration.ofMinutes(16)); // lid closed — wall jumps, monotonic frozen
+        clock.advance(Duration.ofMillis(400));
+        supervisor.sweep();
+
+        assertTrue(stream.resubscribed.isEmpty());
+        assertEquals(0, stream.rebuilds);
+    }
+
+    @Test
+    void persistentSilenceEscalatesResubscribeThenRebuild() {
+        supervisor.watch(DAX);
+        freshness.flag.put(DAX, "DEAL");
+        supervisor.sweep();
+        advanceAndSweep(Duration.ofSeconds(460)); // crosses both resubscribe graces, then the rebuild
+
+        assertEquals(2, stream.resubscribed.size()); // maxResubscribes, then it escalates
+        assertEquals(1, stream.rebuilds);
+    }
+
+    @Test
+    void twoMarketsStaleTogetherRebuildTheSession() {
+        supervisor.watch(DAX);
+        supervisor.watch(NASDAQ);
+        freshness.flag.put(DAX, "DEAL");
+        freshness.flag.put(NASDAQ, "DEAL");
+        supervisor.sweep();
+        advanceAndSweep(Duration.ofSeconds(95));
+
+        assertEquals(1, stream.rebuilds); // several stale at once is never market noise (§3.4)
+        assertTrue(stream.resubscribed.isEmpty());
+    }
+
+    @Test
+    void aRealTickHealsThenRenewedSilenceGoesStaleOnce() {
+        supervisor.watch(DAX);
+        freshness.flag.put(DAX, "DEAL");
+        supervisor.sweep(); // baseline
+        clock.advance(Duration.ofSeconds(5));
+        freshness.tick.put(DAX, clock.monotonicNanos()); // a real tick arrives
+        supervisor.sweep(); // feeds it, heals — the market is live
+        advanceAndSweep(Duration.ofSeconds(95)); // now it goes quiet
+
+        // one resubscribe — the fixed last-seen must NOT be re-fed each sweep (that would heal forever)
+        assertEquals(List.of(DAX), stream.resubscribed);
+    }
+
     // --- helpers + fakes --------------------------------------------------------------------
+
+    /** Advance in ~5s steps (under the 10s freeze threshold) and sweep each, so elapsed time
+     * accrues as in production rather than tripping the watchdog's process-freeze detector. */
+    private void advanceAndSweep(Duration total) {
+        for (long elapsed = 0; elapsed < total.toSeconds(); elapsed += 5) {
+            clock.advance(Duration.ofSeconds(5));
+            supervisor.sweep();
+        }
+    }
 
     private List<ServiceEvent> ofType(EventType type) {
         List<ServiceEvent> matches = new ArrayList<>();
@@ -203,10 +294,37 @@ class SupervisorTest {
 
     private static final class FakeStream implements StreamControl {
         int rebuilds;
+        final List<String> resubscribed = new ArrayList<>();
 
         @Override
         public void rebuild() {
             rebuilds++;
+        }
+
+        @Override
+        public void resubscribe(String epic) {
+            resubscribed.add(epic);
+        }
+    }
+
+    private static final class FakeFreshness implements MarketFreshness {
+        final Map<String, Long> tick = new HashMap<>();
+        final Map<String, Long> bar = new HashMap<>();
+        final Map<String, String> flag = new HashMap<>();
+
+        @Override
+        public long lastTickMono(String epic) {
+            return tick.getOrDefault(epic, Long.MIN_VALUE);
+        }
+
+        @Override
+        public long lastBarMono(String epic) {
+            return bar.getOrDefault(epic, Long.MIN_VALUE);
+        }
+
+        @Override
+        public @Nullable String dealFlag(String epic) {
+            return flag.get(epic);
         }
     }
 }

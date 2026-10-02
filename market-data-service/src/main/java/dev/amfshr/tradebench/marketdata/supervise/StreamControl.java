@@ -11,4 +11,8 @@ public interface StreamControl {
     /** The session-shaped remedy: close the stream, re-establish the session, reconnect, and
      * resubscribe the (non-quarantined) markets. Called when recovery must be wholesale. */
     void rebuild();
+
+    /** The market-shaped remedy: re-subscribe one market's pair in place, leaving the others
+     * (and the connection) untouched — surgical recovery via the increment-1 handles (§3.5). */
+    void resubscribe(String epic);
 }

@@ -2,7 +2,11 @@ package dev.amfshr.tradebench.marketdata.supervise;
 
 import java.time.Duration;
 import java.time.Instant;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.Map;
 import java.util.Queue;
+import java.util.Set;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.function.DoubleSupplier;
 
@@ -34,31 +38,39 @@ public final class Supervisor implements StreamTransport.ConnectionListener, Run
     private final Clock clock;
     private final EventLog events;
     private final StreamControl stream;
+    private final MarketFreshness freshness;
     private final Runnable onExhausted;
     private final Sleeper sleeper;
     private final Duration sweepInterval;
 
     private final ReconnectClassifier reconnects;
     private final StuckSubstateEscalator stuck;
+    private final StalenessWatchdog watchdog;
     private final BackoffPolicy backoff;
 
     private final Queue<Observation> observations = new ConcurrentLinkedQueue<>();
 
     // Owned by the sweep thread only.
+    private final Set<String> watched = new HashSet<>();
+    private final Map<String, Long> lastFedTick = new HashMap<>();
+    private final Map<String, Long> lastFedBar = new HashMap<>();
     private int consecutiveFailures;
     private long lastRebuildMono = Long.MIN_VALUE;
     private volatile boolean running = true;
 
     public Supervisor(Clock clock, Tuning tuning, DoubleSupplier jitter, EventLog events,
-            StreamControl stream, Runnable onExhausted, Sleeper sleeper, Duration sweepInterval) {
+            StreamControl stream, MarketFreshness freshness, Runnable onExhausted, Sleeper sleeper,
+            Duration sweepInterval) {
         this.clock = clock;
         this.events = events;
         this.stream = stream;
+        this.freshness = freshness;
         this.onExhausted = onExhausted;
         this.sleeper = sleeper;
         this.sweepInterval = sweepInterval;
         this.reconnects = new ReconnectClassifier(tuning);
         this.stuck = new StuckSubstateEscalator(tuning);
+        this.watchdog = new StalenessWatchdog(tuning);
         this.backoff = new BackoffPolicy(tuning, jitter);
     }
 
@@ -78,6 +90,23 @@ public final class Supervisor implements StreamTransport.ConnectionListener, Run
     /** Hush the farewell DISCONNECTED before an intentional close (§3.6). */
     public void closing() {
         reconnects.closing();
+    }
+
+    /** Begin watching a market's freshness — called as it is subscribed (startup or on the sweep
+     * thread during a rebuild; §3.4 per-market staleness). */
+    public void watch(String epic) {
+        watched.add(epic);
+        watchdog.track(epic, clock.monotonicNanos());
+        lastFedTick.put(epic, Long.MIN_VALUE);
+        lastFedBar.put(epic, Long.MIN_VALUE);
+    }
+
+    /** Stop watching a market (e.g. once it is quarantined — slice C step 2b). */
+    public void forget(String epic) {
+        watched.remove(epic);
+        watchdog.forget(epic);
+        lastFedTick.remove(epic);
+        lastFedBar.remove(epic);
     }
 
     // --- capture-supervisor thread ----------------------------------------------------------
@@ -114,6 +143,45 @@ public final class Supervisor implements StreamTransport.ConnectionListener, Run
         }
         if (stuck.rebuildDue(clock.monotonicNanos())) {
             rebuild(EventType.STUCK_SUBSTATE_ESCALATED, clock.wallInstant());
+        }
+        checkStaleness();
+    }
+
+    /** Sample each watched market's freshness, feed the watchdog on-change, and execute its
+     * remedies — resubscribe the sick market, or (session-shaped) a backoff-paced rebuild. */
+    private void checkStaleness() {
+        long now = clock.monotonicNanos();
+        long wallMillis = clock.wallInstant().toEpochMilli();
+        for (String epic : watched) {
+            long tick = freshness.lastTickMono(epic);
+            if (tick != Long.MIN_VALUE && tick != lastFedTick.get(epic)) {
+                watchdog.onTick(epic, tick); // only on advance — a replayed last-seen must not heal
+                lastFedTick.put(epic, tick);
+            }
+            long bar = freshness.lastBarMono(epic);
+            if (bar != Long.MIN_VALUE && bar != lastFedBar.get(epic)) {
+                watchdog.onSealedBar(epic, bar);
+                lastFedBar.put(epic, bar);
+            }
+            String flag = freshness.dealFlag(epic);
+            if (flag != null) {
+                watchdog.onDealFlag(epic, flag);
+            }
+        }
+        for (StalenessWatchdog.Remedy remedy : watchdog.evaluate(now, wallMillis)) {
+            applyRemedy(remedy, clock.wallInstant());
+        }
+    }
+
+    private void applyRemedy(StalenessWatchdog.Remedy remedy, Instant occurredAt) {
+        if (remedy.action() == StalenessWatchdog.Action.RESUBSCRIBE) {
+            events.write(ServiceEvent.of(EventType.WATCHDOG_STALE, occurredAt).forEpic(remedy.epic())
+                    .withDetail(MAPPER.createObjectNode()
+                            .put("action", "resubscribe")
+                            .put("signal", remedy.signal().name())));
+            stream.resubscribe(remedy.epic());
+        } else {
+            rebuild(EventType.WATCHDOG_STALE, occurredAt); // backoff-paced session rebuild
         }
     }
 
