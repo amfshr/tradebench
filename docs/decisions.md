@@ -331,3 +331,23 @@ designing v2 before E1-T5 slice B builds the event log means the collector write
 once, and the console reads a data product built for it — not one worked around. **Feeds:**
 E1-T5 slice B (writes `service_events` v2 + `bar_gaps` + `capture_status`), E1-T6 (writes
 `archives` + `heal_outcome`), E9-T2/T3 (read model + SPA).
+
+## D26 — Field Manual organised in Parts: a Foundations part + one per subsystem, formed organically — **Accepted** (2026-10-02, Alex)
+
+The Field Manual (D21 Build track) grows by **parts**, not a flat chapter list: a **Foundations**
+part for the cross-cutting engineering primitives that every service reuses (threads & the
+callback boundary, buffers/queues/backpressure, the single-instance lock, clocks), then **one part
+per subsystem** — today **The market-data service** (the IG domain: sockets/Lightstreamer, the
+capture pipeline, the capture store, the resilience belt, busses); the DSL engine, backtester, and
+bots get their own parts as E3+ build them. Parts are folders under `docs/field-manual/`, which the
+docs-site nested sidebar (E2-T6) renders as groups. Extends **D22** (Field Manual *teaches*,
+Architecture *specs*): the **per-component deep-dive reference** (deps, API surface, resilience
+posture) lives in Architecture's component section (backlog B3), never duplicated in the Field
+Manual. **Why:** a teaching manual reads best as "learn this subsystem", the cross-cutting
+primitives belong to no single subsystem so they sit in Foundations and get referenced, and parts
+scale (each epic adds a part, not more flat numbers) matching the infra-vs-domain split naturally.
+**Migration (Alex's ruling):** the existing nine chapters were regrouped into the two parts
+**keeping their reading-order numbers** (non-breaking — the ~31 in-body cross-references stay
+valid); clean per-part renumbering + making those cross-references name-based is **deferred to the
+chapter-merge pass** (backlog B6), which renumbers anyway. The redundant hand-written prev/next
+footers were dropped — the site generates nav from the tree.

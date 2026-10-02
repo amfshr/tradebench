@@ -128,6 +128,3 @@ part of why Tradebench exists.
 When the first live consumer arrives, the order of work is: schema the event contract
 (D4 requires it), add the publisher leg behind `CaptureStore`, prove persist-then-publish
 under a kill test, and only then let the consumer ship.
-
-*Previous: [Chapter 8 — The resilience belt](08-the-resilience-belt.md) ·
-[Field Manual index](README.md)*

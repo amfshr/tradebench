@@ -114,7 +114,3 @@ One forward pointer: the same discipline is why the DSL can promise determinism.
 backtest and live evaluation advance on **data events** — the event clock — never on wall
 time; a strategy that says "90 seconds" means 90 seconds of *market data time*, replayable
 bit-for-bit. The capture side's clock hygiene is what keeps that promise honest.
-
-*Previous: [Chapter 6 — The advisory lock and single-instance
-discipline](06-the-advisory-lock-and-single-instance.md) · [Field Manual index](README.md) ·
-Next: [Chapter 8 — The resilience belt](08-the-resilience-belt.md)*

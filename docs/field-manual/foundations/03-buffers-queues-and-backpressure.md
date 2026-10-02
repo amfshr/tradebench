@@ -107,5 +107,3 @@ were persistence would be the plumbing grading its own homework.
   `CLOSED` market would record no state at all until the market next changed — and the T5
   watchdog (chapter 8), which stands down on `CLOSED`/`SUSPEND`, would have nothing to stand
   down *on*.
-
-*Previous: [Chapter 2 — Threads and the callback boundary](02-threads-and-the-callback-boundary.md) · [Field Manual index](README.md) · Next: [Chapter 4 — The pump and ack-after-apply](04-the-pump-and-ack-after-apply.md)*
