@@ -35,3 +35,41 @@ rewrite): (a) **per-item subscribe/unsubscribe** in the transport — built for 
 recovery, and exactly the primitive dynamic add/remove needs; (b) the **per-session `CaptureJob`
 unit** structure — multi-user is then "run N of them." The per-item-vs-rebuild choice is a
 transport-layer concern *below* the connection/user layer, independent of the number of users.
+
+## B2 — ig-client REST resilience (platform-wide), and revisit "resilience lives in the consumer"
+
+**Captured** 2026-10-02 · **First consumer** E1-T6 (heal retry) · **Broad surface** E6 Execution (OMS) · **Relates to** E1-T2 (ig-client), D16, `docs/design/architecture/components/ig-client.md`, the trading-ig research (retry patterns)
+
+The **ig-client is the platform's REST foundation, not just the stream wrapper.** As the platform
+grows, it carries the whole IG REST surface — OMS orders, market enquiries, dealing rules,
+account/positions, activity & transaction history, watchlists, `/operations/application` — consumed
+by many services and (via the jar) downstream apps. Today's stance is *"resilience policy lives in
+the consumer; the client throws typed errors and lets the service rule"* — right for one consumer,
+wrong once there are many (every caller re-implementing retry, and the **failure reason must be
+carried through** each hop). When the REST surface broadens we want **basic retry/resilience built
+into or wrapped around the client**: typed failure-reason propagation (the taxonomy already carries
+it) + retry-with-backoff on transient failures + allowance/rate-limit awareness (the `RequestPacer`),
+so every caller inherits sane behaviour by default.
+
+**Decision when it lands:** hand-roll vs **standalone Resilience4j** — *never* Spring Retry /
+Spring Cloud CircuitBreaker (ig-client is framework-free by design, T1). A **circuit breaker is
+largely the wrong tool for IG** (single downstream, no fallback, no inbound load) — but a shared
+**retry + rate-limit + typed-error** wrapper is right. This likely **revisits the
+"resilience-in-the-consumer" stance**: a client-side resilience wrapper (an opt-in policy object)
+rather than per-consumer loops. **First concrete slice: E1-T6's healer** — transient REST retry,
+allowance-aware (weekly `exceeded-allowance` = budget-exhausted, *not* retry). Broad rollout: E6.
+
+## B3 — Component-reference docs: full per-jar coverage (the pages are too thin)
+
+**Captured** 2026-10-02 · **Likely home** an Architecture docs pass (D22; docs-only → main, G4), per component as it matures · **Relates to** E2-T6 (component reference born), D22
+
+The `docs/design/architecture/components/*.md` pages are currently a few bullets each — too thin.
+Each component/jar deserves **full reference coverage**: **dependencies** (what it pulls in + why)
+· **purpose** · **consumers** (who uses it, now + planned) · **client/transport choices + the *why*
+not the alternative** (e.g. JDK vs Apache HttpClient; the Lightstreamer SDK) · **ins/outs** (the
+API surface — key interfaces in and out) · **resilience model** (what it handles vs delegates, and
+the growth path — see B2 for ig-client) · **principles** (the design stances) · **growth seams**
+(what's there for future features). Scope: `core`, `ig-client`, `market-data-service`, and each new
+module. **ig-client is the first to deepen** (stable + about to be heavily used). Stays *reference*
+(D22) — complements, never duplicates, the Field Manual's narrative teaching; can ride the epic that
+grows each component or a dedicated docs pass.

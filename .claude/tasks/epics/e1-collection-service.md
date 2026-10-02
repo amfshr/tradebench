@@ -179,6 +179,11 @@ and DataGrip/read-only role for humans. Decide when Spring lands, migrate via Fl
 **Post-sweep refinement (2026-09-28):** `exceeded-account-historical-data-allowance` resets
 *weekly* — the heal treats it as budget-exhausted (plan via the parsed `Allowance` metadata
 before firing), never as a backoff-and-retry error.
+**ig-client REST resilience (backlog B2):** the healer is the **first consumer of transient
+REST retry-with-backoff** on the ig-client. Decide here: hand-roll (reuse `BackoffPolicy` +
+the error taxonomy, allowance-aware) vs standalone Resilience4j — never Spring Retry/Cloud CB
+(ig-client stays framework-free). This is the first slice of the platform-wide ig-client REST
+resilience that B2 tracks (the broad OMS/enquiries surface rolls it out at E6).
 
 ## T7 — Deploy
 
