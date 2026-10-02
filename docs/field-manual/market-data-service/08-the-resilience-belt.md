@@ -180,7 +180,3 @@ storm risk → episodes, doubling grace, the session guard. IG's login cache →
 floor. "0.4s offline" → dual-duration reporting. The 17:00 Sunday outage → GapDetector's
 literal test fixture. None of these numbers are guesses; that is why they live in
 `Tuning.playbook()` under version control rather than in anyone's memory.
-
-*Previous: [Chapter 7 — Clocks](07-clocks-wall-monotonic-and-sleep.md) ·
-[Field Manual index](README.md) · Next: [Chapter 9 — Busses and serving data
-outward](09-busses-and-serving-data-outward.md)*

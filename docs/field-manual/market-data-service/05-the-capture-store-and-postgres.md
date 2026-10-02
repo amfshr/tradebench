@@ -127,5 +127,3 @@ both land. The drift gate is
 triage D23's inheritance — schema surprises found at deploy time, promoted here into a
 CI-failing byte-diff. And the exact-500 boundary test is doctrine G5 in miniature: the
 mutation that breaks `>=` into `>` survives any sloppier test; the exact one kills it.
-
-*Previous: [Chapter 4 — The pump and ack-after-apply](04-the-pump-and-ack-after-apply.md) · [Field Manual index](README.md) · Next: [Chapter 6 — The advisory lock and single-instance](06-the-advisory-lock-and-single-instance.md)*

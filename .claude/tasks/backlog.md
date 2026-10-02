@@ -101,3 +101,17 @@ role interfaces** (e.g. `MarketDataApi`, `DealingApi`, `AccountApi`, `HistoryApi
 depends only on its slice (**ISP**) and can fake it in tests — mirroring the stream side's
 role-named-interface / vendor-named-impl pattern. The value is the *category* split (a single giant
 interface is no better than the god-class); deferred to multi-consumer, not built speculatively.
+
+## B6 — Field Manual: clean per-part renumbering + name-based cross-references (the merge pass)
+
+**Captured** 2026-10-02 · **Trigger** the "bigger chapters" merge pass · **Relates to** D26, D22
+
+The nine chapters were regrouped into parts (D26) **keeping their original reading-order numbers**,
+so within a part the numbers aren't contiguous (Foundations = 2,3,6,7; The market-data service =
+1,4,5,8,9). Renumbering now would have broken ~31 in-body cross-references ("chapter 5 is
+line-framed", "chapter 8's watchdog", …) and the 9 `Chapter N —` headings. The clean pass:
+**renumber per part (1…n) and convert every chapter cross-reference to name-based** ("the
+capture-store chapter") so the numbering is reorg-proof for good. Fold it into the **chapter-merge
+pass** (making chapters bigger — the other organic Field Manual job) since that renumbers and
+rewrites prose anyway; doing it standalone would be pure churn. Also covers the matching heading
+cleanup (drop `Chapter N —` from H1s, or renumber them).
