@@ -91,8 +91,8 @@ archives (
 | category | event_types |
 |---|---|
 | lifecycle | `service_start` · `service_stop` · `config_loaded` · `window_open` · `window_close` |
-| resilience | `reconnect` · `stuck_substate_escalated` · `session_refreshed` |
-| data_liveness | `watchdog_stale` · `watchdog_recovered` · `market_quarantined` · `market_released` · `host_suspend` · `feed_dead` |
+| resilience | `reconnect` · `stuck_substate_escalated` · `session_refreshed` · `transport_downgraded` |
+| data_liveness | `watchdog_stale` · `watchdog_recovered` · `market_quarantined` · `market_released` · `subscription_rejected` · `market_state_change` · `host_suspend` · `feed_dead` |
 | data_quality | `bar_gap` · `bucket_void` · `oracle_mismatch` · `malformed_update` |
 | heal | `daily_heal` · `backfill` · `parquet_archived` · `pg_dump` · `digest_sent` · `digest_suppressed` |
 | error | `ig_api_error` · `db_error` · `sink_failure` |

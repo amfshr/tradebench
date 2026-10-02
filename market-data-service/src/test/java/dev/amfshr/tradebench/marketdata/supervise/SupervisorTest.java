@@ -224,7 +224,65 @@ class SupervisorTest {
         assertEquals(List.of(DAX), stream.resubscribed);
     }
 
+    @Test
+    void subscriptionFailingThriceWithAHealthyWitnessIsQuarantinedNotRebuilt() {
+        supervisor.watch(DAX);
+        supervisor.watch(NASDAQ);
+        supervisor.onSubscribed(NASDAQ, WitnessQuarantine.Kind.PRICE);
+        supervisor.onSubscribed(NASDAQ, WitnessQuarantine.Kind.CHART); // a fully-confirmed witness
+        failToTheStrikeCeiling(DAX);
+        supervisor.sweep();
+
+        assertEquals(List.of(DAX), stream.quarantined); // isolated — a confirmed peer proves the session fine
+        assertEquals(0, stream.rebuilds);
+        assertEquals(1, count(EventType.MARKET_QUARANTINED));
+    }
+
+    @Test
+    void subscriptionFailingThriceWithNoWitnessRebuildsTheSession() {
+        supervisor.watch(DAX); // the only market — nothing healthy to prove the session innocent
+        failToTheStrikeCeiling(DAX);
+        supervisor.sweep();
+
+        assertEquals(1, stream.rebuilds); // session-shaped, so never quarantine the last market into silence
+        assertTrue(stream.quarantined.isEmpty());
+        assertEquals(DAX, single(EventType.SUBSCRIPTION_REJECTED).epic()); // the rejected market is named
+    }
+
+    @Test
+    void aWitnessStillInsideItsConfirmWindowMakesTheFailureWait() {
+        supervisor.watch(DAX);
+        supervisor.watch(NASDAQ); // subscribe just started — not yet confirmed, still inside its window
+        failToTheStrikeCeiling(DAX);
+        supervisor.sweep();
+
+        assertEquals(0, stream.rebuilds); // hold: never race a fast rejection into a whole-session rebuild
+        assertTrue(stream.quarantined.isEmpty());
+    }
+
+    @Test
+    void aRefusedUnsubscribeOnQuarantineForcesARebuild() {
+        stream.quarantineRefused = true;
+        supervisor.watch(DAX);
+        supervisor.watch(NASDAQ);
+        supervisor.onSubscribed(NASDAQ, WitnessQuarantine.Kind.PRICE);
+        supervisor.onSubscribed(NASDAQ, WitnessQuarantine.Kind.CHART);
+        failToTheStrikeCeiling(DAX);
+        supervisor.sweep();
+
+        assertEquals(List.of(DAX), stream.quarantined); // the unsubscribe was attempted
+        assertEquals(1, stream.rebuilds); // but refused → double-delivery risk → rebuild
+    }
+
     // --- helpers + fakes --------------------------------------------------------------------
+
+    /** Enqueue a market's subscription rejection up to the strike ceiling — the escalation point
+     * at which the witness rule renders its verdict. */
+    private void failToTheStrikeCeiling(String epic) {
+        for (int strike = 0; strike < Tuning.playbook().subscriptionStrikes(); strike++) {
+            supervisor.onSubscriptionError(epic, 40, "rejected");
+        }
+    }
 
     /** Advance in ~5s steps (under the 10s freeze threshold) and sweep each, so elapsed time
      * accrues as in production rather than tripping the watchdog's process-freeze detector. */
@@ -295,6 +353,8 @@ class SupervisorTest {
     private static final class FakeStream implements StreamControl {
         int rebuilds;
         final List<String> resubscribed = new ArrayList<>();
+        final List<String> quarantined = new ArrayList<>();
+        boolean quarantineRefused; // when true, quarantine() reports a refused unsubscribe
 
         @Override
         public void rebuild() {
@@ -304,6 +364,12 @@ class SupervisorTest {
         @Override
         public void resubscribe(String epic) {
             resubscribed.add(epic);
+        }
+
+        @Override
+        public boolean quarantine(String epic) {
+            quarantined.add(epic);
+            return !quarantineRefused;
         }
     }
 

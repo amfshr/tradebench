@@ -11,6 +11,9 @@ import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.function.DoubleSupplier;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ObjectNode;
+
+import org.jspecify.annotations.Nullable;
 
 import dev.amfshr.tradebench.core.time.Clock;
 import dev.amfshr.tradebench.ig.stream.StreamTransport;
@@ -27,9 +30,10 @@ import dev.amfshr.tradebench.marketdata.store.EventLog;
  * {@code capture-supervisor} thread drains that queue, feeds the cores (so the cores stay
  * single-threaded, lock-free), emits {@link ServiceEvent}s, and runs the time-based checks each
  * sweep — executing remedies through {@link StreamControl}, paced by {@link BackoffPolicy}, until
- * recovery is exhausted ({@code onExhausted}). <b>Slice C step 2a</b>: connection resilience
- * (reconnect classification + stuck-substate escalation + backoff + exhaustion); the staleness
- * watchdog and witness quarantine land in 2b.
+ * recovery is exhausted ({@code onExhausted}). <b>Slice C steps 2a–2b</b>: connection resilience
+ * (reconnect classification, stuck-substate escalation, backoff, exhaustion), the staleness
+ * watchdog (quiet vs dead), and witness quarantine (§3.5 blast radius). The gap/state wiring, the
+ * heartbeat, pacer discovery, and the {@code Main} rewiring follow.
  */
 public final class Supervisor implements StreamTransport.ConnectionListener, Runnable {
 
@@ -46,6 +50,7 @@ public final class Supervisor implements StreamTransport.ConnectionListener, Run
     private final ReconnectClassifier reconnects;
     private final StuckSubstateEscalator stuck;
     private final StalenessWatchdog watchdog;
+    private final WitnessQuarantine witness;
     private final BackoffPolicy backoff;
 
     private final Queue<Observation> observations = new ConcurrentLinkedQueue<>();
@@ -71,6 +76,7 @@ public final class Supervisor implements StreamTransport.ConnectionListener, Run
         this.reconnects = new ReconnectClassifier(tuning);
         this.stuck = new StuckSubstateEscalator(tuning);
         this.watchdog = new StalenessWatchdog(tuning);
+        this.witness = new WitnessQuarantine(tuning);
         this.backoff = new BackoffPolicy(tuning, jitter);
     }
 
@@ -87,16 +93,28 @@ public final class Supervisor implements StreamTransport.ConnectionListener, Run
         observations.add(new Observation.ServerError(code, message, clock.wallInstant()));
     }
 
+    /** A market's PRICE or CHART leg confirmed subscribed (LS callback thread; §3.5 witness). */
+    public void onSubscribed(String epic, WitnessQuarantine.Kind kind) {
+        observations.add(new Observation.Subscribed(epic, kind));
+    }
+
+    /** A market's subscription was rejected (LS callback thread; §3.5 strike). */
+    public void onSubscriptionError(String epic, int code, String message) {
+        observations.add(new Observation.SubscriptionError(epic, code, message,
+                clock.monotonicNanos(), clock.wallInstant()));
+    }
+
     /** Hush the farewell DISCONNECTED before an intentional close (§3.6). */
     public void closing() {
         reconnects.closing();
     }
 
     /** Begin watching a market's freshness — called as it is subscribed (startup or on the sweep
-     * thread during a rebuild; §3.4 per-market staleness). */
+     * thread during a rebuild; §3.4 per-market staleness, §3.5 witness subscribe-start). */
     public void watch(String epic) {
         watched.add(epic);
         watchdog.track(epic, clock.monotonicNanos());
+        witness.onSubscribeStarted(epic, clock.monotonicNanos());
         lastFedTick.put(epic, Long.MIN_VALUE);
         lastFedBar.put(epic, Long.MIN_VALUE);
     }
@@ -139,6 +157,10 @@ public final class Supervisor implements StreamTransport.ConnectionListener, Run
                         .withDetail(MAPPER.createObjectNode()
                                 .put("code", code)
                                 .put("message", message)));
+            } else if (observation instanceof Observation.Subscribed(String epic, WitnessQuarantine.Kind kind)) {
+                witness.onSubscribed(epic, kind);
+            } else if (observation instanceof Observation.SubscriptionError error) {
+                applyJudgment(witness.onSubscriptionError(error.epic(), error.monotonicNanos()), error);
             }
         }
         if (stuck.rebuildDue(clock.monotonicNanos())) {
@@ -185,6 +207,40 @@ public final class Supervisor implements StreamTransport.ConnectionListener, Run
         }
     }
 
+    /** Execute a subscription-failure {@link WitnessQuarantine.Judgment} — the §3.5 blast-radius
+     * decision. Retry re-attempts the failing pair in place; Wait holds for a confirming witness;
+     * Quarantine isolates one market; Rebuild treats the failure as session-shaped. */
+    private void applyJudgment(WitnessQuarantine.Judgment judgment, Observation.SubscriptionError error) {
+        switch (judgment) {
+            case WitnessQuarantine.Judgment.Retry(String epic) -> {
+                witness.onSubscribeStarted(epic, clock.monotonicNanos());
+                stream.resubscribe(epic); // surgical re-attempt of the failing pair
+            }
+            case WitnessQuarantine.Judgment.Wait() -> {
+                // a would-be witness is still inside its confirm window — hold, never race a fast
+                // rejection into a whole-session rebuild (§3.5)
+            }
+            case WitnessQuarantine.Judgment.Quarantine(String epic) -> quarantineMarket(epic, error);
+            case WitnessQuarantine.Judgment.Rebuild() -> rebuild(EventType.SUBSCRIPTION_REJECTED,
+                    error.at(), error.epic(), MAPPER.createObjectNode()
+                            .put("code", error.code())
+                            .put("message", error.message()));
+        }
+    }
+
+    /** Isolate one provably market-shaped failure: record it, stop watching it, and unsubscribe its
+     * pair. A refused unsubscribe double-delivers, so it escalates to a session rebuild (§3.5). */
+    private void quarantineMarket(String epic, Observation.SubscriptionError error) {
+        events.write(ServiceEvent.of(EventType.MARKET_QUARANTINED, error.at()).forEpic(epic)
+                .withDetail(MAPPER.createObjectNode()
+                        .put("code", error.code())
+                        .put("message", error.message())));
+        forget(epic);
+        if (!stream.quarantine(epic)) {
+            applyJudgment(witness.onUnsubscribeRefused(epic), error);
+        }
+    }
+
     private void applyStatus(Observation.Status status) {
         if (reconnects.noteFor(status.status()) == ReconnectClassifier.Note.TRANSPORT_DOWNGRADED) {
             events.write(ServiceEvent.of(EventType.TRANSPORT_DOWNGRADED,
@@ -210,6 +266,15 @@ public final class Supervisor implements StreamTransport.ConnectionListener, Run
 
     /** Execute a session rebuild, paced by backoff; give up loud when the ladder is exhausted. */
     private void rebuild(EventType reason, Instant occurredAt) {
+        rebuild(reason, occurredAt, null, null);
+    }
+
+    /** As above, but scoping the reason event to {@code epic} with {@code detail} — used when one
+     * market's rejection with no healthy witness is what forced the whole-session rebuild (§3.5).
+     * The reason event is written only when the rebuild actually proceeds (never when paced out or
+     * exhausted), so it stays a faithful record of rebuilds that happened. */
+    private void rebuild(EventType reason, Instant occurredAt, @Nullable String epic,
+            @Nullable ObjectNode detail) {
         long now = clock.monotonicNanos();
         if (consecutiveFailures > 0
                 && now - lastRebuildMono < backoff.delayFor(consecutiveFailures).toNanos()) {
@@ -222,8 +287,19 @@ public final class Supervisor implements StreamTransport.ConnectionListener, Run
         }
         consecutiveFailures++;
         lastRebuildMono = now;
-        events.write(ServiceEvent.of(reason, occurredAt));
+        ServiceEvent reasonEvent = ServiceEvent.of(reason, occurredAt);
+        if (epic != null) {
+            reasonEvent = reasonEvent.forEpic(epic);
+        }
+        if (detail != null) {
+            reasonEvent = reasonEvent.withDetail(detail);
+        }
+        events.write(reasonEvent);
         stream.rebuild();
+        witness.onSessionRebuilt(); // strikes reset; quarantine persists (exit is restart-only)
+        for (String survivor : watched) {
+            witness.onSubscribeStarted(survivor, now); // the new session re-subscribes the survivors
+        }
     }
 
     private sealed interface Observation {
@@ -231,6 +307,13 @@ public final class Supervisor implements StreamTransport.ConnectionListener, Run
         }
 
         record ServerError(int code, String message, Instant at) implements Observation {
+        }
+
+        record Subscribed(String epic, WitnessQuarantine.Kind kind) implements Observation {
+        }
+
+        record SubscriptionError(String epic, int code, String message, long monotonicNanos,
+                Instant at) implements Observation {
         }
     }
 }

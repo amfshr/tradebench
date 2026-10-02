@@ -118,8 +118,8 @@ public final class StalenessWatchdog {
             lastSessionVerdict = monotonicNanos;
             sessionGraceNanos = Math.min(sessionGraceNanos * 2,
                     tuning.watchdogGraceCap().toNanos());
-            return List.of(new Remedy(stale.get(0).getKey(), Action.REBUILD,
-                    stale.get(0).getValue()));
+            return List.of(new Remedy(stale.getFirst().getKey(), Action.REBUILD,
+                    stale.getFirst().getValue()));
         }
         sessionGraceNanos = 0;
         List<Remedy> remedies = new ArrayList<>();
