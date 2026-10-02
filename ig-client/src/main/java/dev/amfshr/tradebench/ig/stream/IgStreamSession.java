@@ -28,9 +28,10 @@ public final class IgStreamSession implements AutoCloseable {
     }
 
     /** Bid/ask ticks — account-scoped item (the §1.1 wrong-account trap lives here). */
-    public void subscribePrice(String epic, StreamTransport.StateListener state) {
+    public StreamTransport.SubscriptionHandle subscribePrice(String epic,
+            StreamTransport.StateListener state) {
         String priceItem = "PRICE:" + accountId + ":" + epic;
-        connection.subscribe(
+        return connection.subscribe(
                 new StreamTransport.SubscriptionSpec(MERGE, List.of(priceItem), PRICE_FIELDS,
                         PRICE_ADAPTER),
                 (item, fields) -> {
@@ -45,10 +46,11 @@ public final class IgStreamSession implements AutoCloseable {
     }
 
     /** Sealed 1-minute candles (CONS_END=1); in-progress updates are filtered here. */
-    public void subscribeChart1m(String epic, StreamTransport.StateListener state) {
+    public StreamTransport.SubscriptionHandle subscribeChart1m(String epic,
+            StreamTransport.StateListener state) {
         String chartItem = "CHART:" + epic + ":1MINUTE";
         // No data adapter for CHART — demo/live expose only the default (§2.1).
-        connection.subscribe(
+        return connection.subscribe(
                 new StreamTransport.SubscriptionSpec(MERGE, List.of(chartItem), CHART_FIELDS, null),
                 (item, fields) -> {
                     String consEnd = fields.get("CONS_END");
@@ -67,6 +69,12 @@ public final class IgStreamSession implements AutoCloseable {
                     }
                 },
                 state);
+    }
+
+    /** Drop one market's subscription (its price or chart handle) without disturbing the others —
+     * surgical per-market recovery (§3.5); pairing is the service's policy, so is which half to drop. */
+    public void unsubscribe(StreamTransport.SubscriptionHandle handle) {
+        connection.unsubscribe(handle);
     }
 
     @Override

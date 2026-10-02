@@ -13,10 +13,20 @@ public interface StreamTransport {
 
     interface Connection extends AutoCloseable {
 
-        void subscribe(SubscriptionSpec spec, UpdateListener updates, StateListener state);
+        SubscriptionHandle subscribe(SubscriptionSpec spec, UpdateListener updates,
+                StateListener state);
+
+        /** Drop one subscription without disturbing the connection's others — the handle came
+         * from {@link #subscribe}. Surgical per-market recovery (§3.5) turns on this. */
+        void unsubscribe(SubscriptionHandle handle);
 
         @Override
         void close();
+    }
+
+    /** Opaque handle to one live subscription — returned by {@link Connection#subscribe}, passed
+     * back to {@link Connection#unsubscribe}. */
+    interface SubscriptionHandle {
     }
 
     record SubscriptionSpec(String mode, List<String> items, List<String> fields,

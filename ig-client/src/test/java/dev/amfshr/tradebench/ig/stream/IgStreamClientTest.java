@@ -1,6 +1,7 @@
 package dev.amfshr.tradebench.ig.stream;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -25,6 +26,8 @@ class IgStreamClientTest {
     private FakeLs fake;
     private RecordingEvents events;
     private IgStreamSession streamSession;
+    private StreamTransport.SubscriptionHandle priceHandle;
+    private StreamTransport.SubscriptionHandle chartHandle;
 
     private static final class FakeLs implements StreamTransport {
         String serverAddress;
@@ -32,7 +35,11 @@ class IgStreamClientTest {
         String password;
         final List<SubscriptionSpec> specs = new ArrayList<>();
         final List<UpdateListener> updateListeners = new ArrayList<>();
+        final List<SubscriptionHandle> active = new ArrayList<>();
         boolean closed;
+
+        private record FakeHandle(SubscriptionSpec spec) implements SubscriptionHandle {
+        }
 
         @Override
         public Connection connect(String serverAddress, String user, String password,
@@ -42,10 +49,18 @@ class IgStreamClientTest {
             this.password = password;
             return new Connection() {
                 @Override
-                public void subscribe(SubscriptionSpec spec, UpdateListener updates,
+                public SubscriptionHandle subscribe(SubscriptionSpec spec, UpdateListener updates,
                         StateListener state) {
                     specs.add(spec);
                     updateListeners.add(updates);
+                    SubscriptionHandle handle = new FakeHandle(spec);
+                    active.add(handle);
+                    return handle;
+                }
+
+                @Override
+                public void unsubscribe(SubscriptionHandle handle) {
+                    active.remove(handle);
                 }
 
                 @Override
@@ -84,8 +99,8 @@ class IgStreamClientTest {
         IgSession session = new IgSession(new IgTokens("cstA", "xstA"), "Z6CS3E",
                 "https://demo-apd.marketdatasystems.com", List.of());
         streamSession = new IgStreamClient(fake).connect(session, events, new NoopConnection());
-        streamSession.subscribePrice(DAX, new NoopState());
-        streamSession.subscribeChart1m(DAX, new NoopState());
+        priceHandle = streamSession.subscribePrice(DAX, new NoopState());
+        chartHandle = streamSession.subscribeChart1m(DAX, new NoopState());
     }
 
     @Test
@@ -178,6 +193,14 @@ class IgStreamClientTest {
     void closeClosesTheConnection() {
         streamSession.close();
         assertTrue(fake.closed);
+    }
+
+    @Test
+    void unsubscribeDropsJustThatSubscriptionLeavingTheRestAndTheConnection() {
+        streamSession.unsubscribe(priceHandle);
+
+        assertEquals(List.of(chartHandle), fake.active); // only the price subscription is gone
+        assertFalse(fake.closed);                        // the connection itself stays up
     }
 
     private static final class NoopConnection implements StreamTransport.ConnectionListener {
