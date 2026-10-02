@@ -73,3 +73,31 @@ the growth path — see B2 for ig-client) · **principles** (the design stances)
 module. **ig-client is the first to deepen** (stable + about to be heavily used). Stays *reference*
 (D22) — complements, never duplicates, the Field Manual's narrative teaching; can ride the epic that
 grows each component or a dedicated docs pass.
+
+## B4 — ig-client: a default-assembly convenience (composition-root ergonomics)
+
+**Captured** 2026-10-02 · **Trigger** a 2nd composition root (today only `Main`) · **Relates to** B2, P6, config discipline (G1)
+
+Observation (Alex): the explicit-DI constructors make every caller re-wire the same standard
+collaborators (clock, `Sleeper.SYSTEM`, the `RequestPacer` policy, `LoginRateGate`,
+`JdkHttpTransport`) — so `Main` is the de-facto composition root, and a 2nd service would copy that
+assembly (duplication + drift risk). The DI itself is **right** (keep it — it's what makes the seams
+testable and vendor-swappable); what's missing is a **convenience factory/builder** that wires the
+standard **behavioural** defaults so the common case is one call (**P6** — degrade to the simple
+case), with the full constructors kept for tests/injection. **Guardrail:** the factory wires
+behavioural defaults only (`SystemClock`, `Sleeper.SYSTEM`, the pacer rate policy) — **never
+machine-specific config** (env + credentials stay caller-supplied from env, G1). Not now (one
+consumer); lands with the 2nd.
+
+## B5 — ig-client REST: segregate by category as the surface grows
+
+**Captured** 2026-10-02 · **Trigger** the REST surface + consumers multiply (E6 OMS, backtester, charts) · **Relates to** B2, D22, ISP
+
+Observation (Alex): `IgRestClient` is a concrete class with no interface; IG's REST API is large and
+splits into natural categories (market data, dealing/OMS, accounts, activity/history, watchlists,
+operations). One concrete class is **right today** (YAGNI — one impl, one consumer; T2's "add methods
+as needed, drop unused stubs"). As the surface + consumers grow, split into **category-segregated
+role interfaces** (e.g. `MarketDataApi`, `DealingApi`, `AccountApi`, `HistoryApi`) so each consumer
+depends only on its slice (**ISP**) and can fake it in tests — mirroring the stream side's
+role-named-interface / vendor-named-impl pattern. The value is the *category* split (a single giant
+interface is no better than the god-class); deferred to multi-consumer, not built speculatively.
