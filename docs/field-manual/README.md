@@ -64,8 +64,9 @@ follow that journey and the resilience that keeps it honest.
   schema, Flyway, and the drift gate.
 - [The resilience belt](market-data-service/08-the-resilience-belt.md) — pure decision cores,
   one impure shell: the staleness watchdog (quiet vs dead), the stuck-substate escalator,
-  backoff, reconnect classification, witness quarantine, and gap detection — each with the
-  outage that taught it.
+  backoff, reconnect classification, witness quarantine, and gap detection — then the
+  `Supervisor` that runs them: two threads, pushed events vs pulled freshness, feeding the
+  watchdog only on advance, and the escalation ladder — each with the outage that taught it.
 - [Busses and serving data outward](market-data-service/09-busses-and-serving-data-outward.md)
   — what a message bus buys over a database read, the three consumer shapes,
   persist-then-publish, and replay-then-tail.

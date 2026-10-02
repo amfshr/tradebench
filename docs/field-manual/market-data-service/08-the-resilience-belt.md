@@ -3,7 +3,8 @@
 Part of the Tradebench Field Manual. T5's supervision layer exists because the prototype ran
 long enough, unattended enough, to collect real outages — and every class in
 `market-data-service/.../supervise/` and `.../coverage/` is a specific incident with a
-name. This chapter explains the pattern they share, then tours each core.
+name. This chapter explains the pattern they share, tours each core, then follows the
+`Supervisor` shell (slice C) that composes them into a running service.
 
 ## The jargon
 
@@ -154,16 +155,113 @@ errors** — facts T6's heal consumes. The Sunday 17:00–17:15 outage is pinned
 `theLiveOutageSpecimenIsNamedExactly` asserts bars at 17:02 then 17:15 yield
 `Gap(17:03, 17:14, 12)`.
 
-## What slices B and C wire in
+## The shell: the Supervisor
 
-Slice A built the judgment; it is not yet in the running process. **B** gives verdicts a
-durable voice: `store.EventLog` writing the reliability vocabulary into
-`service_events`, Flyway V2's `bar_gaps` table (with `healed_at` for T6), GapDetector
-feeding it. **C** builds the one impure shell: `Supervisor` (owns the stream lifecycle,
-runs the ~1s cadence, executes remedies via resubscribe / `IgSessionManager.afterFailure`
-rebuilds under `BackoffPolicy`, exits 0 on exhaustion), `HealthProbe` (a `StreamEvents`
-decorator noting arrivals for the watchdog), `Main` rewired so streaming lives under
-supervision, and the heartbeat extended with per-market staleness ages.
+Slice A is pure judgment with nowhere to run; **slice C gives it a process.** `Supervisor`
+is the *one impure shell* the title promises — it owns the threads, the clock readings, the
+event writes, and the calls into the real session. Everything hard to test was pushed into
+the cores; what is left here is composition and timing, and it is deliberately thin.
+
+**Two threads, mirroring the pump.** A Lightstreamer connection calls back on its own
+thread, and chapter 2's rule is absolute: *do only cheap work there*. So `onStatusChange` /
+`onServerError` do exactly two things — read the clocks and drop an `Observation` onto a
+`ConcurrentLinkedQueue` — then return. The real work runs on a dedicated
+`capture-supervisor` thread whose `run()` loop is just `sweep(); sleeper.sleep(interval)` at
+a ~1s cadence. That thread owns the cores, the `watched` set, and the `lastFed*` maps
+*alone* — so the cores stay single-threaded and lock-free, exactly as the pump's consumer
+owns its state. The queue is the one hand-off, and it is the happens-before fence: what the
+callback thread wrote before `add()` is visible to the sweep thread after `poll()`
+(chapter 3).
+
+**Events and ticks do not share a queue.** This surprises people, so state it plainly.
+There are *two* freshness paths, each shaped by its traffic:
+
+- *Control observations* — status changes and server errors — are **pushed** onto the
+  Supervisor's own control queue. They are rare (a handful a day) and each one matters, so
+  none may be dropped.
+- *Tick and bar freshness* is **pulled**, never queued. Ticks arrive ~90/min; the watchdog
+  needs not each one but *the latest arrival time*. So the pump stamps a last-seen monotonic
+  clock (O(1)), and `checkStaleness()` reads it through the `MarketFreshness` seam each
+  sweep. Pushing every tick through the control queue would be pointless traffic for a value
+  the watchdog overwrites ninety times a minute.
+
+That push/pull split is the whole reason the control queue stays tiny and the sweep stays
+cheap — and it is why the ticks you see flowing in chapter 4 never appear in this chapter's
+queue.
+
+**The sweep.** One pass does two things, in order. First it drains the observation queue:
+each `Status` feeds `ReconnectClassifier` and `StuckSubstateEscalator` (emitting a
+`RECONNECT` or `TRANSPORT_DOWNGRADED` event when the classifier returns one); each
+`ServerError` writes an `IG_API_ERROR`. Then the time-based checks — if the escalator says a
+rebuild is due, do it; then `checkStaleness()`. Nothing blocks; the pass is microseconds of
+CPU. **Every event named here is a `ServiceEvent` written through the `EventLog` seam into
+`service_events`** — slice B (merged, PR #11) gave the belt its durable voice, so the reason
+a 3am rebuild happened is a row, not a lost log line; the catalogue is D25's `EventType`, the
+schema lives in `docs/design/observability-and-data-model.md`.
+
+**Feeding the watchdog only on advance.** This is the subtle line. `MarketFreshness`
+returns a *fixed* value — the last arrival — and keeps returning it until a real new tick
+moves it. The watchdog's `onTick` *heals* a staleness episode. So if the sweep fed that
+last-seen value every second, a market that went silent at 14:00 would be "healed" at
+14:00:01, :02, :03 … forever, and a dead feed would read as eternally healthy. The guard is
+one comparison:
+
+```java
+long tick = freshness.lastTickMono(epic);
+if (tick != Long.MIN_VALUE && tick != lastFedTick.get(epic)) {
+    watchdog.onTick(epic, tick);  // only on ADVANCE — a replayed last-seen must not heal
+    lastFedTick.put(epic, tick);
+}
+```
+
+A *new* tick (the value changed) heals; a *frozen* last-seen (same as last sweep) is
+ignored, and silence accrues as it should. The `aRealTickHealsThenRenewedSilence…` test pins
+it: one real tick heals, then renewed quiet trips *exactly one* resubscribe — not zero
+(healed forever), not many (re-fed each round).
+
+The watchdog never reads a clock itself — the sweep hands it two `long`s, `monotonicNanos`
+and `wallMillis`, every round. It measures staleness as *now − last-arrival* on the
+**monotonic** clock (chapter 7: monotonic cannot jump when the wall clock is adjusted). It
+compares the two clocks only to catch the host having slept: if wall advanced far more than
+monotonic, the laptop's lid was shut, every market's "silence" is really that sleep, and the
+round **re-baselines** instead of firing. That is why the tests advance in 5-second steps
+(`advanceAndSweep`) — one jump over the 10s freeze threshold would itself look like a process
+freeze and re-baseline, so production's second-by-second cadence has to be modelled.
+
+**Executing the remedy.** The watchdog returns `Remedy` *values*; the shell does them. A
+`RESUBSCRIBE` writes a `WATCHDOG_STALE` event for that epic and calls
+`stream.resubscribe(epic)` — surgical, one market's PRICE+CHART pair re-subscribed in place
+via the increment-1 handles, the connection and every other market untouched (§3.5). A
+`REBUILD` is the session-shaped remedy and goes through the paced `rebuild()`.
+
+**Pacing, and giving up loud.** `rebuild()` carries the backoff discipline the core only
+describes. It refuses to fire again inside the current backoff window (so a run of sweeps
+cannot become a re-login storm against IG, §3.2); otherwise it bumps `consecutiveFailures`,
+stamps the monotonic time, writes the reason event, and calls `stream.rebuild()`. When the
+ladder is exhausted it writes `FEED_DEAD` and calls `onExhausted` — an injected `Runnable`
+that in `Main` is a clean `exit(0)`: a deliberate stop with a written record, never a crash
+loop. A successful reconnect (a `RECONNECT` from the classifier) resets the ladder
+(`consecutiveFailures = 0`) so the next outage starts fresh.
+
+**The seams, and why they are interfaces.** The shell touches the world through exactly two
+injected ports — `StreamControl` (`rebuild()` / `resubscribe(epic)`) and `MarketFreshness`
+(the pulled last-seen clocks) — plus the `onExhausted` hook and an injected `Clock` and
+`Sleeper`. In production `Main` wires `StreamControl` to `IgSessionManager` +
+`IgStreamSession` and `MarketFreshness` to the pump's `Buffers` (step 6, still landing). In
+tests they are fakes — and *that is the point*. Because every effect is a seam and every
+core takes a `long` clock, `SupervisorTest` drives `sweep()` directly with a `FakeClock` and
+asserts on recorded events and fake rebuild/resubscribe counts: thirteen whole outages —
+replayed reconnect, stuck substate, backoff-then-give-up, host-sleep, open-market silence,
+two-markets-together — run as millisecond unit tests with no real sleeps and no sockets. The
+same seam is the hook for the recorded-fixture replay tester (the simulator pillar): a
+`MarketFreshness` fed from a *captured* session, driving the real `Supervisor` against
+recorded silence.
+
+**Still landing on `e1-t5c-supervisor-shell`.** Step 2a (connection resilience) and 2b's
+watchdog wiring are in; the branch still owes witness-quarantine wiring (`forget()` on a
+quarantined market), the gap and `market_state_change` events, the heartbeat writing
+`capture_status`, pacer discovery, and the `Main` rewiring that swaps the test fakes for the
+real session and buffers. This chapter grows with them.
 
 ## The scars, in one line each
 
