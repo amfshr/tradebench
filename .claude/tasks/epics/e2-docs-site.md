@@ -107,7 +107,7 @@ The last content/structure pass before E2 closes. Four strands, all landed (Alex
 rename ruled (D21). Note: chapter *prose* was left as-is (already tight) beyond the rename and
 scar leads — a deeper line-edit can be a future pass if wanted.
 
-## T5 — Ticket-detail pages 🔶
+## T5 — Ticket-detail pages ✅ (PR #8, 2026-09-30)
 
 **Type** build · **Branch** `e2-t5-ticket-views` · **Started** 2026-09-30 · **Blocked by** —
 

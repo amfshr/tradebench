@@ -286,10 +286,11 @@ same seam is the hook for the recorded-fixture replay tester (the simulator pill
 `MarketFreshness` fed from a *captured* session, driving the real `Supervisor` against
 recorded silence.
 
-**Landed on `e1-t5c-supervisor-shell`.** Connection resilience, the watchdog, witness quarantine,
+**Landed (PR #12, merged 2026-10-04).** Connection resilience, the watchdog, witness quarantine,
 the gap and `market_state_change` events, the `Main` rewiring (the belt drives the real session),
-the heartbeat writing `capture_status` through `HealthProbe`, and pacer discovery are all in; the
-slice is complete pending its review and PR. Chapter 10 carries the policy and the rulings.
+the heartbeat writing `capture_status` through `HealthProbe`, and pacer discovery are all on
+`main`; the whole-slice doctrine review's findings were fixed before the merge. Chapter 10 carries
+the policy and the rulings.
 
 ## The scars, in one line each
 

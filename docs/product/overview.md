@@ -106,7 +106,7 @@ Phase 1 is a **thin end-to-end spine** (PRD §11): every pillar touched shallowl
 real — and its first vertebra is deliberately the data-collection service, cloud-deployed and
 streaming 24/7, so that capture is already weeks deep by the time the first backtest runs.
 
-What exists now (Epic 1, tickets T1–T4 merged; T5 in progress):
+What exists now (Epic 1, tickets T1–T5 merged):
 
 - **`ig-client`** — a deliberately dumb IG broker library: session management with correct
   login pacing, typed REST (markets, prices, allowances) with exact decimal handling, and
@@ -118,10 +118,11 @@ What exists now (Epic 1, tickets T1–T4 merged; T5 in progress):
 - **The database as a product** — `market_data` is not private state; it is the platform's
   published read surface (D17), with user and source stamped on every row and its schema
   pinned by a CI drift gate.
-- **The resilience belt** (T5, in progress) — a staleness watchdog that trusts data freshness
-  over connection status, reconnect classification (did we lose data or not?), backoff with
-  a floor, quarantine judgment for multi-market blast radius, and gap detection whose test
-  fixture is a real captured outage.
+- **The resilience belt** (T5) — a staleness watchdog that trusts data freshness over
+  connection status, reconnect classification (did we lose data or not?), backoff with a floor
+  and a ten-minute recovery budget, quarantine judgment for multi-market blast radius, gap
+  detection whose test fixture is a real captured outage, and a heartbeat that publishes each
+  market's capture status for the console.
 
 Next along the spine: the daily heal → Parquet archive → digest email cycle (T6), cloud
 deploy (T7), and a week-long shadow-diff against the Python prototype as the epic's

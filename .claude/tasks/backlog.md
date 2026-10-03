@@ -58,7 +58,7 @@ multi-user era / E8 — not re-litigated here; E9 is Alex's stated trigger.)
 **Isolation findings (2026-10-03 — design intent, so it isn't lost):**
 - **Process-per-job is the isolation boundary.** The service exits the JVM on fatal conditions —
   `System.exit(1)` on pump death today (`Main`); the ruled exhaustion exit via the Supervisor's
-  `onExhausted` once slice C rewires `Main`. Co-hosting jobs as threads in one JVM would let one job's exit
+  `onExhausted` (slice C rewired `Main` — PR #12, 2026-10-04). Co-hosting jobs as threads in one JVM would let one job's exit
   kill the others — so **B1 = one process per job, never threads-in-one-JVM**; that is what makes "one
   connection must not break another" (Alex's paramount requirement) hold. *Sharpens the "run N" picture
   above — N processes, not N threads; the job manager becomes a process launcher. Alex confirms when B1 is cut.*
@@ -167,7 +167,7 @@ cleanup (drop `Chapter N —` from H1s, or renumber them).
 
 ## B7 — AI operating framework (E0): legible board state, a "how we build" (SDLC) guide on the docs site, and a retrospective practice
 
-**Captured** 2026-10-03 · **Likely home** E0 — extend it with tickets, or close it and open a successor (Alex's call; framework §5 records new agents/skills on the E0 family, §6 already schedules a contract review "when E1 ships … and at every epic boundary") + a Build-track docs pass (docs-only → main, G4) · **Trigger** Alex (2026-10-03): "after this epic" — a retrospective session once E1 closes (nearest checkpoint: E1-T5's close; slice C steps 4–5 remain) · **Relates to** PRD §9 (AI-workable NFR) · E0 (T1 the contract, T2 agents v1, T3 skills v1, T5 `board-steward` — all done; T4 guardrail enforcement — queued) · `.claude/ai-framework.md` (§1 roles, §2 G1–G8, §3 session protocols, §4 directory standard, §5 agents & skills inventory, §6 evolution) · `.claude/task-workflow.md` · `docs/reference/board-format.md` · D10, D13 (the framework's own decisions) · D20 (lean template; new fields proposed, never invented) · D21/D22 (docs split: Build track = Field Manual + Architecture + Decisions; Use track = Product + User Guide + DSL reference) · D26 (Field Manual parts) · E1 plan T5 § (slices A/B/C + numbered steps — the worked precedent) · E1-T9 (born from a step review)
+**Captured** 2026-10-03 · **Likely home** E0 — extend it with tickets, or close it and open a successor (Alex's call; framework §5 records new agents/skills on the E0 family, §6 already schedules a contract review "when E1 ships … and at every epic boundary") + a Build-track docs pass (docs-only → main, G4) · **Trigger** Alex (2026-10-03): "after this epic" — a retrospective session once E1 closes (nearest checkpoint: E1-T5's close — reached 2026-10-04, PR #12) · **Relates to** PRD §9 (AI-workable NFR) · E0 (T1 the contract, T2 agents v1, T3 skills v1, T5 `board-steward` — all done; T4 guardrail enforcement — queued) · `.claude/ai-framework.md` (§1 roles, §2 G1–G8, §3 session protocols, §4 directory standard, §5 agents & skills inventory, §6 evolution) · `.claude/task-workflow.md` · `docs/reference/board-format.md` · D10, D13 (the framework's own decisions) · D20 (lean template; new fields proposed, never invented) · D21/D22 (docs split: Build track = Field Manual + Architecture + Decisions; Use track = Product + User Guide + DSL reference) · D26 (Field Manual parts) · E1 plan T5 § (slices A/B/C + numbered steps — the worked precedent) · E1-T9 (born from a step review)
 
 **The problem, as a reader of the board and the docs site (Alex, 2026-10-03):** "as a reader I don't
 understand why it's open or what its tickets were, and there is no user guide or SDLC section in the
@@ -195,7 +195,7 @@ track (Dad, brother) — not the home for this.
   nod, D13 → branch → build in **slices and numbered steps**, each staged for Alex's review →
   `doctrine-reviewer` → PR restating the DoD, Alex merges) → close-out (board, done history, menu).
   Worked precedent: E1-T5 — slices A/B/C, numbered steps in the commit log (`1/6`, `2a/6`,
-  `2b-i/6`, `2b-ii/6`, `3/6`, `6/6`; 4–5 pending), and a step-6 review that re-ruled exhaustion
+  `2b-i/6`, `2b-ii/6`, `3/6`, `4/6`, `5/6`, `6/6` — all landed, PR #12), and a step-6 review that re-ruled exhaustion
   and ticketed E1-T9.
 - **Board hygiene for E0:** make its state legible — why it is open, what its tickets were and are
   (a plan file with metadata lines + plan bodies, per `board-format.md`), and **close or extend it

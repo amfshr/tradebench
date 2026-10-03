@@ -100,7 +100,9 @@ Spring waits for T6 · JSONL back-import deferred.
 **In-ticket decisions:** none — tick-lake *format* (PRD Q#4's open half) explicitly does NOT
 block: Postgres rows now, Parquet export is T6's job, revisit at scale.
 
-## T5 — Resilience belt (the long tail — budget accordingly)
+## T5 — Resilience belt ✅ (slices A + B PR #11, 2026-10-01 · slice C PR #12, 2026-10-04 — complete)
+
+**Type** build · **Branch** `e1-t5-resilience` (slices A + B; slice C on `e1-t5c-supervisor-shell`) · **Started** 2026-09-28 · **Blocked by** —
 
 **Goal:** the service self-heals and self-reports; quiet is healthy, silence is an alarm.
 **Pieces** (all pure logic on injectable clocks, no wall-clock reads):
@@ -175,6 +177,28 @@ reload.
 discovered at service startup from `GET /operations/application` (minus headroom) or
 config-injected — field data shows demo keys enforce 10/min, not the published 30; never
 assume the constant.
+**Slice C — ✅ landed (PR #12 from `e1-t5c-supervisor-shell`, merged by Alex 2026-10-04 — completes T5):**
+the `Supervisor` shell composing the slice-A cores on a dedicated 1s sweep thread; `IgStreamControl` as
+the real `StreamControl` (boot + rebuild on one path, per-item subscribe/unsubscribe, generation-gated
+callbacks, bounded boot); `HealthProbe` publishing `capture_status` each 60s heartbeat; gaps + market
+state onto the `EventLog` (the capture sink is market-data-only); post-login pacer discovery
+(`RequestPacer.CONSERVATIVE_START` 10/min → min(account, application) − 5 via
+`GET /operations/application`); `java-test-fixtures` (`FakeStreamTransport`); Field Manual ch. 10 "The
+failure playbook" + ch. 08 brought true; component page refreshed. DoD scenarios on fakes — dead socket
+(`SupervisorTest`, `IgStreamControlTest`), silent-while-connected (`SupervisorTest`,
+`StalenessWatchdogTest`), host suspend (`SupervisorTest.hostSleep…` ×2, `StalenessWatchdogTest`) — each
+mutation-verified. 89 mutations killed across steps 2a–6 + the whole-slice review (step 6: 36 of 37 —
+the survivor exposed redundant code, removed); doctrine reviews per-step (3–6) + whole-slice
+pass-with-findings F1–F10, fixed on-branch except F9 (a declared residual). Tests at merge: ig-client 92
+· market-data-service 143 · docs site 63 · 0 failures. The 2026-10-03 rulings above are logged as **D27**.
+**Residuals (recorded 2026-10-04 — not tickets; Alex decides whether to ticket):**
+1. The gated demo smoke (`IG_SMOKE=1 ./gradlew :ig-client:demoSmoke`) has not run, so the
+   `application-allowance.json` wire fixture is *authored*, not captured — run it and re-golden before
+   T6's heal budget leans on pacer discovery. A skew fails safe today: refused at the boundary, 10/min kept.
+2. No composed-loop test — `Supervisor` ↔ `IgStreamControl` ↔ `FakeStreamTransport` through the single
+   `bind()`. Each layer is tested; the composition is not.
+3. No shell-level suspend → wake → `WILL-RETRY` → rebuild scenario — the rebaseline path is pinned only
+   in slice A's `StalenessWatchdogTest`.
 
 ## T6 — Daily completeness + archive + digest (D6)
 
@@ -237,9 +261,9 @@ ruling on making Tradebench the primary capture — recorded in `docs/decisions.
 **Note:** deltas are expected (clock edges, reconnect windows); the bar is *explained*, not
 *zero*.
 
-## T9 — Sink blip resilience: hold-and-retry for the capture sink ⬜ (ticketed 2026-10-03; after T5 slice C)
+## T9 — Sink blip resilience: hold-and-retry for the capture sink ⬜ (ticketed 2026-10-03; unblocked — T5 landed 2026-10-04; sequence vs T6: TBD, Alex)
 
-**Type** build · **Branch** `—` · **Started** — · **Blocked by** T5
+**Type** build · **Branch** `—` · **Started** — · **Blocked by** —
 
 **Goal:** a Postgres blip during a tick/bar write costs *nothing* the queues were already holding —
 the sink holds the data, reconnects, retries, and says so loudly; it stops (and the process exits 1
@@ -284,7 +308,7 @@ belt; both recorded in ch. 10, "The rulings behind it").
 
 **Not in scope:** the Tier-2 best-effort policy; the belt; the schema.
 
-**Sequencing:** after T5 slice C merges (slice C is in flight — steps 4 and 5 remain).
+**Sequencing:** T5 slice C merged (PR #12, 2026-10-04) — unblocked; its slot vs T6 is Alex's call (below).
 **Sequence vs T6 (the EOD heal): (TBD, Alex)** — recorded here, not decided.
 
 **In-ticket decisions:** the retry budget (approach item 4) — Alex rules; the default proposal is

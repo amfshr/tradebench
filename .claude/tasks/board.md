@@ -6,11 +6,11 @@
 > Tickets carry a DoD; ideation that hasn't earned a ticket lives in `backlog.md` (this dir) —
 > the pre-ticket staging area — and enduring design lives in `docs/`, not here.
 
-**Guide (refreshed 2026-09-30):** **E2 complete** (docs site live + licensed, D23). **E1 active** —
-T1–T4 merged (live DAX → Postgres); T5 (resilience belt) **slices A + B merged (PR #11)** — the
-pure cores + the observability store (`service_events` v2, `bar_gaps`, `capture_status`) now on
-main; **slice C (the Supervisor shell) is next, on branch `e1-t5c-supervisor-shell`** (design ruled
-in the E1 plan). **New: E9
+**Guide (refreshed 2026-10-04):** **E2 complete** (docs site live + licensed, D23). **E1 active** —
+**T1–T5 merged** (live DAX → Postgres; the resilience belt complete — slices A + B **PR #11**, slice C
+the Supervisor shell **PR #12**, merged 2026-10-04; its operating contract logged as **D27**). Next
+in E1: **T6** (EOD heal · archive · digest) and **T9** (sink hold-and-retry) — their order is Alex's
+call; T5's three residuals are recorded in the E1 plan (T5 §), unticketed. **E9
 🎛️ Operator console** born from the 2026-09-30 operability design session (D24) — the deployed
 collector observed & its data retrieved *without SSH* (read-model SPA + thin service over the
 `market_data` data product + R2, edge-gated by Cloudflare Tunnel + Access; hosting = a small
@@ -21,20 +21,20 @@ split, the per-view SQL, and the streaming-schedule (Q1 resolved: generous windo
 calendar). Field Manual read: **done.** E0 lacks enforcement (T4). E3 language semantics ruled
 (D7–D9), design-gate tickets plannable. E4–E8 name the horizon.
 
-**Next-session menu (refreshed 2026-10-04):** ① **E1-T5 slice C — the Supervisor shell** (**PR #12
-open**, branch `e1-t5c-supervisor-shell`; Alex merges, then the T5 close-out): the Supervisor composing the five
-slice-A cores on a control thread, HealthProbe/heartbeat → `capture_status`, **per-item
-subscribe/unsubscribe** (surgical recovery, §3.5), gap persistence + `market_state_change` via
-`EventLog`, `Main` rewiring, pacer discovery. Design ruled in the E1 plan (T5 §). **Follow-up
-ticketed 2026-10-03 → E1-T9 sink hold-and-retry** (Tier-1 product-data writes: hold · reconnect ·
-retry · loud · bounded; after slice C merges; the budget and the sequence vs T6 are Alex's calls —
-E1 plan T9 §). ② **E9 build
-tickets** — T2 read-model service, T3 SPA, T4 Cloudflare edge (cut from the E9-T1 spec; can run
-after E1-T5). Optional: E0-T4 guardrail enforcement; formal E1-T7 host ruling. Backlog: B1
-stream-jobs (multi-user) — reviewed 2026-10-03 against the code (`backlog.md`): three gaps
-(per-service advisory lock → per-job · hardcoded `default-user` → `TRADEBENCH_USER` + `users` rows ·
-env file + unit per job → E1-T7), one process per job, trigger = E9 gains save-credentials +
-save-jobs (Alex).
+**Next-session menu (refreshed 2026-10-04, post E1-T5 close-out):** **E1-T5 is ✅** (PR #12 merged
+2026-10-04 — T5 complete; three residuals recorded in the E1 plan T5 §, unticketed — Alex decides). ①
+**E1's next build ticket — Alex's pick, sequence undecided:** **E1-T9 sink hold-and-retry** (Tier-1
+product-data writes: hold · reconnect · retry · loud · bounded; unblocked; its retry budget is a
+`Decision: (TBD)`, default proposal 10 min — E1 plan T9 §) **or E1-T6 daily completeness + archive +
+digest** (D6; T5 residual 1 — run the gated demo smoke and re-golden `application-allowance.json` —
+comes first if T6's heal budget leans on pacer discovery). ② **E9 build tickets** — T2 read-model
+service, T3 SPA, T4 Cloudflare edge (cut from the E9-T1 spec; E1-T5 is on main, so runnable).
+Optional: E0-T4 guardrail enforcement; formal E1-T7 host ruling; a **B7 retrospective** (its stated
+checkpoint — E1-T5's close — is reached; Alex's call). Backlog: B1 stream-jobs (multi-user) —
+reviewed 2026-10-03 against the code (`backlog.md`): three gaps (per-service advisory lock → per-job ·
+hardcoded `default-user` → `TRADEBENCH_USER` + `users` rows · env file + unit per job → E1-T7), one
+process per job, trigger = E9 gains save-credentials + save-jobs (Alex); B7 AI-framework (legible E0,
+a "how we build" guide, a retrospective practice).
 
 ---
 
@@ -81,11 +81,11 @@ CHART:1MINUTE sealed bars only) · engineering playbook §1–§4.
 | T2 | **`ig-client`: session + REST core behind the provider port.** REST login/refresh (demo + live envs), typed config (no code defaults; secrets via env beside config — never committed), request pacing guard (IG session rate limits are real — playbook + engineering playbook §4.6), typed errors. **DoD:** unit suite on fakes; one integration-gated smoke that logs into demo. | ✅ 2026-09-27 (PR #2; smoke run clean vs live demo 2026-09-28 — switch path unexercised, profile prefers the configured account) |
 | T3 | **Streaming: ticks + sealed 1m bars.** Lightstreamer Java SDK: PRICE (ticks) + CHART:1MINUTE (accept `CONS_END=1` only) per market; cheap-work-only on callback threads, everything queued to one consumer; per-market subscriptions (identity-vs-addressing per triage D16). **DoD:** a live demo session captures a full DAX day of ticks + 1m bars locally. | ✅ 2026-09-28 (PR #4; Alex's ruling: Sunday's live capture — 500+ ticks, 4 sealed bars, 0 dropped/malformed — suffices; the multi-day local soak moves to T7's pre-cloud runway) |
 | T4 | **Persistence.** Flyway from birth: `instruments`, `ticks`, `bars_1m` (user + source columns from day one), `service_events`, `job_runs`; least-privilege roles (triage D22); testcontainers suite; generated schema render + CI drift gate (triage D23). **DoD:** captured data lands via the real write path; drift gate green. | ✅ 2026-09-28 (PR #5; live DAX → Postgres via the real path, all dimension-attributed; drift gate green) |
-| T5 | **Resilience belt.** Reconnect stack; staleness watchdog on injectable clocks — should-be-ticking derived from the stream itself, monotonic/awake vs wall time split, escalation ladder (triage D25); gap detection writing gap rows; structured `service_events` + quiet-is-healthy warnings stream. **DoD:** scripted failure scenarios (dead socket, silent-while-connected, host suspend) pass on fakes — each test mutation-verified. | 🔶 (nod ruled 2026-09-28; live outage 17:00–17:15 is the motivating specimen. **Slices A + B ✅ merged (PR #11)** — 7 pure cores (23 mutations) + the observability store (`service_events` v2 / `bar_gaps` / `capture_status`, 8 mutations); slice C (Supervisor shell) **PR #12 open** — whole-slice doctrine review passed, findings fixed on-branch; Alex merges, then the T5 close-out) |
+| T5 | **Resilience belt.** Reconnect stack; staleness watchdog on injectable clocks — should-be-ticking derived from the stream itself, monotonic/awake vs wall time split, escalation ladder (triage D25); gap detection writing gap rows; structured `service_events` + quiet-is-healthy warnings stream. **DoD:** scripted failure scenarios (dead socket, silent-while-connected, host suspend) pass on fakes — each test mutation-verified. | ✅ 2026-10-04 (nod ruled 2026-09-28, the 17:00–17:15 live outage its specimen. **Slices A + B merged PR #11** (2026-10-01) — 7 pure cores (23 mutations) + the observability store (`service_events` v2 / `bar_gaps` / `capture_status`, 8 mutations); **slice C merged PR #12** (2026-10-04, completes T5) — the `Supervisor` shell, `IgStreamControl`, `HealthProbe` → `capture_status`, gaps + market state onto the `EventLog`, post-login pacer discovery; DoD scenarios (dead socket · silent-while-connected · host suspend) pass on fakes, each mutation-verified; 89 mutations killed across the slice-C steps + whole-slice review; doctrine reviews per-step + whole-slice F1–F10 fixed on-branch, F9 a declared residual; rulings → **D27**; 3 residuals recorded, E1 plan T5 §) |
 | T6 | **Daily completeness + archive + digest (decisions D6).** `@Scheduled` end-of-day job: 1m-bar REST heal (window-clipped, paced, allowance-aware; outcomes classified healed / tickless-at-source / failed — ticks are stream-only, the job never claims otherwise), day's Parquet export to object storage (pick R2 vs B2 in-ticket), digest email (counts, gaps, heal outcomes, archive path). Audited `job_runs` row every run, clean or not. **DoD:** staging produces archive + digest end-to-end; a suppressed digest is detectable (absence = alarm documented in the runbook). | ⬜ |
 | T7 | **Deploy.** Dockerfiles + compose; staging + prod configs with separate DBs (promote by release tag); cloud host selection (revisit the phase-1 doc's Lightsail analysis against the ~£20/mo envelope); secrets injection; deploy runbook. **DoD:** staging runs 24/7 for 3 consecutive days unattended with daily digests arriving. | ⬜ |
 | T8 | **Acceptance: shadow-diff week vs the Python appliance.** Both systems capture the same DAX sessions for a week; diff tick coverage, 1m bars, and own-aggregated 10m vs the prototype's; write the report; rule on making Tradebench the primary capture. **DoD:** the diff report with every delta explained + Alex's ruling recorded in `docs/decisions.md`. | ⬜ |
-| T9 | **Sink blip resilience — hold-and-retry for the capture sink (Tier-1 product-data writes).** Today a failed tick/bar write (`PersistenceException` from `PostgresStore`) stops the pump and `Main`'s heartbeat exits 1 within ≤60s — fail-closed but crude: a 5s Postgres blip costs ~1–2 min of ticks (never healable) + a bar gap (T6 heals), while bars sat queued (ack-after-apply) and the tick queue held 100 000. Instead: **hold** (bars stay queued; the pending ≤500-tick batch survives the reconnect) → `PostgresStore` **re-acquires** its pooled connection + re-prepares → the pump **retries with backoff**; **loud** (sink-failure counter in the heartbeat line beside `obsFailures`/`eventWriteFailures`; `SINK_FAILURE`/`DB_ERROR` event on recovery — D25 catalogue; the dead-man alarm fires meanwhile, correctly); **bounded** (retry budget → stop + exit(1) as today — **Decision: (TBD)**: default proposal 10 min, symmetry with `Tuning.giveUpAfter`; longer, or tied to queue pressure, is reasonable while the queues hold); pump death → **immediate** exit(1), not heartbeat latency. Refines — never removes — the fail-closed contract (`PumpTest.sinkFailureStopsThePumpKeepsTheBarAndKeepsTheCause`). Not in scope: Tier-2 policy, the belt, the schema. P8 · P9 · Field Manual ch. 10 "When the database fails". **DoD:** a Postgres restart of ≤ budget length loses zero bars and zero ticks; the heartbeat line shows the sink-failure count; a `SINK_FAILURE`/`DB_ERROR` event records the episode on recovery; past the budget the pump stops and the process exits 1 immediately; every behavioural test mutation-verified — budget boundary exact, failure-mode tests on budget expiry; ch. 10's Tier-1 row updated from "today: stop and restart" to the landed policy. | ⬜ (ticketed 2026-10-03 — Alex's ruling at the slice C step-6 review: "ticket the tier-1 hold and retry"; **after T5 slice C merges**; **Sequence vs T6: (TBD, Alex)**; plan: E1 plan T9 §) |
+| T9 | **Sink blip resilience — hold-and-retry for the capture sink (Tier-1 product-data writes).** Today a failed tick/bar write (`PersistenceException` from `PostgresStore`) stops the pump and `Main`'s heartbeat exits 1 within ≤60s — fail-closed but crude: a 5s Postgres blip costs ~1–2 min of ticks (never healable) + a bar gap (T6 heals), while bars sat queued (ack-after-apply) and the tick queue held 100 000. Instead: **hold** (bars stay queued; the pending ≤500-tick batch survives the reconnect) → `PostgresStore` **re-acquires** its pooled connection + re-prepares → the pump **retries with backoff**; **loud** (sink-failure counter in the heartbeat line beside `obsFailures`/`eventWriteFailures`; `SINK_FAILURE`/`DB_ERROR` event on recovery — D25 catalogue; the dead-man alarm fires meanwhile, correctly); **bounded** (retry budget → stop + exit(1) as today — **Decision: (TBD)**: default proposal 10 min, symmetry with `Tuning.giveUpAfter`; longer, or tied to queue pressure, is reasonable while the queues hold); pump death → **immediate** exit(1), not heartbeat latency. Refines — never removes — the fail-closed contract (`PumpTest.sinkFailureStopsThePumpKeepsTheBarAndKeepsTheCause`). Not in scope: Tier-2 policy, the belt, the schema. P8 · P9 · Field Manual ch. 10 "When the database fails". **DoD:** a Postgres restart of ≤ budget length loses zero bars and zero ticks; the heartbeat line shows the sink-failure count; a `SINK_FAILURE`/`DB_ERROR` event records the episode on recovery; past the budget the pump stops and the process exits 1 immediately; every behavioural test mutation-verified — budget boundary exact, failure-mode tests on budget expiry; ch. 10's Tier-1 row updated from "today: stop and restart" to the landed policy. | ⬜ (ticketed 2026-10-03 — Alex's ruling at the slice C step-6 review: "ticket the tier-1 hold and retry"; **unblocked — T5 merged 2026-10-04 (PR #12)**; **Sequence vs T6: (TBD, Alex)**; plan: E1 plan T9 §) |
 
 ## E2 🧰 The docs site (`web/docs` → docs.tradebench) — ✅ COMPLETE (T1–T6 merged; live at docs.tradebench.amfshr.dev)
 
@@ -169,12 +169,35 @@ captured/imported data to chew on (E1 + first Databento decisions).
 
 ## Done history
 
+- **2026-10-04 — E1-T5 slice C merged (PR #12) — T5 Resilience belt complete** ✅: the `Supervisor`
+  shell composing the slice-A cores on a dedicated 1s sweep thread; `IgStreamControl` as the real
+  `StreamControl` (boot + rebuild on one path, per-item subscribe/unsubscribe, generation-gated
+  callbacks, bounded boot); `HealthProbe` publishing `capture_status` each 60s heartbeat; gaps +
+  market state onto the `EventLog` (the capture sink stays market-data-only); post-login pacer
+  discovery (`RequestPacer.CONSERVATIVE_START` 10/min → min(account, application) − 5 headroom via
+  `GET /operations/application`); `java-test-fixtures` (`FakeStreamTransport`); Field Manual ch. 10
+  "The failure playbook" + ch. 08 brought true; component page refreshed. DoD met on fakes — dead
+  socket (`SupervisorTest`, `IgStreamControlTest`), silent-while-connected (`SupervisorTest`,
+  `StalenessWatchdogTest`), host suspend (`SupervisorTest.hostSleep…` ×2, `StalenessWatchdogTest`)
+  — each mutation-verified. Tests at merge: ig-client 92 · market-data-service 143 · docs site 63 ·
+  0 failures; 89 mutations killed (steps 2a 5 · 2b-i 4 · 2b-ii 4 · 3 3 · 4 17 · 5 9 · 6 36 of 37 — the
+  survivor exposed redundant code, removed · whole-slice review 11). Doctrine reviews per-step (3, 4,
+  5, 6) + whole-slice pass-with-findings F1–F10, all fixed on-branch before merge except F9 (a
+  declared residual). Rulings (Alex, 2026-10-03) logged as **D27**: DB-write tiers (Tier 1 product
+  data fail-closed · Tier 2 observability best-effort-but-loud · Tier 3 decisions never touch the DB);
+  exhaustion = time budget `Tuning.giveUpAfter` 10 min → `FEED_DEAD{reason}` → orderly `exit(1)`; one
+  streaming rule `ReconnectClassifier.isStreaming`; pacer headroom min(account, application) − 5 (E1
+  plan T5 §). Three residuals recorded in the E1 plan T5 § — not ticketed, Alex decides: the gated
+  demo smoke unrun (`application-allowance.json` authored, not captured), no composed-loop test, no
+  shell-level suspend → wake → `WILL-RETRY` → rebuild scenario. Follow-up already ticketed: **E1-T9**
+  sink hold-and-retry (sequence vs T6: Alex). Evidence: PR #12 (merged by Alex, commit `8872075`).
+
 - **2026-10-01 — E1-T5 slices A + B merged (PR #11)** ✅: the resilience belt's foundation on main —
   slice A's 7 pure decision cores (`supervise/` + `coverage/`, 23 mutations) and slice B's
   observability store (migration V2: `service_events` v2 / `bar_gaps` / `capture_status`; the
   `marketdata.events` vocabulary; the `EventLog`/`GapStore`/`StatusStore` seam over
   `PostgresObservabilityStore`; 8 mutations; doctrine review pass-with-findings, F1–F4 fixed). Slice
-  C (the Supervisor shell) continues on branch `e1-t5c-supervisor-shell`, design ruled (E1 plan T5 §).
+  C (the Supervisor shell) followed on `e1-t5c-supervisor-shell` → PR #12, merged 2026-10-04 (entry above).
 
 - **2026-09-30 — Operability design session + E9-T1** ✅: two same-day design sessions on the
   deployed collector's operability. (1) *Architecture/access* → **D24** + record
@@ -193,7 +216,7 @@ captured/imported data to chew on (E1 + first Databento decisions).
   `flattenLeaves` powers the page-turn); **architecture** split into a folder with a
   `components/<module>` reference (core, ig-client, market-data-service); **D22** (Field Manual
   teaches / Architecture specs, extends D21). 62 tests, tree logic mutation-verified; docs
-  link-integrity clean after the move. Evidence: PR #10 (pending). **E2 is complete: T1–T6.**
+  link-integrity clean after the move. Evidence: PR #10 (merged 2026-09-30). **E2 is complete: T1–T6.**
 
 - **2026-09-30 — E2-T4 Docs polish & structure** ✅: the final docs sweep — **D21** (docs
   split by audience: book → **Field Manual** / Build track, reserved User Guide / Use track);
