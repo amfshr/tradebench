@@ -32,6 +32,10 @@ import dev.amfshr.tradebench.marketdata.store.SingleInstanceLock;
 import org.jspecify.annotations.Nullable;
 import dev.amfshr.tradebench.marketdata.store.JsonlStore;
 import dev.amfshr.tradebench.marketdata.store.CaptureStore;
+import dev.amfshr.tradebench.marketdata.store.EventLog;
+import dev.amfshr.tradebench.marketdata.store.GapStore;
+import dev.amfshr.tradebench.marketdata.store.PostgresObservabilityStore;
+import dev.amfshr.tradebench.marketdata.coverage.GapDetector;
 import dev.amfshr.tradebench.marketdata.ingest.Pump;
 import dev.amfshr.tradebench.marketdata.ingest.Buffers;
 
@@ -65,6 +69,8 @@ public final class Main {
         Database database = null;
         SingleInstanceLock lock = null;
         CaptureStore sink;
+        EventLog eventLog;
+        GapStore gaps;
         switch (sinkKind) {
             case "jsonl" -> {
                 Path captureDir = Path.of(required(env, "TRADEBENCH_CAPTURE_DIR"));
@@ -76,14 +82,23 @@ public final class Main {
                         new JsonlStore(Files.newBufferedWriter(file, StandardCharsets.UTF_8));
                 jsonl.writeMeta(USER, source, instance, epics, started);
                 sink = jsonl;
-                log(instance, "capturing to " + file.toAbsolutePath());
+                // jsonl is market-data-only (decision #1): gaps and service events have no home
+                // here, so they are discarded — the db sink is the one that persists observability.
+                eventLog = event -> { };
+                gaps = gap -> { };
+                log(instance, "capturing to " + file.toAbsolutePath()
+                        + " (jsonl: gaps + service events are not persisted)");
             }
             case "db" -> {
                 String dbUrl = required(env, "TRADEBENCH_DB_URL");
                 database = Database.connect(dbUrl, required(env, "TRADEBENCH_DB_USER"),
                         required(env, "TRADEBENCH_DB_PASSWORD"));
                 lock = SingleInstanceLock.acquire(database);
-                sink = new PostgresStore(database.dataSource(), USER, source, instance);
+                sink = new PostgresStore(database.dataSource(), USER, source);
+                PostgresObservabilityStore observability = new PostgresObservabilityStore(
+                        database.dataSource(), USER, source, instance);
+                eventLog = observability;
+                gaps = observability;
                 log(instance, "capturing to " + dbUrl + " (migrated; advisory lock held)");
             }
             default -> throw new IgFatalConfigException(
@@ -101,7 +116,7 @@ public final class Main {
                 + session.lightstreamerEndpoint());
 
         Buffers queues = new Buffers(Buffers.DEFAULT_TICK_CAPACITY);
-        Pump pump = new Pump(queues, sink, Sleeper.SYSTEM);
+        Pump pump = new Pump(queues, sink, new GapDetector(), gaps, eventLog, Sleeper.SYSTEM);
         Thread pumpThread = new Thread(pump, "capture-pump");
 
         IgStreamSession stream = new IgStreamClient(new LightstreamerTransport())
@@ -177,7 +192,8 @@ public final class Main {
     private static String summary(Buffers queues, Pump pump) {
         return "ticks=" + queues.tickCount() + " bars=" + queues.barCount()
                 + " written=" + pump.writtenCount()
-                + " dropped=" + queues.droppedTicks() + " malformed=" + queues.malformedUpdates();
+                + " dropped=" + queues.droppedTicks() + " malformed=" + queues.malformedUpdates()
+                + " obsFailures=" + pump.observabilityFailures();
     }
 
     private static void closeQuietly(String instance, @Nullable AutoCloseable closeable) {
