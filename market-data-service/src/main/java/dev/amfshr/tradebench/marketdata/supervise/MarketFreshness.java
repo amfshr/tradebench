@@ -6,7 +6,8 @@ import org.jspecify.annotations.Nullable;
  * The per-market freshness the {@link Supervisor} samples each sweep to feed the
  * {@link StalenessWatchdog}. High-frequency tick/bar arrivals are <b>pulled</b> here (a last-seen
  * clock, O(1) to stamp), never pushed onto the control queue — the watchdog only needs the latest.
- * {@code Buffers} implements this in {@code Main} (slice C step 6); the Supervisor's tests fake it.
+ * {@code Buffers} implements it, stamping on the LS callback thread; {@code Main} wires it; the
+ * Supervisor's tests fake it.
  */
 public interface MarketFreshness {
 

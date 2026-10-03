@@ -242,4 +242,17 @@ class IgRestClientTest {
 
         assertTrue(thrown.getMessage().contains("allowanceApplicationOverall"));
     }
+
+    @Test
+    void applicationAllowanceRefusesAnExplicitZeroButAcceptsOne() throws Exception {
+        transport.enqueue(FakeTransport.json(200, "[{\"apiKey\":\"placeholder-key\","
+                + "\"allowanceAccountOverall\":0,\"allowanceApplicationOverall\":60}]"));
+        assertThrows(IllegalStateException.class, () -> client.applicationAllowance(session),
+                "0 is not a budget — it would become 1/min for life");
+
+        transport.enqueue(FakeTransport.json(200, "[{\"apiKey\":\"placeholder-key\","
+                + "\"allowanceAccountOverall\":1,\"allowanceApplicationOverall\":60}]"));
+        assertEquals(new ApplicationAllowance("placeholder-key", 1, 60, 0, 0, 0),
+                client.applicationAllowance(session), "1 is the floor — accepted");
+    }
 }

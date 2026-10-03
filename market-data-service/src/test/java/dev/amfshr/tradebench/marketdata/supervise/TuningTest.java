@@ -23,4 +23,22 @@ class TuningTest {
         assertEquals(Tuning.playbook(), tuned.withGiveUpAfter(Duration.ofMinutes(10)),
                 "a round trip is the identity — every other field is carried");
     }
+
+    @Test
+    void theLadderCeilingAndTheStrikeCountAreTheRuledPlaybookNumbers() {
+        // Engineering playbook §8: ten consecutive failures exhaust the ladder; three strikes judge
+        // a subscription. SupervisorTest reads these at run time, so they are pinned here.
+        assertEquals(10, Tuning.playbook().maxConsecutiveFailures());
+        assertEquals(3, Tuning.playbook().subscriptionStrikes());
+    }
+
+    @Test
+    void theWatchdogScheduleIsTheRuledNinetyTwoTenAndTwoResubscribes() {
+        // Playbook §8 / chapters 8 and 10: remedies at T+90s and T+210s, rebuild at T+450s.
+        Tuning playbook = Tuning.playbook();
+        assertEquals(Duration.ofSeconds(90), playbook.tickSilent());
+        assertEquals(Duration.ofSeconds(210), playbook.barSilentWhileTicksFlow());
+        assertEquals(Duration.ofSeconds(60), playbook.watchdogGraceBase());
+        assertEquals(2, playbook.watchdogMaxResubscribes());
+    }
 }

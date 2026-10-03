@@ -98,7 +98,7 @@ class SupervisorTest {
         supervisor.sweep();
         assertEquals(1, stream.rebuilds); // paced — no second rebuild
 
-        clock.advance(Duration.ofSeconds(5)); // now past the window
+        clock.advance(Duration.ofSeconds(2)); // exactly the 5s floor — "at least", so this proceeds
         supervisor.sweep();
         assertEquals(2, stream.rebuilds);
     }
@@ -498,6 +498,91 @@ class SupervisorTest {
         assertEquals(1, stream.rebuilds); // but refused → double-delivery risk → rebuild
     }
 
+    @Test
+    void aSubCeilingRejectionIsRetriedInPlaceNotLeftToTheWatchdog() {
+        supervisor.watch(DAX);
+        supervisor.onSubscriptionError(DAX, 40, "rejected"); // strike 1 of 3
+        supervisor.sweep();
+
+        assertEquals(List.of(DAX), stream.resubscribed, "surgical re-attempt of the failing pair");
+        assertEquals(0, stream.rebuilds);
+        assertTrue(stream.quarantined.isEmpty());
+    }
+
+    @Test
+    void aRebuildResetsTheStrikesSoTheNewSessionIsJudgedAfresh() {
+        supervisor.watch(DAX);
+        failToTheStrikeCeiling(DAX);
+        supervisor.sweep(); // no witness → rebuild #1
+        assertEquals(1, stream.rebuilds);
+        stream.resubscribed.clear();
+
+        clock.advance(Duration.ofSeconds(10)); // past the 5s floor — pacing is not what decides here
+        supervisor.onSubscriptionError(DAX, 40, "rejected"); // the NEW session's first rejection
+        supervisor.sweep();
+
+        assertEquals(1, stream.rebuilds, "one strike in a fresh session is a retry, not a verdict");
+        assertEquals(List.of(DAX), stream.resubscribed);
+    }
+
+    @Test
+    void aRebuildReArmsTheSurvivorsSoAWitnessCanConfirmInTheNewSession() {
+        supervisor.watch(DAX);
+        supervisor.watch(NASDAQ);
+        clock.advance(Duration.ofSeconds(31)); // NASDAQ's confirm window lapses unconfirmed
+        failToTheStrikeCeiling(DAX);
+        supervisor.sweep(); // no witness → rebuild #1
+        assertEquals(1, stream.rebuilds);
+
+        supervisor.onSubscribed(NASDAQ, WitnessQuarantine.Kind.PRICE); // the new session confirms NASDAQ
+        supervisor.onSubscribed(NASDAQ, WitnessQuarantine.Kind.CHART);
+        clock.advance(Duration.ofSeconds(10));
+        failToTheStrikeCeiling(DAX);
+        supervisor.sweep();
+
+        assertEquals(List.of(DAX), stream.quarantined, "the re-armed witness proves the new session fine");
+        assertEquals(1, stream.rebuilds);
+    }
+
+    @Test
+    void aQuarantinedMarketIsForgottenNotNursedByTheWatchdog() {
+        supervisor.watch(DAX);
+        supervisor.watch(NASDAQ);
+        supervisor.onSubscribed(NASDAQ, WitnessQuarantine.Kind.PRICE);
+        supervisor.onSubscribed(NASDAQ, WitnessQuarantine.Kind.CHART);
+        failToTheStrikeCeiling(DAX);
+        supervisor.sweep();
+        assertEquals(List.of(DAX), stream.quarantined);
+        stream.resubscribed.clear(); // the two in-place retries before the verdict are not the point
+
+        freshness.flag.put(DAX, "DEAL");      // open and silent — a watched market would be resubscribed
+        freshness.flag.put(NASDAQ, "CLOSED"); // the witness stands down by its own flag
+        supervisor.sweep();
+        advanceAndSweep(Duration.ofSeconds(95));
+
+        assertTrue(stream.resubscribed.isEmpty(), "quarantined means off the watch list too");
+        assertEquals(0, stream.rebuilds);
+    }
+
+    @Test
+    void theConfirmWindowStartsWhenTheRebuiltSessionSubscribesNotWhenTheRebuildBegan() {
+        stream.duringRebuild = () -> clock.advance(Duration.ofSeconds(61)); // a paced re-login (LoginRateGate)
+        supervisor.watch(DAX);
+        supervisor.watch(NASDAQ);
+        freshness.flag.put(DAX, "CLOSED");    // the watchdog is not under test: closed flags stand it
+        freshness.flag.put(NASDAQ, "CLOSED"); // down, so the 61s jump cannot fire a staleness rebuild
+        clock.advance(Duration.ofSeconds(31));
+        failToTheStrikeCeiling(DAX);
+        supervisor.sweep(); // no witness → rebuild #1, blocking 61s on the login gate
+        assertEquals(1, stream.rebuilds);
+
+        failToTheStrikeCeiling(DAX); // rejected again at once; NASDAQ's fresh subscribe is unconfirmed
+        supervisor.sweep();
+
+        assertEquals(1, stream.rebuilds,
+                "NASDAQ is inside its fresh 30s confirm window: wait, never a second rebuild");
+    }
+
     // --- helpers + fakes --------------------------------------------------------------------
 
     /** jitter = 1.0 → deterministic backoff; Sleeper/interval unused (tests drive sweep() directly). */
@@ -590,10 +675,12 @@ class SupervisorTest {
         final List<String> quarantined = new ArrayList<>();
         boolean quarantineRefused; // when true, quarantine() reports a refused unsubscribe
         boolean fatal; // when true, rebuild() reports the broker rejected the configuration
+        Runnable duringRebuild = () -> { }; // what the blocking rebuild does to the clock
 
         @Override
         public boolean rebuild() {
             rebuilds++;
+            duringRebuild.run();
             return !fatal;
         }
 

@@ -33,10 +33,10 @@ import dev.amfshr.tradebench.marketdata.store.EventLog;
  * single-threaded, lock-free), emits {@link ServiceEvent}s, and runs the time-based checks each
  * sweep — executing remedies through {@link StreamControl}, paced by {@link BackoffPolicy}, until
  * recovery is given up ({@code onExhausted}): the recovery budget runs out, the rebuild ceiling
- * is hit, or the broker rejects the configuration outright. <b>Slice C steps 2a–2b</b>:
- * connection resilience (reconnect classification, stuck-substate escalation, backoff,
- * exhaustion), the staleness watchdog (quiet vs dead), and witness quarantine (§3.5 blast
- * radius).
+ * is hit, or the broker rejects the configuration outright. It covers connection resilience
+ * (reconnect classification, stuck-substate escalation, backoff, exhaustion), the staleness
+ * watchdog (quiet vs dead), witness quarantine (§3.5 blast radius), and the {@link BeltView} the
+ * heartbeat reads.
  */
 public final class Supervisor implements StreamObserver, BeltView, Runnable {
 
@@ -124,8 +124,9 @@ public final class Supervisor implements StreamObserver, BeltView, Runnable {
         reconnects.closing();
     }
 
-    /** Begin watching a market's freshness — called as it is subscribed (startup or on the sweep
-     * thread during a rebuild; §3.4 per-market staleness, §3.5 witness subscribe-start). */
+    /** Begin watching a market's freshness — called once per market at startup, before the sweep
+     * thread exists (§3.4 per-market staleness, §3.5 witness subscribe-start); a rebuild re-arms
+     * the survivors itself. */
     public void watch(String epic) {
         watched.add(epic);
         watchdog.track(epic, clock.monotonicNanos());
@@ -336,9 +337,12 @@ public final class Supervisor implements StreamObserver, BeltView, Runnable {
             giveUp("fatal_config", occurredAt); // never climb a ladder against a lockout
             return;
         }
+        // Re-read the clock: a paced re-login blocks ~61s, and the §3.5 confirm window must start
+        // when the new session's subscribes begin, not when the rebuild was decided.
+        long resubscribed = clock.monotonicNanos();
         witness.onSessionRebuilt(); // strikes reset; quarantine persists (exit is restart-only)
         for (String survivor : watched) {
-            witness.onSubscribeStarted(survivor, now); // the new session re-subscribes the survivors
+            witness.onSubscribeStarted(survivor, resubscribed); // the survivors re-subscribe now
         }
     }
 

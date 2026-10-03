@@ -184,11 +184,14 @@ public final class IgStreamControl implements StreamControl, AutoCloseable {
                 live.subscribeChart1m(epic, leg(epic, WitnessQuarantine.Kind.CHART, gen)));
     }
 
+    /** Drop a market's pair; the handles are forgotten only once both legs are gone, so a refused
+     * unsubscribe leaves nothing live-but-unknown for the next attempt to double-subscribe. */
     private void dropLegs(IgStreamSession live, String epic) {
-        Legs pair = legs.remove(epic);
+        Legs pair = legs.get(epic);
         if (pair != null) {
             live.unsubscribe(pair.price());
             live.unsubscribe(pair.chart());
+            legs.remove(epic);
         }
     }
 

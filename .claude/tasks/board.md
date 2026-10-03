@@ -59,7 +59,7 @@ testing doctrine G5 binds to) · PRD §9.
 
 ## E1 📡 Collection service, deployed 24/7 — ACTIVE
 
-**Since** 2026-09-27 · **Decisions** D2, D14, D15, D16, D17 · **Manual** ch. 1–10
+**Since** 2026-09-27 · **Decisions** D2, D14, D15, D16, D17, D27 · **Manual** ch. 1–10
 
 **Mission:** Tradebench's first deployed artifact: a standalone Spring Boot service streaming
 IG **ticks + 1-minute bars** for DAX into Postgres, resilient and self-reporting, with the

@@ -37,7 +37,7 @@ re-serves them).
 
 | What breaks | How we notice | What we do | Cost | Who finds out | Heals |
 |---|---|---|---|---|---|
-| The server stops talking but the socket stays up (*silent while connected*, the 2h56m scar) | `StalenessWatchdog`: no tick for **90s** while the market's `DLG_FLAG` says open; or ticks flowing but no sealed bar for **210s** (a dead CHART leg) | per-market **resubscribe** (×2, grace 60s → 120s), then a session **rebuild**; ≥2 markets stale together → rebuild at once | ticks from the stop to the resume; a bar gap | `WATCHDOG_STALE` events; `RECONNECT{replayed=false}` on resume; `BAR_GAP` | heal backfills the bars |
+| The server stops talking but the socket stays up (*silent while connected*, the 2h56m scar) | `StalenessWatchdog`: no tick for **90s** while the market's `DLG_FLAG` says open; or ticks flowing but no sealed bar for **210s** (a dead CHART leg) | per-market **resubscribe** ×2 (T+90s, then T+210s — the grace doubles before each wait: 120s, 240s), then a session **rebuild** (T+450s); ≥2 markets stale together → rebuild at once | ticks from the stop to the resume; a bar gap | `WATCHDOG_STALE` events; `RECONNECT{replayed=false}` on resume; `BAR_GAP` | heal backfills the bars |
 | The SDK hangs in `DISCONNECTED:WILL-RETRY` (it gave up without saying so) | `StuckSubstateEscalator`: **120s** in WILL-RETRY, **300s** in TRYING-RECOVERY (the server may still replay there) | **rebuild**, paced by backoff | as above | `STUCK_SUBSTATE_ESCALATED` | heal |
 | A normal drop and reconnect | `ReconnectClassifier` on any streaming substate | nothing — report | none if the server replayed (no WILL-RETRY seen); otherwise the outage's data | `RECONNECT{replayed, wallOutage, awakeOutage, hostSlept}` | heal when `replayed=false` |
 | One market's subscription is rejected three times while another market's pair is confirmed | `WitnessQuarantine` (§3.5) | **quarantine** that market — unsubscribe its pair, leave it off; exit is restart-only | that market until the next restart | `MARKET_QUARANTINED` | restart |
@@ -46,7 +46,7 @@ re-serves them).
 | The WebSocket silently downgrades to HTTP polling | `noteFor(CONNECTED:HTTP-POLLING)` | report only | latency | `TRANSPORT_DOWNGRADED` | — |
 | Recovery keeps failing | the **budget**: 10 min from an outage's first rebuild without streaming resuming (ceiling 10 rebuilds as a cap) | **give up**: `FEED_DEAD`, orderly `exit(1)`; the outer loop restarts us | the whole outage until IG returns | `FEED_DEAD{reason=budget|ceiling}`, exit code 1, restart counter | heal |
 | IG rejects the configuration itself (key, account, **wrong password**) | `IgFatalConfigException` — the §1.6 taxonomy's fatal families, now including `error.security.invalid-details` | **stop at once** — never climb a ladder against a lockout; at boot, fail before retrying | everything until a human fixes config | `FEED_DEAD{reason=fatal_config}` or a FATAL boot line, exit 1 | human |
-| IG unreachable at boot (we restarted into an outage) | login fails with a retryable error | **retry every 30s under the login gate, for the same 10-min budget**, then exit 1 | the outage | "boot attempt N" lines, then FATAL | heal |
+| IG unreachable at boot (we restarted into an outage) | login fails with a retryable error | **retry every 30s under the login gate, for the same 10-min budget**, then exit 1; any other exception at boot fails loud at once (exit 1 with its trace) | the outage | "boot attempt N" lines, then FATAL | heal |
 | IG enforces a smaller REST budget than it publishes (demo keys: 10/min, not 30) | `GET /operations/application` after login | start at 10/min, then apply min(`allowanceAccountOverall`, `allowanceApplicationOverall`) minus 5 headroom (≥1); an unlisted key or a failed read keeps the start | nothing — the pacer paces every REST caller | `PACER_DISCOVERED{account, application, published, used, headroom}`, or an `IG_API_ERROR` naming the read plus a "keeping the conservative start" line | — |
 | Postgres blips while we write an **event/gap/status** row | `PersistenceException` from the observability store | **count and continue** — the belt and the pump never die for a breadcrumb | the breadcrumbs written during the blip | `obsFailures=` / `eventWriteFailures=` / `statusFailures=` in the heartbeat | coverage truth is recomputed from `bars_1m` |
 | Postgres blips while we write a **tick or bar** | `PersistenceException` from `PostgresStore` | *today:* pump stops, process exits 1 within ≤60s, outer loop restarts | ~1–2 min of ticks (gone), a bar gap (healed) | FATAL line, exit 1 | heal — see *the pending decision* below |
@@ -123,12 +123,13 @@ Every number, where it lives, and what it means:
 | *deploy* | restart policy + delay (T7, pending) | the outer loop's cadence; see the ruling below |
 
 **A worked timeline — the server goes silent at T+0, one market open, IG down for twenty
-minutes.** T+90s the watchdog fires: `WATCHDOG_STALE`, resubscribe DAX. T+150s still silent:
-second resubscribe. T+270s resubscribes exhausted: **rebuild #1** — `rebuilding()` opens the
-outage and starts the budget clock; the old connection is torn down (its generation retired),
-the session is validated-or-renewed, a new connection is opened. IG is down, so the new client
-reports `DISCONNECTED:WILL-RETRY`; T+390s the escalator forces **rebuild #2**, and so on at
-roughly two-minute rungs, each paced by backoff. At **T+870s** the budget expires:
+minutes.** T+90s the watchdog fires: `WATCHDOG_STALE`, resubscribe DAX; the market's grace
+doubles to 120s. T+210s still silent: second resubscribe; grace 240s. T+450s resubscribes
+exhausted: **rebuild #1** — `rebuilding()` opens the outage and starts the budget clock; the old
+connection is torn down (its generation retired), the session is validated-or-renewed, a new
+connection is opened. IG is down, so the new client reports `DISCONNECTED:WILL-RETRY`; T+570s
+the escalator forces **rebuild #2**, and so on at roughly two-minute rungs, each paced by
+backoff. At **T+1050s** — ten minutes after rebuild #1 — the budget expires:
 `FEED_DEAD{reason=budget}`, orderly `exit(1)`. The outer loop restarts the job; boot logs in
 under the gate, fails, retries every 30s. When IG returns at T+20min the boot succeeds,
 capture resumes, and E1-T6 later heals the bar gap from T+0. Twenty minutes of ticks are gone;
@@ -243,6 +244,10 @@ must change are the single-instance advisory lock (per job, not per service) and
 user; nothing in the belt, the pump or the schema. See `backlog.md` B1.
 
 ## The rulings behind it
+
+The cross-cutting ones — the DB-write tiers, exhaustion as a time budget with `exit(1)`, the one
+streaming rule — are logged as **D27** (`docs/decisions.md`); the dated lines below are the
+in-ticket record.
 
 - **2026-09-28 (E1 plan nod):** witness quarantine built now; exhaustion = clean exit(0) with the
   container restart policy as the outer loop; all §8 timings in one `Tuning` record.

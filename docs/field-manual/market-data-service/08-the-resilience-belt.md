@@ -76,8 +76,10 @@ Around the signals, four pieces of judgment, each visible in the code:
   (`SUPPRESSING_FLAGS`) — weekends need no calendar and no hours config. Unknown flags
   deliberately do **not** suppress: a spurious resubscribe on a closed market is
   harmless, and its snapshot teaches us the real flag.
-- *Episodes with doubling grace* (`remedyFor`): first remedy at the threshold, then grace
-  60s → 120s → 240s → … capped at 30min; two resubscribes, then escalate to `REBUILD`. A
+- *Episodes with doubling grace* (`remedyFor`): first remedy at the threshold (90s tick-silent);
+  the grace then doubles **before** each wait — 120s, 240s, 480s … capped at 30min (the 60s base
+  is the seed, never itself waited) — so the second resubscribe lands at T+210s and the
+  escalation to `REBUILD` at T+450s (two resubscribes, then rebuild). A
   genuinely-quiet-but-open market decays to about one remedy per half hour — never a
   storm. Healing (`healIf`) is **same-signal-kind only**: flowing ticks must never reset
   a dead-CHART episode, or the failure mode this signal exists for becomes undetectable.
@@ -97,9 +99,9 @@ stateDiagram-v2
     [*] --> Healthy
     Healthy --> Episode: 90s tick-silent / 210s bar-silent-while-ticks-flow
     state Episode {
-        [*] --> Resubscribe1: remedy fires, grace 60s
-        Resubscribe1 --> Resubscribe2: still silent after grace → remedy, grace 120s
-        Resubscribe2 --> Rebuild: resubscribes exhausted (max 2) → grace 240s
+        [*] --> Resubscribe1: remedy fires at T+90s, next wait 120s
+        Resubscribe1 --> Resubscribe2: still silent at T+210s → remedy, next wait 240s
+        Resubscribe2 --> Rebuild: still silent at T+450s, resubscribes exhausted (max 2) → next wait 480s
         Rebuild --> Rebuild: grace keeps doubling, capped 30min
     }
     Episode --> Healthy: same-signal-kind data arrives (fresh budget)
@@ -186,8 +188,8 @@ There are *two* freshness paths, each shaped by its traffic:
   Supervisor's own control queue. They are rare (a handful a day) and each one matters, so
   none may be dropped.
 - *Tick and bar freshness* is **pulled**, never queued. Ticks arrive ~90/min; the watchdog
-  needs not each one but *the latest arrival time*. So the pump stamps a last-seen monotonic
-  clock (O(1)), and `checkStaleness()` reads it through the `MarketFreshness` seam each
+  needs not each one but *the latest arrival time*. So `Buffers` stamps a last-seen monotonic
+  clock on the LS callback thread (O(1)), and `checkStaleness()` reads it through the `MarketFreshness` seam each
   sweep. Pushing every tick through the control queue would be pointless traffic for a value
   the watchdog overwrites ninety times a minute.
 

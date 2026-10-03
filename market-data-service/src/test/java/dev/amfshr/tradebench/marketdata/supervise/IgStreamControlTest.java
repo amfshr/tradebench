@@ -357,4 +357,33 @@ class IgStreamControlTest {
         assertTrue(ladderContinues, "an interrupt is not a rejected configuration");
         assertEquals(1, fake.connections.size());
     }
+
+    @Test
+    void aRefusedUnsubscribeDuringResubscribeOrphansNothingAndNeverDoubleSubscribes() throws Exception {
+        boot();
+        FakeStreamTransport.FakeConnection connection = fake.last();
+        fake.refuseUnsubscribe = true;
+
+        control.resubscribe(DAX); // refused — logged; the old pair stays known
+
+        assertEquals(4, connection.active.size(), "nothing dropped, nothing added — no half-dropped pair");
+        assertTrue(log.getLast().contains("resubscribe " + DAX + " failed"));
+
+        fake.refuseUnsubscribe = false;
+        control.resubscribe(DAX); // the next attempt still holds the old handles
+        assertEquals(List.of(FTSE_PRICE, FTSE_CHART, DAX_PRICE, DAX_CHART), activeItems(connection));
+        assertEquals(4, connection.active.size(), "the old DAX pair is gone; exactly one fresh pair");
+    }
+
+    @Test
+    void quarantineWhileTheStreamIsDownIsAcceptedAndStillExcludesTheMarketLater() throws Exception {
+        boot();
+        fake.failNextConnect = true;
+        assertTrue(control.rebuild(), "transient — the stream is left down for the ladder");
+
+        assertTrue(control.quarantine(FTSE), "nothing is subscribed while down — nothing to refuse");
+
+        control.rebuild();
+        assertEquals(List.of(DAX_PRICE, DAX_CHART), subscribedItems(fake.last()));
+    }
 }

@@ -142,7 +142,9 @@ public final class Main {
                 () -> {
                     log(instance, "FATAL: recovery exhausted — the feed is dead; exiting for the"
                             + " process supervisor to restart");
-                    System.exit(1);
+                    // Not on the sweep thread: the shutdown hook joins it, and a thread parked
+                    // inside Runtime.exit never finishes — the join would time out every time.
+                    new Thread(() -> System.exit(1), "capture-exit").start();
                 },
                 Sleeper.SYSTEM, SWEEP_INTERVAL);
         control.bind(supervisor);
