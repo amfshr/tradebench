@@ -12,7 +12,7 @@
 
 ## B1 — Stream-jobs service (multi-user, multi-market capture)
 
-**Captured** 2026-09-30 · **Likely home** a future epic (post-E1 spine) · **Relates to** PRD §5.1 (stream-job setup), §2 (tenancy/admin) · D16 (per-user creds), D17 (DB topology) · architecture §3.4 (stream-jobs trajectory)
+**Captured** 2026-09-30 · **Likely home** a future epic (post-E1 spine) · **Trigger** E9 Operator Console gains save-credentials + save-jobs (Alex, 2026-10-03) · **Relates to** PRD §5.1 (stream-job setup), §2 (tenancy/admin) · D16 (one key per account; multi-user creds as encrypted DB data), D17 (DB topology) · IG playbook §7 (single-instance & single-key discipline) · E1-T5 slice C (the belt), E1-T7 (host ruling), E8 (multi-user goes real), E9 (the trigger) · architecture §3.4 (stream-jobs trajectory)
 
 The market-data-service's wider role: a **central service running N capture jobs**, not one
 hardwired market. Each platform user's broker key = account = **one Lightstreamer session**
@@ -35,6 +35,55 @@ rewrite): (a) **per-item subscribe/unsubscribe** in the transport — built for 
 recovery, and exactly the primitive dynamic add/remove needs; (b) the **per-session `CaptureJob`
 unit** structure — multi-user is then "run N of them." The per-item-vs-rebuild choice is a
 transport-layer concern *below* the connection/user layer, independent of the number of users.
+
+**Codebase review 2026-10-03 — the three concrete gaps B1 must close** (each verified against the code):
+1. **`SingleInstanceLock` is one global advisory key per service** (`pg_try_advisory_lock(0x7472_6462_0001L)`,
+   `market-data-service/…/store/SingleInstanceLock.java`): a 2nd/3rd collector job against the same DB is
+   **refused at startup** ("another market-data-service instance holds the advisory lock"). The guard exists
+   to protect the **IG key** — no accidental second Lightstreamer connection on a shared key (IG playbook
+   §7) — not the database, so B1 scopes it to what it protects: **per job** (keyed on the instance name, or
+   better on `(user, source)`). A double-launch of the *same* job stays refused.
+2. **`Main` hardcodes `USER = "default-user"`** and `V1__baseline.sql` seeds only that user: B1 needs a
+   `TRADEBENCH_USER` config + a `users` row per platform user (e.g. Alex's brother). Env-file-per-job is fine
+   until D16's multi-user era moves users' broker credentials into app-encrypted DB columns (E8).
+3. **One env file + one service unit per job** (three jobs = three processes) — belongs to the deploy/host
+   ticket (E1-T7 host ruling), not the service code.
+
+**Trigger (Alex, 2026-10-03):** "my main concern with the ability to run multiple jobs realistically comes
+when I make the E9 dashboard and add user functionality to save credentials and jobs — then we will need to
+run multiple jobs." B1 becomes necessary when the **E9 Operator Console gains save-credentials + save-jobs**;
+until then single-job is fine. (D16 already places users' broker credentials as encrypted DB data in the
+multi-user era / E8 — not re-litigated here; E9 is Alex's stated trigger.)
+
+**Isolation findings (2026-10-03 — design intent, so it isn't lost):**
+- **Process-per-job is the isolation boundary.** The service exits the JVM on fatal conditions —
+  `System.exit(1)` on pump death today (`Main`); the ruled exhaustion exit via the Supervisor's
+  `onExhausted` once slice C rewires `Main`. Co-hosting jobs as threads in one JVM would let one job's exit
+  kill the others — so **B1 = one process per job, never threads-in-one-JVM**; that is what makes "one
+  connection must not break another" (Alex's paramount requirement) hold. *Sharpens the "run N" picture
+  above — N processes, not N threads; the job manager becomes a process launcher. Alex confirms when B1 is cut.*
+- The resilience belt (E1-T5 slice C: `Supervisor` + cores + `StreamControl` + `Buffers` + `Pump`) is
+  entirely per-connection instance state — nothing static/shared. Nothing in the belt, the pump, or the
+  schema changes for B1.
+- **IG level is naturally isolated when keys are distinct** (Alex prod key / Alex demo key / brother's own
+  key = three sessions, three LS connections, three rate budgets — `RequestPacer`/`LoginRateGate` are per
+  process). D16's "all processes share the account key" caveat only bites when two processes share *one*
+  key (e.g. the future EOD heal job sharing Alex's prod key with the live collector — the login stagger).
+- **Schema is already multi-job-ready:** `user_id + source_id` in every key (`ticks_dedupe UNIQUE(user,
+  source, instrument, ts, bid, ask)`, `bars_1m PK(user, source, instrument, start)`, `bar_gaps_span`
+  likewise), `capture_status` keyed `(instance, instrument)`, `service_events` carries `instance`; Flyway
+  migrates at connect under its own lock. Different `(user, source)` never collide; the same market captured
+  twice by one `(user, source)` dedupes idempotently.
+- Witness quarantine (§3.5) needs ≥2 markets per connection to ever quarantine; a 1-market job degrades to
+  rebuild-only (by design — no witness ⇒ session-shaped).
+
+**Example job mapping** (jobs 1 and 2 are already distinguishable today — same user, different source):
+
+| Job | user | source | key | instance |
+|---|---|---|---|---|
+| 1 — Alex, prod, 2 markets | `default-user` | `ig-stream-live` | Alex `IG_LIVE_*` | `alex-live` |
+| 2 — Alex, demo, 3 markets | `default-user` | `ig-stream-demo` | Alex `IG_DEMO_*` | `alex-demo` |
+| 3 — brother, his choice, several | new `users` row | `ig-stream-live` or `-demo` | his own `IG_*` set | `brother-…` |
 
 ## B2 — ig-client REST resilience (platform-wide), and revisit "resilience lives in the consumer"
 

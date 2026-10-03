@@ -21,14 +21,20 @@ split, the per-view SQL, and the streaming-schedule (Q1 resolved: generous windo
 calendar). Field Manual read: **done.** E0 lacks enforcement (T4). E3 language semantics ruled
 (D7–D9), design-gate tickets plannable. E4–E8 name the horizon.
 
-**Next-session menu (refreshed 2026-10-01):** ① **E1-T5 slice C — the Supervisor shell** (branch
+**Next-session menu (refreshed 2026-10-03):** ① **E1-T5 slice C — the Supervisor shell** (branch
 `e1-t5c-supervisor-shell`, checked out, current with main): the Supervisor composing the five
 slice-A cores on a control thread, HealthProbe/heartbeat → `capture_status`, **per-item
 subscribe/unsubscribe** (surgical recovery, §3.5), gap persistence + `market_state_change` via
-`EventLog`, `Main` rewiring, pacer discovery. Design ruled in the E1 plan (T5 §). ② **E9 build
+`EventLog`, `Main` rewiring, pacer discovery. Design ruled in the E1 plan (T5 §). **Follow-up
+ticketed 2026-10-03 → E1-T9 sink hold-and-retry** (Tier-1 product-data writes: hold · reconnect ·
+retry · loud · bounded; after slice C merges; the budget and the sequence vs T6 are Alex's calls —
+E1 plan T9 §). ② **E9 build
 tickets** — T2 read-model service, T3 SPA, T4 Cloudflare edge (cut from the E9-T1 spec; can run
 after E1-T5). Optional: E0-T4 guardrail enforcement; formal E1-T7 host ruling. Backlog: B1
-stream-jobs (multi-user).
+stream-jobs (multi-user) — reviewed 2026-10-03 against the code (`backlog.md`): three gaps
+(per-service advisory lock → per-job · hardcoded `default-user` → `TRADEBENCH_USER` + `users` rows ·
+env file + unit per job → E1-T7), one process per job, trigger = E9 gains save-credentials +
+save-jobs (Alex).
 
 ---
 
@@ -53,7 +59,7 @@ testing doctrine G5 binds to) · PRD §9.
 
 ## E1 📡 Collection service, deployed 24/7 — ACTIVE
 
-**Since** 2026-09-27 · **Decisions** D2, D14, D15, D16, D17 · **Manual** ch. 1–9
+**Since** 2026-09-27 · **Decisions** D2, D14, D15, D16, D17 · **Manual** ch. 1–10
 
 **Mission:** Tradebench's first deployed artifact: a standalone Spring Boot service streaming
 IG **ticks + 1-minute bars** for DAX into Postgres, resilient and self-reporting, with the
@@ -79,6 +85,7 @@ CHART:1MINUTE sealed bars only) · engineering playbook §1–§4.
 | T6 | **Daily completeness + archive + digest (decisions D6).** `@Scheduled` end-of-day job: 1m-bar REST heal (window-clipped, paced, allowance-aware; outcomes classified healed / tickless-at-source / failed — ticks are stream-only, the job never claims otherwise), day's Parquet export to object storage (pick R2 vs B2 in-ticket), digest email (counts, gaps, heal outcomes, archive path). Audited `job_runs` row every run, clean or not. **DoD:** staging produces archive + digest end-to-end; a suppressed digest is detectable (absence = alarm documented in the runbook). | ⬜ |
 | T7 | **Deploy.** Dockerfiles + compose; staging + prod configs with separate DBs (promote by release tag); cloud host selection (revisit the phase-1 doc's Lightsail analysis against the ~£20/mo envelope); secrets injection; deploy runbook. **DoD:** staging runs 24/7 for 3 consecutive days unattended with daily digests arriving. | ⬜ |
 | T8 | **Acceptance: shadow-diff week vs the Python appliance.** Both systems capture the same DAX sessions for a week; diff tick coverage, 1m bars, and own-aggregated 10m vs the prototype's; write the report; rule on making Tradebench the primary capture. **DoD:** the diff report with every delta explained + Alex's ruling recorded in `docs/decisions.md`. | ⬜ |
+| T9 | **Sink blip resilience — hold-and-retry for the capture sink (Tier-1 product-data writes).** Today a failed tick/bar write (`PersistenceException` from `PostgresStore`) stops the pump and `Main`'s heartbeat exits 1 within ≤60s — fail-closed but crude: a 5s Postgres blip costs ~1–2 min of ticks (never healable) + a bar gap (T6 heals), while bars sat queued (ack-after-apply) and the tick queue held 100 000. Instead: **hold** (bars stay queued; the pending ≤500-tick batch survives the reconnect) → `PostgresStore` **re-acquires** its pooled connection + re-prepares → the pump **retries with backoff**; **loud** (sink-failure counter in the heartbeat line beside `obsFailures`/`eventWriteFailures`; `SINK_FAILURE`/`DB_ERROR` event on recovery — D25 catalogue; the dead-man alarm fires meanwhile, correctly); **bounded** (retry budget → stop + exit(1) as today — **Decision: (TBD)**: default proposal 10 min, symmetry with `Tuning.giveUpAfter`; longer, or tied to queue pressure, is reasonable while the queues hold); pump death → **immediate** exit(1), not heartbeat latency. Refines — never removes — the fail-closed contract (`PumpTest.sinkFailureStopsThePumpKeepsTheBarAndKeepsTheCause`). Not in scope: Tier-2 policy, the belt, the schema. P8 · P9 · Field Manual ch. 10 "When the database fails". **DoD:** a Postgres restart of ≤ budget length loses zero bars and zero ticks; the heartbeat line shows the sink-failure count; a `SINK_FAILURE`/`DB_ERROR` event records the episode on recovery; past the budget the pump stops and the process exits 1 immediately; every behavioural test mutation-verified — budget boundary exact, failure-mode tests on budget expiry; ch. 10's Tier-1 row updated from "today: stop and restart" to the landed policy. | ⬜ (ticketed 2026-10-03 — Alex's ruling at the slice C step-6 review: "ticket the tier-1 hold and retry"; **after T5 slice C merges**; **Sequence vs T6: (TBD, Alex)**; plan: E1 plan T9 §) |
 
 ## E2 🧰 The docs site (`web/docs` → docs.tradebench) — ✅ COMPLETE (T1–T6 merged; live at docs.tradebench.amfshr.dev)
 
