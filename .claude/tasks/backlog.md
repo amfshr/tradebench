@@ -164,3 +164,54 @@ capture-store chapter") so the numbering is reorg-proof for good. Fold it into t
 pass** (making chapters bigger — the other organic Field Manual job) since that renumbers and
 rewrites prose anyway; doing it standalone would be pure churn. Also covers the matching heading
 cleanup (drop `Chapter N —` from H1s, or renumber them).
+
+## B7 — AI operating framework (E0): legible board state, a "how we build" (SDLC) guide on the docs site, and a retrospective practice
+
+**Captured** 2026-10-03 · **Likely home** E0 — extend it with tickets, or close it and open a successor (Alex's call; framework §5 records new agents/skills on the E0 family, §6 already schedules a contract review "when E1 ships … and at every epic boundary") + a Build-track docs pass (docs-only → main, G4) · **Trigger** Alex (2026-10-03): "after this epic" — a retrospective session once E1 closes (nearest checkpoint: E1-T5's close; slice C steps 4–5 remain) · **Relates to** PRD §9 (AI-workable NFR) · E0 (T1 the contract, T2 agents v1, T3 skills v1, T5 `board-steward` — all done; T4 guardrail enforcement — queued) · `.claude/ai-framework.md` (§1 roles, §2 G1–G8, §3 session protocols, §4 directory standard, §5 agents & skills inventory, §6 evolution) · `.claude/task-workflow.md` · `docs/reference/board-format.md` · D10, D13 (the framework's own decisions) · D20 (lean template; new fields proposed, never invented) · D21/D22 (docs split: Build track = Field Manual + Architecture + Decisions; Use track = Product + User Guide + DSL reference) · D26 (Field Manual parts) · E1 plan T5 § (slices A/B/C + numbered steps — the worked precedent) · E1-T9 (born from a step review)
+
+**The problem, as a reader of the board and the docs site (Alex, 2026-10-03):** "as a reader I don't
+understand why it's open or what its tickets were, and there is no user guide or SDLC section in the
+[docs] pages — an explanation of what and why: the agents and skills and the intended flows we take
+during development." Checked against the artefacts: E0's header reads `ACTIVE (born urgent
+2026-09-27)` with four of five tickets done; the one open ticket, **T4 guardrail enforcement**
+(pre-commit + CI secret scan, `.claude/settings.json` permissions baseline — neither exists yet),
+carries the note "pairs with E1-T1's CI", and E1-T1 closed 2026-09-27; the *why open* lives in one
+clause of the board's guide prose ("E0 lacks enforcement (T4)"), not on the epic itself. **E0 has no
+plan file** (`.claude/tasks/epics/` holds e1, e2, e9 only), so its tickets carry no metadata lines
+and no plan bodies — their detail pages render from the board rows alone. On the site, the contract
+(`.claude/ai-framework.md`) and `task-workflow.md` are **not rendered at all** (the content glob
+covers `.claude/tasks/**` only; nav groups: Product · Field Manual · Design · Decisions · Reference ·
+Inherited · Board) — a site reader meets the framework only second-hand, via the E0 rows and
+D10/D13 in the decision log. Note: the D21 **User Guide** seat (`docs/guide/`) is the *end-user* Use
+track (Dad, brother) — not the home for this.
+
+**Scope sketch (not ruled — ideation):**
+- **A "how we build" section in the Build track** (name and seat TBD — Alex rules; it is neither a
+  Field Manual chapter (D22: teaches code paths, with scars) nor an Architecture spec): the roles
+  ("Claude proposes, Alex rules"), G1–G8 in plain words, the skills (`/sanity-lap`,
+  `/design-session`, `/start-ticket`) and agents (`doctrine-reviewer`, `board-steward`,
+  `seed-pack-librarian`, `db-admin`) and when each is used, and the intended flows: cold start →
+  design session (answered record filed same day) → ticket (`/start-ticket`: scope check → design
+  nod, D13 → branch → build in **slices and numbered steps**, each staged for Alex's review →
+  `doctrine-reviewer` → PR restating the DoD, Alex merges) → close-out (board, done history, menu).
+  Worked precedent: E1-T5 — slices A/B/C, numbered steps in the commit log (`1/6`, `2a/6`,
+  `2b-i/6`, `2b-ii/6`, `3/6`, `6/6`; 4–5 pending), and a step-6 review that re-ruled exhaustion
+  and ticketed E1-T9.
+- **Board hygiene for E0:** make its state legible — why it is open, what its tickets were and are
+  (a plan file with metadata lines + plan bodies, per `board-format.md`), and **close or extend it
+  explicitly** (T4's "pairs with E1-T1" note is stale; the §6 review clause is unexercised).
+- **A retrospective practice:** a retro session after each epic and/or spontaneously — what went
+  well, what the reviews caught that planning should have, what to change in skills/agents/docs;
+  possibly a `retrospective` skill or agent added to the pipeline (framework §5's bar: a repeated
+  need, recorded on the board).
+- **Strengthen the AI side for** (Alex's list): retrospectives · multi-workflow sessions ·
+  support/operations flows · docs-update flows (keeping docs true when the code they cite moves) ·
+  end-to-end tasks and **validation tickets** · more formal structuring of tickets into slices and
+  build steps. Anything that adds a template field (a slice/step field, a validation ticket type) is
+  proposed to Alex first, never invented (D20).
+
+**Alex's words (2026-10-03):** "I'm thinking, after this epic, of having a retrospective session and
+maybe creating an agent/skill for this and adding that to the AI pipeline and SDLC lifecycle as
+random/spontaneous or after each epic — strengthen the skills and AI to do retrospectives,
+multiple-workflow sessions, support, docs updates, end-to-end tasks and validation tickets,
+structuring the tickets into slices and build steps more formally, etc."
