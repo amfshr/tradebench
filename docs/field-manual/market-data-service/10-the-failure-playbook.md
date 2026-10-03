@@ -39,7 +39,7 @@ re-serves them).
 |---|---|---|---|---|---|
 | The server stops talking but the socket stays up (*silent while connected*, the 2h56m scar) | `StalenessWatchdog`: no tick for **90s** while the market's `DLG_FLAG` says open; or ticks flowing but no sealed bar for **210s** (a dead CHART leg) | per-market **resubscribe** (×2, grace 60s → 120s), then a session **rebuild**; ≥2 markets stale together → rebuild at once | ticks from the stop to the resume; a bar gap | `WATCHDOG_STALE` events; `RECONNECT{replayed=false}` on resume; `BAR_GAP` | heal backfills the bars |
 | The SDK hangs in `DISCONNECTED:WILL-RETRY` (it gave up without saying so) | `StuckSubstateEscalator`: **120s** in WILL-RETRY, **300s** in TRYING-RECOVERY (the server may still replay there) | **rebuild**, paced by backoff | as above | `STUCK_SUBSTATE_ESCALATED` | heal |
-| A normal drop and reconnect | `ReconnectClassifier` on `STREAMING` | nothing — report | none if the server replayed (no WILL-RETRY seen); otherwise the outage's data | `RECONNECT{replayed, wallOutage, awakeOutage, hostSlept}` | heal when `replayed=false` |
+| A normal drop and reconnect | `ReconnectClassifier` on any streaming substate | nothing — report | none if the server replayed (no WILL-RETRY seen); otherwise the outage's data | `RECONNECT{replayed, wallOutage, awakeOutage, hostSlept}` | heal when `replayed=false` |
 | One market's subscription is rejected three times while another market's pair is confirmed | `WitnessQuarantine` (§3.5) | **quarantine** that market — unsubscribe its pair, leave it off; exit is restart-only | that market until the next restart | `MARKET_QUARANTINED` | restart |
 | The same, but no healthy witness | `WitnessQuarantine` | treat as session-shaped: **rebuild** | the outage | `SUBSCRIPTION_REJECTED` | heal |
 | The laptop lid closes (host sleep) | wall clock jumped, monotonic did not (`hostSleepSkew` 5s) | **re-baseline**, no alarm; annotate the resume | none that we can act on | `RECONNECT{hostSlept=true}` | — |
@@ -47,7 +47,7 @@ re-serves them).
 | Recovery keeps failing | the **budget**: 10 min from an outage's first rebuild without streaming resuming (ceiling 10 rebuilds as a cap) | **give up**: `FEED_DEAD`, orderly `exit(1)`; the outer loop restarts us | the whole outage until IG returns | `FEED_DEAD{reason=budget|ceiling}`, exit code 1, restart counter | heal |
 | IG rejects the configuration itself (key, account, **wrong password**) | `IgFatalConfigException` — the §1.6 taxonomy's fatal families, now including `error.security.invalid-details` | **stop at once** — never climb a ladder against a lockout; at boot, fail before retrying | everything until a human fixes config | `FEED_DEAD{reason=fatal_config}` or a FATAL boot line, exit 1 | human |
 | IG unreachable at boot (we restarted into an outage) | login fails with a retryable error | **retry every 30s under the login gate, for the same 10-min budget**, then exit 1 | the outage | "boot attempt N" lines, then FATAL | heal |
-| Postgres blips while we write an **event/gap/status** row | `PersistenceException` from the observability store | **count and continue** — the belt and the pump never die for a breadcrumb | the breadcrumbs written during the blip | `obsFailures=` / `eventWriteFailures=` in the heartbeat | coverage truth is recomputed from `bars_1m` |
+| Postgres blips while we write an **event/gap/status** row | `PersistenceException` from the observability store | **count and continue** — the belt and the pump never die for a breadcrumb | the breadcrumbs written during the blip | `obsFailures=` / `eventWriteFailures=` / `statusFailures=` in the heartbeat | coverage truth is recomputed from `bars_1m` |
 | Postgres blips while we write a **tick or bar** | `PersistenceException` from `PostgresStore` | *today:* pump stops, process exits 1 within ≤60s, outer loop restarts | ~1–2 min of ticks (gone), a bar gap (healed) | FATAL line, exit 1 | heal — see *the pending decision* below |
 | The pump or the supervisor thread dies for any other reason | `Main`'s heartbeat: `!thread.isAlive()` | exit 1 | until restart | FATAL line | heal |
 
@@ -116,7 +116,7 @@ Every number, where it lives, and what it means:
 | 5s / 10s | `hostSleepSkew` / `processFreezeJump` | the clock-divergence discriminators (chapter 7) |
 | 1s | `Main.SWEEP_INTERVAL` | the supervisor's cadence — the detectors assume it |
 | 30s / 10 min | `Main.BOOT_RETRY` / the same `giveUpAfter` | boot retry spacing and budget |
-| 60s | `Main.HEARTBEAT` | how quickly a dead pump or supervisor thread is noticed and the process exits |
+| 60s | `Main.HEARTBEAT` | the `capture_status` cadence, and how quickly a dead pump or supervisor thread is noticed and the process exits (a Postgres outage can add the probe's ~30s connection timeout per market — T9) |
 | 61s | `LoginRateGate.MIN_INTERVAL` | spacing between logins — IG caches login responses, so faster re-logins get stale tokens |
 | *deploy* | restart policy + delay (T7, pending) | the outer loop's cadence; see the ruling below |
 
@@ -145,7 +145,7 @@ Four threads touch the belt. Knowing which owns what is most of what there is to
 | Lightstreamer callback threads | nothing of ours | stamp a clock, enqueue — and that is all |
 | `capture-supervisor` (the sweep) | the cores, `watched`, `IgStreamControl`'s handles | everything decided and executed |
 | `capture-pump` | the sink, the gap detector | write market data; derive gaps and state events |
-| main (heartbeat) | — | watch the other two live; exit 1 if one dies |
+| main (heartbeat) | the health probe | watch the other two live; exit 1 if one dies; publish `capture_status` through the shared pool — a Postgres outage can hold it ~30s per market (the pool's connection timeout), so a dead pump may be noticed later than 60s until T9 bounds the pool |
 
 Three fences make the hand-offs safe. **Queue** — what a callback wrote before `add()` is visible
 to the sweep after `poll()`; the pump has the same contract with `Buffers`. **`Thread.start()`**
@@ -216,10 +216,13 @@ a FATAL line and `System.exit(1)`.
 What the operator sees, in order: `WATCHDOG_STALE` / `STUCK_SUBSTATE_ESCALATED` /
 `SUBSCRIPTION_REJECTED` reason events as rebuilds happen; `RECONNECT` with `replayed` saying
 whether a heal is owed; `FEED_DEAD{reason}`; the exit code; the heartbeat line's counters
-(`dropped`, `malformed`, `obsFailures`, `eventWriteFailures`) every minute until then. Two alarms
-are distinct and must stay so (*pending, step 4 and E9*): **box down** — `capture_status.updated_at`
+(`dropped`, `malformed`, `obsFailures`, `eventWriteFailures`, `statusFailures`) every minute until then. Two alarms
+are distinct and must stay so (the probe writes them — step 4; reading them is E9's): **box down** — `capture_status.updated_at`
 stale, nothing is running; **feed dead** — the process is up and heartbeating but
-`last_tick_at` is stale or `FEED_DEAD` was written. A restarting job keeps the first fresh while
+`last_tick_at` is stale **while `market_state` says the market is open** (a `CLOSED` market is
+quiet by the watchdog's own rule — never alarm on it), or `stream_state` is not
+`connected_streaming`, or `FEED_DEAD` was written. `stream_state = window_closed` is not produced
+until R4's stream windows exist. A restarting job keeps the first fresh while
 the second fires; conflating them would hide an outage behind a healthy-looking heartbeat.
 
 The **outer loop contract** (T7, pending): the restart policy must restart on exit 1 with a
@@ -253,8 +256,16 @@ user; nothing in the belt, the pump or the schema. See `backlog.md` B1.
 - **2026-10-03 — step-6 review:** the belt's own event writes made best-effort (F1); boot bounded
   (F2); shutdown joins the sweep thread before closing (F3); the generation gate and
   `rebuilding()` (F5).
-- **Pending:** Tier-1 hold-and-retry for the sink; the heartbeat → `capture_status` (step 4);
-  pacer discovery (step 5); the T7 restart-policy contract; B1 multi-job.
+- **2026-10-03 — step 4:** the heartbeat publishes `capture_status` through `HealthProbe` (per-market
+  telemetry from `Buffers`, stream state and reconnects from the Supervisor's `BeltView`);
+  `last_bar_at_utc` is the bar's start; dropped ticks are charged to the shed tick's market;
+  `db_pending` is bars + ticks queued; a failing upsert is counted, never thrown. **Ruled the same
+  day:** the view and `ReconnectClassifier` share one rule — any `CONNECTED:*` substate except the
+  `STREAM-SENSING` handshake is streaming, so a resume onto a polling fallback ends the outage and
+  resets the ladder (the degradation itself is `TRANSPORT_DOWNGRADED`); the two voices cannot
+  disagree about what "resumed" means.
+- **Pending:** Tier-1 hold-and-retry for the sink (T9); pacer discovery (step 5); the T7
+  restart-policy contract; B1 multi-job.
 
 ## The scars this chapter answers
 

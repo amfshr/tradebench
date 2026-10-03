@@ -297,3 +297,9 @@ behind it").
 shows the failure count; a `SINK_FAILURE`/`DB_ERROR` event records the episode on recovery; past the
 budget the pump stops and the process exits 1 immediately; all behavioural tests mutation-verified;
 ch. 10's Tier-1 row updated from "today: stop and restart" to the landed policy.
+
+**Added 2026-10-03 (step-4 doctrine review, F3):** the observability pool (`Database`: Hikari, max 4,
+default 30s `connectionTimeout`) is shared by the belt's event writes and the heartbeat's
+`capture_status` upserts, so a Postgres outage can hold the sweep thread ~30s per event and the
+heartbeat ~30s per market — delaying the dead-pump notice past the ≤60s promise. Decide here: a
+short `connectionTimeout` for observability writes, or a dedicated small pool (config — Alex).

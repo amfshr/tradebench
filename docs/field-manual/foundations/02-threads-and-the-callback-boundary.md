@@ -44,7 +44,7 @@ the Lightstreamer SDK's own internal pool:
 
 | Thread | Born where | Does |
 |---|---|---|
-| `main` | JVM | builds the object graph (`app/Main.main`), then becomes the heartbeat loop: sleep 60s, check the pump is alive, log honest counters |
+| `main` | JVM | builds the object graph (`app/Main.main`), then becomes the heartbeat loop: sleep 60s, check the pump and the supervisor are alive, publish `capture_status`, log honest counters |
 | `capture-pump` | `Main` (`new Thread(pump, "capture-pump")`) | the single consumer: drains queues into the store — chapter 4 |
 | `capture-shutdown` | JVM shutdown hook | dormant until Ctrl-C, then the orderly close |
 | LS SDK threads | `LightstreamerClient` (inside `LightstreamerTransport.connect`) | not ours — a small pool the SDK manages; owns the socket and delivers every `onItemUpdate`/`onStatusChange` — the callback boundary |

@@ -20,7 +20,6 @@ public final class ReconnectClassifier {
 
     public enum Note { TRANSPORT_DOWNGRADED, GRACEFUL_CLOSE }
 
-    private static final String STREAMING = "CONNECTED:WS-STREAMING";
     private static final String POLLING = "CONNECTED:HTTP-POLLING";
 
     private final Tuning tuning;
@@ -63,6 +62,13 @@ public final class ReconnectClassifier {
         return null;
     }
 
+    /** Data flows on every CONNECTED substate except the STREAM-SENSING handshake — so a resume
+     * onto a polling fallback ends an outage (the downgrade itself is a {@link Note}); the
+     * Supervisor's health view uses the same rule, so the two can never disagree (ruled 2026-10-03). */
+    public static boolean isStreaming(String status) {
+        return status.startsWith("CONNECTED:") && !status.endsWith("STREAM-SENSING");
+    }
+
     /** Returns the outage summary when this status change ends one; else null. */
     public @Nullable Reconnect onStatus(String status, long monotonicNanos, long wallMillis) {
         if (status.startsWith("DISCONNECTED") && !closing) {
@@ -77,7 +83,7 @@ public final class ReconnectClassifier {
             }
             return null;
         }
-        if (STREAMING.equals(status) && inOutage) {
+        if (isStreaming(status) && inOutage) {
             inOutage = false;
             Duration wall = Duration.ofMillis(wallMillis - outageStartWallMillis);
             Duration awake = Duration.ofNanos(monotonicNanos - outageStartMono);

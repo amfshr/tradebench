@@ -131,7 +131,10 @@ A tight 06:00–17:00 window on an always-on box buys ~nothing (a closed DAX jus
 ## Read-model SQL (per console view)
 
 - **Health:** `capture_status` for the instance + `now() - updated_at_utc` freshness + open-gap
-  counts per market.
+  counts per market. Stale = `now() − updated_at_utc` > 2–3 × the collector's heartbeat
+  (`Main.HEARTBEAT`, 60s) → **box down**; a fresh row with a stale `last_tick_at_utc` while
+  `market_state` is open, or `stream_state ≠ connected_streaming`, → **feed dead** (ruled
+  2026-10-03). `window_closed` is not produced until R4's stream windows exist.
 - **Coverage map:** per market×day — expected session-minutes (`market_calendar`) `LEFT JOIN`
   present bar-minutes (`bars_1m`) → `complete | partial(gaps) | closed`.
 - **Gaps:** `bar_gaps WHERE healed_at_utc IS NULL` (open) + healed history with `heal_outcome`.

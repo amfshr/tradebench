@@ -7,6 +7,7 @@ import java.util.HashSet;
 import java.util.Map;
 import java.util.Queue;
 import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.DoubleSupplier;
@@ -21,6 +22,7 @@ import dev.amfshr.tradebench.ig.time.Sleeper;
 import dev.amfshr.tradebench.marketdata.events.EventType;
 import dev.amfshr.tradebench.marketdata.events.ServiceEvent;
 import dev.amfshr.tradebench.marketdata.events.Severity;
+import dev.amfshr.tradebench.marketdata.events.StreamState;
 import dev.amfshr.tradebench.marketdata.store.EventLog;
 
 /**
@@ -34,9 +36,9 @@ import dev.amfshr.tradebench.marketdata.store.EventLog;
  * is hit, or the broker rejects the configuration outright. <b>Slice C steps 2a–2b</b>:
  * connection resilience (reconnect classification, stuck-substate escalation, backoff,
  * exhaustion), the staleness watchdog (quiet vs dead), and witness quarantine (§3.5 blast
- * radius). The heartbeat and pacer discovery follow.
+ * radius). Pacer discovery follows.
  */
-public final class Supervisor implements StreamObserver, Runnable {
+public final class Supervisor implements StreamObserver, BeltView, Runnable {
 
     private static final ObjectMapper MAPPER = new ObjectMapper();
 
@@ -55,6 +57,11 @@ public final class Supervisor implements StreamObserver, Runnable {
     private final WitnessQuarantine witness;
     private final BackoffPolicy backoff;
     private final AtomicLong eventWriteFailures = new AtomicLong();
+    private final AtomicLong reconnectsTotal = new AtomicLong();
+    private final Set<String> quarantinedMarkets = ConcurrentHashMap.newKeySet();
+    // The heartbeat's view: written here on the sweep thread, read on the heartbeat thread.
+    private volatile boolean streaming;
+    private volatile boolean rebuilding;
 
     private final Queue<Observation> observations = new ConcurrentLinkedQueue<>();
 
@@ -253,6 +260,7 @@ public final class Supervisor implements StreamObserver, Runnable {
                         .put("code", error.code())
                         .put("message", error.message())));
         forget(epic);
+        quarantinedMarkets.add(epic);
         if (!stream.quarantine(epic)) {
             applyJudgment(witness.onUnsubscribeRefused(epic), error);
         }
@@ -267,6 +275,7 @@ public final class Supervisor implements StreamObserver, Runnable {
         ReconnectClassifier.Reconnect reconnect =
                 reconnects.onStatus(status.status(), status.monotonicNanos(), status.wallMillis());
         if (reconnect != null) {
+            reconnectsTotal.incrementAndGet();
             consecutiveFailures = 0; // streaming resumed — the ladder resets; the next outage's
             lastRebuildMono = Long.MIN_VALUE; // first rebuild restarts the budget clock
             record(new ServiceEvent(EventType.RECONNECT,
@@ -279,6 +288,10 @@ public final class Supervisor implements StreamObserver, Runnable {
                             .put("hostSlept", reconnect.hostSleptDuring())));
         }
         stuck.onStatus(status.status(), status.monotonicNanos());
+        streaming = ReconnectClassifier.isStreaming(status.status());
+        if (streaming) {
+            rebuilding = false;
+        }
     }
 
     /** Execute a session rebuild, paced by backoff; give up loud when the ladder is exhausted. */
@@ -318,6 +331,7 @@ public final class Supervisor implements StreamObserver, Runnable {
         }
         record(reasonEvent);
         reconnects.rebuilding(now, occurredAt.toEpochMilli()); // the outage is open from here, farewell or not
+        rebuilding = true; // the view reads RECONNECTING until the new connection streams
         if (!stream.rebuild()) {
             giveUp("fatal_config", occurredAt); // never climb a ladder against a lockout
             return;
@@ -352,6 +366,21 @@ public final class Supervisor implements StreamObserver, Runnable {
         } catch (RuntimeException e) {
             eventWriteFailures.incrementAndGet();
         }
+    }
+
+    // --- the heartbeat's read-only view --------------------------------------------------------
+
+    @Override
+    public StreamState stateOf(String epic) {
+        if (quarantinedMarkets.contains(epic)) {
+            return StreamState.QUARANTINED;
+        }
+        return streaming && !rebuilding ? StreamState.CONNECTED_STREAMING : StreamState.RECONNECTING;
+    }
+
+    @Override
+    public long reconnectsTotal() {
+        return reconnectsTotal.get();
     }
 
     private sealed interface Observation {

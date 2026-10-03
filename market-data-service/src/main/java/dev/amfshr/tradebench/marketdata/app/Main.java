@@ -32,10 +32,12 @@ import dev.amfshr.tradebench.marketdata.store.JsonlStore;
 import dev.amfshr.tradebench.marketdata.store.CaptureStore;
 import dev.amfshr.tradebench.marketdata.store.EventLog;
 import dev.amfshr.tradebench.marketdata.store.GapStore;
+import dev.amfshr.tradebench.marketdata.store.StatusStore;
 import dev.amfshr.tradebench.marketdata.store.PostgresObservabilityStore;
 import dev.amfshr.tradebench.marketdata.coverage.GapDetector;
 import dev.amfshr.tradebench.marketdata.ingest.Pump;
 import dev.amfshr.tradebench.marketdata.ingest.Buffers;
+import dev.amfshr.tradebench.marketdata.supervise.HealthProbe;
 import dev.amfshr.tradebench.marketdata.supervise.IgStreamControl;
 import dev.amfshr.tradebench.marketdata.supervise.Supervisor;
 import dev.amfshr.tradebench.marketdata.supervise.Tuning;
@@ -62,7 +64,7 @@ public final class Main {
     private Main() {
     }
 
-    public static void main(String[] args) throws Exception {
+    static void main() throws Exception {
         Map<String, String> env = System.getenv();
         String instance = required(env, "TRADEBENCH_INSTANCE");
         List<String> epics = Arrays.stream(required(env, "TRADEBENCH_EPICS").split(","))
@@ -80,6 +82,7 @@ public final class Main {
         CaptureStore sink;
         EventLog eventLog;
         GapStore gaps;
+        StatusStore statusStore;
         switch (sinkKind) {
             case "jsonl" -> {
                 Path captureDir = Path.of(required(env, "TRADEBENCH_CAPTURE_DIR"));
@@ -95,6 +98,7 @@ public final class Main {
                 // here, so they are discarded — the db sink is the one that persists observability.
                 eventLog = event -> { };
                 gaps = gap -> { };
+                statusStore = status -> { };
                 log(instance, "capturing to " + file.toAbsolutePath()
                         + " (jsonl: gaps + service events are not persisted)");
             }
@@ -108,6 +112,7 @@ public final class Main {
                         database.dataSource(), USER, source, instance);
                 eventLog = observability;
                 gaps = observability;
+                statusStore = observability;
                 log(instance, "capturing to " + dbUrl + " (migrated; advisory lock held)");
             }
             default -> throw new IgFatalConfigException(
@@ -142,6 +147,7 @@ public final class Main {
         for (String epic : epics) {
             supervisor.watch(epic);
         }
+        HealthProbe probe = new HealthProbe(instance, epics, queues, supervisor, clock, statusStore);
         Thread supervisorThread = new Thread(supervisor, "capture-supervisor");
         pumpThread.start();
         supervisorThread.start();
@@ -178,7 +184,7 @@ public final class Main {
                 log(instance, "pump did not stop within 5s — leaving sink open to avoid a"
                         + " close/write race; file may miss its tail");
             }
-            log(instance, summary(queues, pump, supervisor));
+            log(instance, summary(queues, pump, supervisor, probe));
         }, "capture-shutdown"));
 
         while (true) {
@@ -192,16 +198,19 @@ public final class Main {
                 log(instance, "FATAL: capture supervisor died — resilience is void from here");
                 System.exit(1);
             }
-            log(instance, summary(queues, pump, supervisor));
+            probe.publish();
+            log(instance, summary(queues, pump, supervisor, probe));
         }
     }
 
-    private static String summary(Buffers queues, Pump pump, Supervisor supervisor) {
+    private static String summary(Buffers queues, Pump pump, Supervisor supervisor,
+            HealthProbe probe) {
         return "ticks=" + queues.tickCount() + " bars=" + queues.barCount()
                 + " written=" + pump.writtenCount()
                 + " dropped=" + queues.droppedTicks() + " malformed=" + queues.malformedUpdates()
                 + " obsFailures=" + pump.observabilityFailures()
-                + " eventWriteFailures=" + supervisor.eventWriteFailures();
+                + " eventWriteFailures=" + supervisor.eventWriteFailures()
+                + " statusFailures=" + probe.statusFailures();
     }
 
     private static void closeQuietly(String instance, @Nullable AutoCloseable closeable) {

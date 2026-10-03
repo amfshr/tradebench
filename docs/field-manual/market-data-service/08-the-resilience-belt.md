@@ -286,8 +286,8 @@ recorded silence.
 
 **Still landing on `e1-t5c-supervisor-shell`.** Connection resilience, the watchdog, witness
 quarantine, the gap and `market_state_change` events, and the `Main` rewiring (the belt now
-drives the real session) are in; the branch still owes the heartbeat writing
-`capture_status` and pacer discovery. This chapter grows with them.
+drives the real session) are in, and so is the heartbeat writing `capture_status` through
+`HealthProbe`; the branch still owes pacer discovery. This chapter grows with it.
 
 ## The scars, in one line each
 

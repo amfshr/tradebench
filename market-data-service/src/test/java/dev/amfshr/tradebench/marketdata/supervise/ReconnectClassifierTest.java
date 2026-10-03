@@ -89,4 +89,17 @@ class ReconnectClassifierTest {
                 "the outage began at the drop, not at the rebuild");
         assertFalse(summary.replayed());
     }
+
+    @Test
+    void aPollingFallbackEndsTheOutageWhileTheSensingHandshakeDoesNot() {
+        classifier.onStatus(StuckSubstateEscalator.WILL_RETRY, 0, 0);
+
+        assertNull(classifier.onStatus("CONNECTED:STREAM-SENSING", 10 * S, 10_000),
+                "the handshake is not data — the outage stays open");
+        Reconnect summary = classifier.onStatus("CONNECTED:HTTP-POLLING", 30 * S, 30_000);
+
+        assertNotNull(summary, "data flows on a polling fallback — that is the resume");
+        assertFalse(summary.replayed());
+        assertEquals(Duration.ofSeconds(30), summary.wallOutage());
+    }
 }

@@ -21,6 +21,7 @@ import dev.amfshr.tradebench.ig.time.Sleeper;
 import dev.amfshr.tradebench.marketdata.events.EventType;
 import dev.amfshr.tradebench.marketdata.events.ServiceEvent;
 import dev.amfshr.tradebench.marketdata.events.Severity;
+import dev.amfshr.tradebench.marketdata.events.StreamState;
 import dev.amfshr.tradebench.marketdata.store.EventLog;
 
 class SupervisorTest {
@@ -242,6 +243,109 @@ class SupervisorTest {
         assertFalse(exhausted.get(), "the resume reset the ladder — no spurious give-up");
         assertEquals(0, count(EventType.FEED_DEAD));
         assertEquals(1, stream.rebuilds);
+    }
+
+    @Test
+    void theBeltViewReportsStreamingReconnectingAndQuarantined() {
+        supervisor.watch(DAX);
+        supervisor.watch(NASDAQ);
+        assertEquals(StreamState.RECONNECTING, supervisor.stateOf(DAX), "nothing has streamed yet");
+
+        supervisor.onStatusChange(STREAMING);
+        supervisor.sweep();
+        assertEquals(StreamState.CONNECTED_STREAMING, supervisor.stateOf(DAX));
+
+        supervisor.onStatusChange(WILL_RETRY);
+        supervisor.sweep();
+        assertEquals(StreamState.RECONNECTING, supervisor.stateOf(DAX), "a drop is not streaming");
+
+        supervisor.onStatusChange(STREAMING);
+        supervisor.sweep();
+        supervisor.onSubscribed(NASDAQ, WitnessQuarantine.Kind.PRICE);
+        supervisor.onSubscribed(NASDAQ, WitnessQuarantine.Kind.CHART);
+        failToTheStrikeCeiling(DAX);
+        supervisor.sweep();
+        assertEquals(StreamState.QUARANTINED, supervisor.stateOf(DAX));
+        assertEquals(StreamState.CONNECTED_STREAMING, supervisor.stateOf(NASDAQ), "the witness streams on");
+        assertEquals(1, supervisor.reconnectsTotal(), "one resume counted — the boot STREAMING is not a reconnect");
+    }
+
+    @Test
+    void aConnectionStuckInStreamSensingDoesNotReadAsStreaming() {
+        supervisor.onStatusChange("CONNECTED:STREAM-SENSING");
+        supervisor.sweep();
+        assertEquals(StreamState.RECONNECTING, supervisor.stateOf(DAX), "the handshake is not data");
+
+        supervisor.onStatusChange("CONNECTED:HTTP-POLLING");
+        supervisor.sweep();
+        assertEquals(StreamState.CONNECTED_STREAMING, supervisor.stateOf(DAX),
+                "a polling fallback still delivers data");
+    }
+
+    @Test
+    void aQuarantinedMarketStaysQuarantinedThroughAnOutage() {
+        supervisor.watch(DAX);
+        supervisor.watch(NASDAQ);
+        supervisor.onStatusChange(STREAMING);
+        supervisor.sweep();
+        supervisor.onSubscribed(NASDAQ, WitnessQuarantine.Kind.PRICE);
+        supervisor.onSubscribed(NASDAQ, WitnessQuarantine.Kind.CHART);
+        failToTheStrikeCeiling(DAX);
+        supervisor.sweep();
+        assertEquals(StreamState.QUARANTINED, supervisor.stateOf(DAX));
+
+        supervisor.onStatusChange(WILL_RETRY);
+        supervisor.sweep();
+        assertEquals(StreamState.QUARANTINED, supervisor.stateOf(DAX), "quarantine outranks the connection state");
+        assertEquals(StreamState.RECONNECTING, supervisor.stateOf(NASDAQ));
+    }
+
+    @Test
+    void aRebuildReadsAsReconnectingUntilTheNewConnectionStreams() {
+        supervisor.onStatusChange(STREAMING);
+        supervisor.sweep();
+        supervisor.watch(DAX);
+        freshness.flag.put(DAX, "DEAL");
+        supervisor.sweep();
+        advanceAndSweep(Duration.ofSeconds(460)); // a watchdog-driven rebuild; status still reads STREAMING
+        assertEquals(1, stream.rebuilds);
+        assertEquals(StreamState.RECONNECTING, supervisor.stateOf(DAX),
+                "mid-rebuild the old STREAMING is history, whatever the status says");
+
+        supervisor.onStatusChange(STREAMING); // the new connection comes up
+        supervisor.sweep();
+        assertEquals(StreamState.CONNECTED_STREAMING, supervisor.stateOf(DAX));
+    }
+
+    @Test
+    void reconnectsAreCounted() {
+        assertEquals(0, supervisor.reconnectsTotal());
+        supervisor.onStatusChange(WILL_RETRY);
+        clock.advance(Duration.ofSeconds(30));
+        supervisor.onStatusChange(STREAMING);
+        supervisor.sweep();
+
+        assertEquals(1, supervisor.reconnectsTotal());
+    }
+
+    @Test
+    void aResumeOntoAPollingFallbackResetsTheLadder() {
+        supervisor.onStatusChange(WILL_RETRY);
+        supervisor.sweep();
+        clock.advance(Duration.ofSeconds(120));
+        supervisor.sweep(); // the first rebuild of this outage starts the budget clock
+        assertEquals(1, stream.rebuilds);
+
+        supervisor.onStatusChange("CONNECTED:HTTP-POLLING"); // WebSocket blocked at the host; data still flows
+        supervisor.sweep();
+
+        assertEquals(1, count(EventType.RECONNECT), "a polling resume is a resume");
+        assertEquals(1, count(EventType.TRANSPORT_DOWNGRADED), "and the degradation is recorded");
+        clock.advance(Tuning.playbook().giveUpAfter().plusSeconds(1));
+        supervisor.sweep();
+        assertFalse(exhausted.get(), "the ladder reset — no spurious give-up on a flowing feed");
+        assertEquals(StreamState.CONNECTED_STREAMING, supervisor.stateOf(DAX),
+                "the view and the classifier agree on what resumed means");
     }
 
     @Test
