@@ -17,7 +17,6 @@ import org.junit.jupiter.api.Test;
 import dev.amfshr.tradebench.core.domain.Bar1m;
 import dev.amfshr.tradebench.core.domain.OhlcPrices;
 import dev.amfshr.tradebench.core.domain.Tick;
-import dev.amfshr.tradebench.marketdata.ingest.Buffers;
 
 class PostgresStoreTest extends PostgresTestBase {
 
@@ -29,10 +28,10 @@ class PostgresStoreTest extends PostgresTestBase {
     void setUp() throws SQLException {
         try (Connection c = database.dataSource().getConnection();
                 Statement s = c.createStatement()) {
-            s.execute("TRUNCATE ticks, bars_1m, service_events, instruments"
+            s.execute("TRUNCATE ticks, bars_1m, instruments"
                     + " RESTART IDENTITY CASCADE");
         }
-        sink = new PostgresStore(database.dataSource(), "default-user", "ig-stream-demo", "test-run");
+        sink = new PostgresStore(database.dataSource(), "default-user", "ig-stream-demo");
     }
 
     @AfterEach
@@ -148,24 +147,6 @@ class PostgresStoreTest extends PostgresTestBase {
         }
     }
 
-    @Test
-    void stateChangeLandsAsServiceEvent() throws SQLException {
-        sink.write(new Buffers.StateChange(DAX,
-                Instant.parse("2026-09-28T16:30:00Z"), "CLOSED"));
-
-        try (Connection c = database.dataSource().getConnection();
-                Statement s = c.createStatement();
-                ResultSet r = s.executeQuery("SELECT event_type, category, severity, instance,"
-                        + " detail->>'dealFlag' FROM service_events")) {
-            r.next();
-            assertEquals("market_state_change", r.getString(1));
-            assertEquals("data_liveness", r.getString(2));
-            assertEquals("info", r.getString(3));
-            assertEquals("test-run", r.getString(4));
-            assertEquals("CLOSED", r.getString(5));
-        }
-    }
-
     // Change detector (doctrine 2.3): registration correctness; the id-cache is an
     // optimisation with no observable row effect, so no mutation can kill this via rows.
     @Test
@@ -181,7 +162,7 @@ class PostgresStoreTest extends PostgresTestBase {
     @Test
     void unknownSourceNameFailsLoudAtConstruction() {
         IllegalStateException thrown = assertThrows(IllegalStateException.class,
-                () -> new PostgresStore(database.dataSource(), "default-user", "not-a-source", "x"));
+                () -> new PostgresStore(database.dataSource(), "default-user", "not-a-source"));
         assertEquals(true, thrown.getMessage().contains("not-a-source"));
     }
 }

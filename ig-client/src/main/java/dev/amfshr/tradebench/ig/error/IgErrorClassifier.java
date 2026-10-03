@@ -10,16 +10,16 @@ import org.jspecify.annotations.Nullable;
  * family/substring because IG varies suffixes by field (e.g. {@code validation.pattern.
  * invalid.authenticationRequest.identifier}).
  *
- * <p>Unknown codes default to RETRYABLE: T5's supervisor ladder will bound retries (floor,
- * ceiling, 10-consecutive-failure stop — §3.2), so a misclassified retryable is bounded —
- * while a misclassified fatal permanently stops capture on a transient, the worse failure
- * for a data service. Until that ladder exists, callers must not loop on RETRYABLE
- * unbounded.
+ * <p>Unknown codes default to RETRYABLE: the supervisor bounds retries at run time (its
+ * recovery budget, §3.2) and at boot (the same budget), so a misclassified retryable is
+ * bounded — while a misclassified fatal permanently stops capture on a transient, the worse
+ * failure for a data service. Callers must never loop on RETRYABLE unbounded.
  */
 public final class IgErrorClassifier {
 
     private static final List<String> FATAL_FAMILIES = List.of(
             "error.security.api-key",
+            "error.security.invalid-details", // wrong identifier/password — retrying risks the lockout
             "preferred.account.disabled",
             "preferred.account.not.set",
             "error.security.account-suspended",

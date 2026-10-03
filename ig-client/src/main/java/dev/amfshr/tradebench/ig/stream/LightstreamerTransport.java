@@ -79,7 +79,7 @@ public final class LightstreamerTransport implements StreamTransport {
         }
 
         @Override
-        public void subscribe(SubscriptionSpec spec, UpdateListener updates,
+        public SubscriptionHandle subscribe(SubscriptionSpec spec, UpdateListener updates,
                 StateListener state) {
             Subscription subscription = toSubscription(spec);
             subscription.addListener(new SubscriptionListener() {
@@ -136,11 +136,25 @@ public final class LightstreamerTransport implements StreamTransport {
                 }
             });
             client.subscribe(subscription);
+            return new LsSubscriptionHandle(subscription);
+        }
+
+        @Override
+        public void unsubscribe(SubscriptionHandle handle) {
+            if (handle instanceof LsSubscriptionHandle ls) {
+                client.unsubscribe(ls.subscription());
+            } else {
+                throw new IllegalArgumentException(
+                        "not a Lightstreamer subscription handle: " + handle);
+            }
         }
 
         @Override
         public void close() {
             client.disconnect();
         }
+    }
+
+    private record LsSubscriptionHandle(Subscription subscription) implements SubscriptionHandle {
     }
 }

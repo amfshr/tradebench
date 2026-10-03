@@ -12,7 +12,6 @@ import com.fasterxml.jackson.databind.node.ObjectNode;
 import dev.amfshr.tradebench.core.domain.Bar1m;
 import dev.amfshr.tradebench.core.domain.OhlcPrices;
 import dev.amfshr.tradebench.core.domain.Tick;
-import dev.amfshr.tradebench.marketdata.ingest.Buffers;
 
 /** One JSON object per line; BigDecimals serialize with their exact wire scale (D36). */
 public final class JsonlStore implements CaptureStore {
@@ -60,15 +59,6 @@ public final class JsonlStore implements CaptureStore {
             node.put("ltv", bar.lastTradedVolume());
         }
         writeLine(node);
-    }
-
-    @Override
-    public void write(Buffers.StateChange stateChange) {
-        writeLine(mapper.createObjectNode()
-                .put("kind", "state")
-                .put("epic", stateChange.epic())
-                .put("utc", stateChange.atUtc().toString())
-                .put("dealFlag", stateChange.dealFlag()));
     }
 
     private void putOhlc(ObjectNode node, OhlcPrices prices) {

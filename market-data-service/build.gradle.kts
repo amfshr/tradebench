@@ -28,6 +28,7 @@ dependencies {
     runtimeOnly(libs.flyway.postgresql)
 
     testImplementation(libs.testcontainers.postgresql)
+    testImplementation(testFixtures(project(":ig-client"))) // the shared fake Lightstreamer seam
     testImplementation(platform(libs.junit.bom))
     testImplementation(libs.junit.jupiter)
     testRuntimeOnly(libs.junit.platform.launcher)

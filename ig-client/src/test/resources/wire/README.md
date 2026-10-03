@@ -37,3 +37,11 @@ T6's heal path — re-golden those fixtures from captured bytes then.
 
 All credentials/tokens in fixtures and tests are obvious fakes; account ids and the
 identifier reuse values the inherited playbook already publishes.
+
+- `application-allowance.json` — **authored** from the documented `GET /operations/application`
+  shape (two applications; ours second, so the key match is load-bearing). The demo
+  `allowanceAccountOverall` of 10 is the trading-ig field evidence (demo enforces 10/min, not the
+  published 30). Field names come from trading-ig's `rest.py` via
+  `docs/reference/trading-ig-comparison.md` (our reference summary does not carry this endpoint's
+  schema). The gated demo smoke (`IG_SMOKE=1 ./gradlew :ig-client:demoSmoke`) reads the endpoint for
+  real and asserts both overall figures are positive — re-golden from its output when it next runs.

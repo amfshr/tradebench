@@ -351,3 +351,28 @@ scale (each epic adds a part, not more flat numbers) matching the infra-vs-domai
 valid); clean per-part renumbering + making those cross-references name-based is **deferred to the
 chapter-merge pass** (backlog B6), which renumbers anyway. The redundant hand-written prev/next
 footers were dropped — the site generates nav from the tree.
+
+## D27 — The resilience belt's operating contract: DB-write tiers, exhaustion as a time budget with `exit(1)`, one streaming rule — **Accepted** (2026-10-03, Alex)
+
+Three cross-cutting rulings from E1-T5 slice C, logged because T7 (deploy), T9 (sink
+hold-and-retry) and every later service inherit them. **(1) DB-write tiers.** Tier 1 — product data
+(ticks, bars) — is **fail-closed**: a failed write halts the pump and the process exits for the outer
+loop to restart (P9; the hold-and-retry refinement is T9). Tier 2 — observability (service events,
+gaps, capture status) — is **best-effort-but-loud**: caught, counted (`obsFailures=` /
+`eventWriteFailures=` / `statusFailures=` in the heartbeat), never propagated, so the product plane
+can never halt to protect a breadcrumb. Tier 3 — decisions — never touch the DB: the cores run on
+in-memory state (the DB is downstream of decisions, never upstream). **(2) Exhaustion.** Recovery is
+a **time budget** — `Tuning.giveUpAfter` = 10 min of continuous no-streaming from an outage's first
+rebuild (the 10-rebuild ceiling stays as a cap) — not a count, because rung cadence is
+detector-driven (a 10-rung ladder spans 20 min–3.5 h). Giving up is
+`FEED_DEAD{reason: budget | ceiling | fatal_config}` then an orderly **`exit(1)`**, so any restart
+policy brings the job back and none is load-bearing (the policy itself is T7's deploy contract);
+boot retries retryable IG errors every 30s inside the same budget and fails loud at once on a
+rejected configuration (`IgFatalConfigException`, now including `error.security.invalid-details`).
+**(3) One streaming rule.** `ReconnectClassifier.isStreaming` — any `CONNECTED:*` substate except the
+`STREAM-SENSING` handshake — is the single definition of "data flowing", shared by the reconnect
+classifier and the health view: a resume onto a polling fallback ends an outage and resets the
+ladder (the degradation is `TRANSPORT_DOWNGRADED`), and the two voices cannot disagree. **Why:** each
+was ruled in-ticket (E1 plan T5 §; chapter 10 "The rulings behind it"), but they are contracts other
+work depends on, and G2 says a decision lives in the log, not only in the plan that made it.
+Supersedes the 09-28 nod's "exhaustion = clean exit(0)".

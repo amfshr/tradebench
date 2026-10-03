@@ -123,6 +123,31 @@ conservative, adjust minus headroom post-login) · exhaustion = clean exit(0), c
 restart policy is the outer loop at T7 · all §8 timings in one `Tuning` record with
 playbook defaults as named constants (policy, not machine config; env overrides only when
 actually needed).
+**Amended (Alex, 2026-10-03, slice C step 6) — exhaustion re-ruled:** recovery is a **time
+budget**, not a rebuild count — `Tuning.giveUpAfter` = **10 min** of continuous no-streaming
+from an outage's first rebuild (the 10-rebuild ceiling stays as a cap; rung cadence is
+detector-driven — a 10-rung ladder spans 20 min–3.5 h depending on which detector drives
+it — so a count was never the number it looked like) →
+`FEED_DEAD` (detail `reason`: budget · ceiling · fatal_config) → orderly **`exit(1)`**, not 0:
+the mission failed, and 1 restarts under every policy (`always` / `unless-stopped` /
+`on-failure`) instead of making `restart: always` load-bearing. Boot retries *retryable* IG
+errors under the login gate (30s between attempts, bounded by the same 10-min budget — the
+error taxonomy defaults unknown codes to retryable, so an unbounded boot loop would retry a
+wrong password forever) and fails loud on a rejected configuration or an exhausted budget, so
+a restart during an outage never becomes a login storm; a rejected configuration mid-ladder
+stops recovery at once, and `error.security.invalid-details` (wrong identifier/password) is
+now classified fatal. A rebuild opens the outage in the classifier (the resume is a
+replacement) and superseded connections are gated, so the ladder reset never races the
+farewell `DISCONNECTED`. *Why:* a JVM restart is ≈ free during an IG
+outage (the feed is already dead; one process per job, B1) and the only cure for a wedged
+process — so err short. **Also ruled 2026-10-03:** observability writes are best-effort-but-loud in
+both the pump (step 3) and the belt (step-6 review) — counted, surfaced by the heartbeat, never
+fatal — while the sink stays fail-closed (its hold-and-retry refinement is **T9**); shutdown stops
+and joins the sweep thread before closing the stream. Pacer discovery (step 5): start at 10/min,
+then min(`allowanceAccountOverall`, `allowanceApplicationOverall`) − **5** headroom (≥1) from
+`GET /operations/application` — ruled 2026-10-03 (Alex): the account figure is shared by every key
+on the account, so the tighter of the two binds; both are refused at the boundary when missing or
+non-positive; an unlisted key or a failed read keeps the start and says so (`IG_API_ERROR` + log).
 **Build slices:** A pure cores (supervise/coverage decision logic + scenario tests) →
 B store side (EventLog, V2 bar_gaps, drift regen) → C shell (Supervisor, HealthProbe,
 Main rewiring, heartbeat, pacer discovery).
@@ -211,3 +236,74 @@ the Air) capture the same DAX sessions for a full week.
 ruling on making Tradebench the primary capture — recorded in `docs/decisions.md`.
 **Note:** deltas are expected (clock edges, reconnect windows); the bar is *explained*, not
 *zero*.
+
+## T9 — Sink blip resilience: hold-and-retry for the capture sink ⬜ (ticketed 2026-10-03; after T5 slice C)
+
+**Type** build · **Branch** `—` · **Started** — · **Blocked by** T5
+
+**Goal:** a Postgres blip during a tick/bar write costs *nothing* the queues were already holding —
+the sink holds the data, reconnects, retries, and says so loudly; it stops (and the process exits 1
+at once) only when a budget expires. Refines the fail-closed contract, never removes it (P8 data
+collected forever · P9 fail closed, fail loud · CLAUDE.md: the DB is downstream of decisions, never
+upstream).
+
+**Problem (the 2026-10-03 step-6 doctrine-review discussion; Field Manual ch. 10, "When the
+database fails — the pending decision"):** today a failed tick/bar write (`PersistenceException`
+from `PostgresStore`, which holds one dedicated connection + its prepared statements for its
+lifetime) stops the pump; `Main`'s heartbeat notices within ≤60s (`Main.HEARTBEAT`) and
+`System.exit(1)`s; the outer loop restarts the job. Fail-closed, but crude: a five-second blip costs
+~1–2 min of ticks (never healable — IG does not re-serve ticks) plus a bar gap (healed later by T6
+from IG REST) — while the data sat safely in memory: bars stay queued (ack-after-apply, ch. 4) and
+the tick queue holds `Buffers.DEFAULT_TICK_CAPACITY` = 100 000 ticks (ch. 10's estimate: ~18 h of
+DAX at normal rate). Tier-2 observability writes already self-heal — pooled connection per write,
+best-effort-but-loud (ruled 2026-10-03: slice C step 3 for the pump, the step-6 review's F1 for the
+belt; both recorded in ch. 10, "The rulings behind it").
+
+**Approach (the ticket's scope):**
+1. **Hold the data.** Bars remain queued (already true — ack-after-apply). The pending tick batch
+   (≤ `PostgresStore.TICK_BATCH_LIMIT` = 500 ticks `addBatch`'d into the `PreparedStatement`) is
+   retained by the store across a reconnect — today it is lost with the dead statement.
+2. **Reconnect.** `PostgresStore` re-acquires its connection from the Hikari pool (which hands back
+   a healthy connection once Postgres is up) and re-prepares its statements; the pump then retries
+   with backoff.
+3. **Loud.** A sink-failure counter surfaced in the heartbeat line (like `obsFailures=` /
+   `eventWriteFailures=`), plus a `SINK_FAILURE` / `DB_ERROR` service event once the DB is writable
+   again (both already in the D25 `EventType` catalogue). The dead-man (box-down) alarm — stale
+   `capture_status`, slice C step 4 — fires meanwhile, correctly.
+4. **Bounded.** A retry budget, then stop + `exit(1)` as today. **Decision: (TBD)** — default
+   proposal **10 min** (symmetry with `Tuning.giveUpAfter`); on record: a longer budget costs
+   nothing while the queues hold (bars unbounded; ticks ~18 h), so it could reasonably be longer,
+   or tied to queue pressure (give up only when the tick queue begins shedding).
+5. **Pump death → immediate exit.** Not today's up-to-60s heartbeat latency: an uncaught-exception
+   path or a fatal callback from the pump to `Main`.
+6. **Tests to doctrine (G5).** A failing sink write against a recovering fake DB → no data lost,
+   the retry succeeds, the counter is incremented, the event is written on recovery; the budget
+   boundary exact; failure-mode tests for the budget-expiry path; every behavioural test
+   mutation-verified. `PumpTest.sinkFailureStopsThePumpKeepsTheBarAndKeepsTheCause` is the current
+   fail-closed contract this ticket refines, not removes.
+
+**Not in scope:** the Tier-2 best-effort policy; the belt; the schema.
+
+**Sequencing:** after T5 slice C merges (slice C is in flight — steps 4 and 5 remain).
+**Sequence vs T6 (the EOD heal): (TBD, Alex)** — recorded here, not decided.
+
+**In-ticket decisions:** the retry budget (approach item 4) — Alex rules; the default proposal is
+10 min.
+
+**Cross-references:** P8 · P9 · CLAUDE.md "the DB is downstream of decisions" · Field Manual ch. 10
+(`docs/field-manual/market-data-service/10-the-failure-playbook.md`, "When the database fails" — the
+Tier-1 row and "the pending decision", which this ticket closes) · ch. 4 (the pump, ack-after-apply)
+· ch. 5 (the capture store) · D25 (`EventType.SINK_FAILURE` / `DB_ERROR`) · the 2026-10-03 slice C
+step-3 pump ruling (observability best-effort-but-loud, sink fail-closed — ch. 10, "The rulings
+behind it").
+
+**DoD anchor:** a Postgres restart of ≤ budget length loses zero bars and zero ticks; the heartbeat
+shows the failure count; a `SINK_FAILURE`/`DB_ERROR` event records the episode on recovery; past the
+budget the pump stops and the process exits 1 immediately; all behavioural tests mutation-verified;
+ch. 10's Tier-1 row updated from "today: stop and restart" to the landed policy.
+
+**Added 2026-10-03 (step-4 doctrine review, F3):** the observability pool (`Database`: Hikari, max 4,
+default 30s `connectionTimeout`) is shared by the belt's event writes and the heartbeat's
+`capture_status` upserts, so a Postgres outage can hold the sweep thread ~30s per event and the
+heartbeat ~30s per market — delaying the dead-pump notice past the ≤60s promise. Decide here: a
+short `connectionTimeout` for observability writes, or a dedicated small pool (config — Alex).

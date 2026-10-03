@@ -15,6 +15,7 @@ class IgErrorClassifierTest {
             // fatal config: retry can never fix these; retrying risks a key lockout
             "error.security.api-key-invalid, FATAL_CONFIG",
             "error.security.api-key-disabled, FATAL_CONFIG",
+            "error.security.invalid-details, FATAL_CONFIG",
             "error.public-api.failure.preferred.account.disabled, FATAL_CONFIG",
             "error.public-api.failure.preferred.account.not.set, FATAL_CONFIG",
             "error.security.account-suspended, FATAL_CONFIG",

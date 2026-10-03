@@ -1,6 +1,7 @@
 package dev.amfshr.tradebench.ig.stream;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -22,39 +23,11 @@ class IgStreamClientTest {
 
     private static final String DAX = "IX.D.DAX.DAILY.IP";
 
-    private FakeLs fake;
+    private FakeStreamTransport fake;
     private RecordingEvents events;
     private IgStreamSession streamSession;
-
-    private static final class FakeLs implements StreamTransport {
-        String serverAddress;
-        String user;
-        String password;
-        final List<SubscriptionSpec> specs = new ArrayList<>();
-        final List<UpdateListener> updateListeners = new ArrayList<>();
-        boolean closed;
-
-        @Override
-        public Connection connect(String serverAddress, String user, String password,
-                ConnectionListener listener) {
-            this.serverAddress = serverAddress;
-            this.user = user;
-            this.password = password;
-            return new Connection() {
-                @Override
-                public void subscribe(SubscriptionSpec spec, UpdateListener updates,
-                        StateListener state) {
-                    specs.add(spec);
-                    updateListeners.add(updates);
-                }
-
-                @Override
-                public void close() {
-                    closed = true;
-                }
-            };
-        }
-    }
+    private StreamTransport.SubscriptionHandle priceHandle;
+    private StreamTransport.SubscriptionHandle chartHandle;
 
     private static final class RecordingEvents implements StreamEvents {
         final List<TickUpdate> ticks = new ArrayList<>();
@@ -79,32 +52,32 @@ class IgStreamClientTest {
 
     @BeforeEach
     void setUp() {
-        fake = new FakeLs();
+        fake = new FakeStreamTransport();
         events = new RecordingEvents();
         IgSession session = new IgSession(new IgTokens("cstA", "xstA"), "Z6CS3E",
                 "https://demo-apd.marketdatasystems.com", List.of());
         streamSession = new IgStreamClient(fake).connect(session, events, new NoopConnection());
-        streamSession.subscribePrice(DAX, new NoopState());
-        streamSession.subscribeChart1m(DAX, new NoopState());
+        priceHandle = streamSession.subscribePrice(DAX, new NoopState());
+        chartHandle = streamSession.subscribeChart1m(DAX, new NoopState());
     }
 
     @Test
     void connectsWithTheSessionsEndpointAccountAndTokenPassword() {
-        assertEquals("https://demo-apd.marketdatasystems.com", fake.serverAddress);
-        assertEquals("Z6CS3E", fake.user);
-        assertEquals("CST-cstA|XST-xstA", fake.password);
+        assertEquals("https://demo-apd.marketdatasystems.com", fake.last().serverAddress);
+        assertEquals("Z6CS3E", fake.last().user);
+        assertEquals("CST-cstA|XST-xstA", fake.last().password);
     }
 
     @Test
     void subscribesThePriceChartPairExactly() {
-        assertEquals(2, fake.specs.size());
-        StreamTransport.SubscriptionSpec price = fake.specs.get(0);
+        assertEquals(2, fake.last().specs.size());
+        StreamTransport.SubscriptionSpec price = fake.last().specs.get(0);
         assertEquals("MERGE", price.mode());
         assertEquals(List.of("PRICE:Z6CS3E:" + DAX), price.items());
         assertEquals(List.of("TIMESTAMP", "BIDPRICE1", "ASKPRICE1", "DLG_FLAG"), price.fields());
         assertEquals("Pricing", price.dataAdapter());
 
-        StreamTransport.SubscriptionSpec chart = fake.specs.get(1);
+        StreamTransport.SubscriptionSpec chart = fake.last().specs.get(1);
         assertEquals("MERGE", chart.mode());
         assertEquals(List.of("CHART:" + DAX + ":1MINUTE"), chart.items());
         assertEquals(List.of("UTM", "CONS_END",
@@ -121,7 +94,7 @@ class IgStreamClientTest {
         fields.put("ASKPRICE1", "24511.7");
         fields.put("DLG_FLAG", "DEAL ");
 
-        fake.updateListeners.get(0).onUpdate("PRICE:Z6CS3E:" + DAX, fields);
+        fake.last().updateListeners.get(0).onUpdate("PRICE:Z6CS3E:" + DAX, fields);
 
         assertEquals(List.of(new TickUpdate(DAX, Instant.parse("2026-09-25T14:57:03.250Z"),
                 new BigDecimal("24510.5"), new BigDecimal("24511.7"), "DEAL")), events.ticks);
@@ -130,7 +103,7 @@ class IgStreamClientTest {
 
     @Test
     void garbagePriceUpdateCountsAsMalformed() {
-        fake.updateListeners.get(0).onUpdate("PRICE:Z6CS3E:" + DAX,
+        fake.last().updateListeners.get(0).onUpdate("PRICE:Z6CS3E:" + DAX,
                 Map.of("TIMESTAMP", "garbage"));
 
         assertTrue(events.ticks.isEmpty());
@@ -143,7 +116,7 @@ class IgStreamClientTest {
         fields.put("CONS_END", "0");
         fields.put("UTM", "1790348220000");
 
-        fake.updateListeners.get(1).onUpdate("CHART:" + DAX + ":1MINUTE", fields);
+        fake.last().updateListeners.get(1).onUpdate("CHART:" + DAX + ":1MINUTE", fields);
 
         assertTrue(events.bars.isEmpty());
         assertTrue(events.malformed.isEmpty());
@@ -156,7 +129,7 @@ class IgStreamClientTest {
         Map<String, @Nullable String> fields = new HashMap<>();
         fields.put("UTM", "1790348220000");
 
-        fake.updateListeners.get(1).onUpdate("CHART:" + DAX + ":1MINUTE", fields);
+        fake.last().updateListeners.get(1).onUpdate("CHART:" + DAX + ":1MINUTE", fields);
 
         assertTrue(events.bars.isEmpty());
         assertEquals(List.of("CHART:" + DAX + ":1MINUTE"), events.malformed);
@@ -168,7 +141,7 @@ class IgStreamClientTest {
         fields.put("CONS_END", "1");
         fields.put("UTM", "1790348220000");
 
-        fake.updateListeners.get(1).onUpdate("CHART:" + DAX + ":1MINUTE", fields);
+        fake.last().updateListeners.get(1).onUpdate("CHART:" + DAX + ":1MINUTE", fields);
 
         assertTrue(events.bars.isEmpty());
         assertEquals(List.of("CHART:" + DAX + ":1MINUTE"), events.malformed);
@@ -177,7 +150,15 @@ class IgStreamClientTest {
     @Test
     void closeClosesTheConnection() {
         streamSession.close();
-        assertTrue(fake.closed);
+        assertTrue(fake.last().closed);
+    }
+
+    @Test
+    void unsubscribeDropsJustThatSubscriptionLeavingTheRestAndTheConnection() {
+        streamSession.unsubscribe(priceHandle);
+
+        assertEquals(List.of(chartHandle), fake.last().active); // only the price subscription is gone
+        assertFalse(fake.last().closed);                        // the connection itself stays up
     }
 
     private static final class NoopConnection implements StreamTransport.ConnectionListener {

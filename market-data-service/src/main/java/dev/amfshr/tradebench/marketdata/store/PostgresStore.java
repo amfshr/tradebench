@@ -12,20 +12,16 @@ import java.util.Map;
 
 import javax.sql.DataSource;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
-
 import dev.amfshr.tradebench.core.domain.Bar1m;
 import dev.amfshr.tradebench.core.domain.OhlcPrices;
 import dev.amfshr.tradebench.core.domain.Tick;
-import dev.amfshr.tradebench.marketdata.events.EventType;
-import dev.amfshr.tradebench.marketdata.ingest.Buffers;
-import dev.amfshr.tradebench.marketdata.store.CaptureStore;
 
 /**
- * The real write path (T4): bars and state changes apply immediately (ack-after-apply —
- * the pump removes a bar from its queue only after this write returns); ticks batch and
- * land on {@link #flush()} or when the batch fills (best-effort by design, like their
- * queue). Single-threaded by contract: only the pump calls a sink.
+ * The real write path (T4): bars apply immediately (ack-after-apply — the pump removes a bar
+ * from its queue only after this write returns); ticks batch and land on {@link #flush()} or
+ * when the batch fills (best-effort by design, like their queue). Market data only (decision
+ * #1) — service events and bar gaps go to the observability store, never here. Single-threaded
+ * by contract: only the pump calls a sink.
  */
 public final class PostgresStore implements CaptureStore {
 
@@ -45,24 +41,16 @@ public final class PostgresStore implements CaptureStore {
                 ask_o = EXCLUDED.ask_o, ask_h = EXCLUDED.ask_h,
                 ask_l = EXCLUDED.ask_l, ask_c = EXCLUDED.ask_c,
                 ltv = EXCLUDED.ltv""";
-    private static final String INSERT_EVENT = """
-            INSERT INTO service_events (instance, user_id, source_id, instrument_id, category,
-                event_type, severity, event_time_utc, detail)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?::jsonb)""";
 
     private final Connection connection;
     private final PreparedStatement tickInsert;
     private final PreparedStatement barUpsert;
-    private final PreparedStatement eventInsert;
     private final short userId;
     private final short sourceId;
-    private final String instance;
     private final Map<String, Short> instrumentIds = new HashMap<>();
-    private final ObjectMapper mapper = new ObjectMapper();
     private int pendingTicks;
 
-    public PostgresStore(DataSource dataSource, String userName, String sourceName, String instance) {
-        this.instance = instance;
+    public PostgresStore(DataSource dataSource, String userName, String sourceName) {
         try {
             this.connection = dataSource.getConnection();
             this.userId = lookupId("SELECT id FROM users WHERE name = ?", userName, "user");
@@ -70,7 +58,6 @@ public final class PostgresStore implements CaptureStore {
                     "source");
             this.tickInsert = connection.prepareStatement(INSERT_TICK);
             this.barUpsert = connection.prepareStatement(UPSERT_BAR);
-            this.eventInsert = connection.prepareStatement(INSERT_EVENT);
         } catch (SQLException e) {
             throw new PersistenceException("PostgresStore initialisation failed", e);
         }
@@ -115,28 +102,6 @@ public final class PostgresStore implements CaptureStore {
     }
 
     @Override
-    public void write(Buffers.StateChange stateChange) {
-        // A DLG_FLAG transition is a market_state_change event (v2, D25). Slice C unifies this
-        // onto the EventLog seam when it rewires Main; here it rides the pump's existing path.
-        try {
-            eventInsert.setString(1, instance);
-            eventInsert.setShort(2, userId);
-            eventInsert.setShort(3, sourceId);
-            eventInsert.setShort(4, instrumentId(stateChange.epic()));
-            eventInsert.setString(5, EventType.MARKET_STATE_CHANGE.category().db());
-            eventInsert.setString(6, EventType.MARKET_STATE_CHANGE.db());
-            eventInsert.setString(7, EventType.MARKET_STATE_CHANGE.defaultSeverity().db());
-            eventInsert.setObject(8, utc(stateChange.atUtc()));
-            eventInsert.setString(9, mapper.createObjectNode()
-                    .put("epic", stateChange.epic())
-                    .put("dealFlag", stateChange.dealFlag()).toString());
-            eventInsert.executeUpdate();
-        } catch (SQLException e) {
-            throw new PersistenceException("state-change write failed", e);
-        }
-    }
-
-    @Override
     public void flush() {
         if (pendingTicks == 0) {
             return;
@@ -155,7 +120,6 @@ public final class PostgresStore implements CaptureStore {
         try {
             tickInsert.close();
             barUpsert.close();
-            eventInsert.close();
             connection.close();
         } catch (SQLException e) {
             throw new PersistenceException("PostgresStore close failed", e);

@@ -89,7 +89,7 @@ all non-data-product integration goes via events (D4). Writes: owner only, alway
 | `error` | `IgErrorClass`, `IgErrorClassifier`, `IgErrors`, exceptions | the §1.6 taxonomy: FATAL_CONFIG (stop — lockout risk) vs RETRYABLE (rebuild fixes); session-dead is a **context** handled by the session manager, not an enum value |
 | `http` | `HttpCall`, `HttpResult`, **`HttpTransport`**, `JdkHttpTransport` | **the wire seam** — the app injects the transport and may decorate it (retries, circuit breaker); timeouts injectable, library defaults 10s/30s |
 | `session` | `IgSessionManager`, `LoginRateGate`, `IgSession`, `IgTokens`, `IgAccount` | login → switch → token re-read (§1.1); validate-before-relogin (§1.2); 61s stagger on monotonic clock |
-| `rest` | `IgRestClient`, `RequestPacer`, price/market records | paced (30/min) REST v3: market details + dealing rules; prices last-N keyed on `snapshotTimeUTC` only, allowance parsed |
+| `rest` | `IgRestClient`, `RequestPacer`, price/market records | paced REST — a conservative 10/min start, then the budget discovered from `GET /operations/application` v1 (`ApplicationAllowance`, our key only); v3 market details + dealing rules; prices last-N keyed on `snapshotTimeUTC` only, allowance parsed |
 | `time` | `Sleeper` | injectable sleep seam; monotonic time enters as `LongSupplier` |
 | `stream` | **`StreamTransport`**, `LightstreamerTransport`, `IgStreamClient`, `IgStreamSession`, `StreamParsers`, DTOs | the stream seam (simulator seed) + LS impl; subscribePrice/subscribeChart1m as separate capabilities (pairing is service policy); pure never-throw parsers, sealed-only candles, malformed counted |
 

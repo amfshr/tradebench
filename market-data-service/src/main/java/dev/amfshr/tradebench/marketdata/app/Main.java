@@ -10,20 +10,19 @@ import java.time.temporal.ChronoUnit;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.ThreadLocalRandom;
 
 import dev.amfshr.tradebench.core.time.SystemClock;
 import dev.amfshr.tradebench.ig.IgCredentials;
 import dev.amfshr.tradebench.ig.IgEnvironment;
 import dev.amfshr.tradebench.ig.error.IgFatalConfigException;
 import dev.amfshr.tradebench.ig.http.JdkHttpTransport;
+import dev.amfshr.tradebench.ig.rest.IgRestClient;
 import dev.amfshr.tradebench.ig.rest.RequestPacer;
-import dev.amfshr.tradebench.ig.session.IgSession;
 import dev.amfshr.tradebench.ig.session.IgSessionManager;
 import dev.amfshr.tradebench.ig.session.LoginRateGate;
 import dev.amfshr.tradebench.ig.stream.IgStreamClient;
-import dev.amfshr.tradebench.ig.stream.IgStreamSession;
 import dev.amfshr.tradebench.ig.stream.LightstreamerTransport;
-import dev.amfshr.tradebench.ig.stream.StreamTransport;
 import dev.amfshr.tradebench.ig.time.Sleeper;
 import dev.amfshr.tradebench.marketdata.store.Database;
 import dev.amfshr.tradebench.marketdata.store.PostgresStore;
@@ -32,24 +31,42 @@ import dev.amfshr.tradebench.marketdata.store.SingleInstanceLock;
 import org.jspecify.annotations.Nullable;
 import dev.amfshr.tradebench.marketdata.store.JsonlStore;
 import dev.amfshr.tradebench.marketdata.store.CaptureStore;
+import dev.amfshr.tradebench.marketdata.store.EventLog;
+import dev.amfshr.tradebench.marketdata.store.GapStore;
+import dev.amfshr.tradebench.marketdata.store.StatusStore;
+import dev.amfshr.tradebench.marketdata.store.PostgresObservabilityStore;
+import dev.amfshr.tradebench.marketdata.coverage.GapDetector;
 import dev.amfshr.tradebench.marketdata.ingest.Pump;
 import dev.amfshr.tradebench.marketdata.ingest.Buffers;
+import dev.amfshr.tradebench.marketdata.supervise.HealthProbe;
+import dev.amfshr.tradebench.marketdata.supervise.IgStreamControl;
+import dev.amfshr.tradebench.marketdata.supervise.PacerDiscovery;
+import dev.amfshr.tradebench.marketdata.supervise.Supervisor;
+import dev.amfshr.tradebench.marketdata.supervise.Tuning;
 
 /**
- * The capture entrypoint: session → stream → queues → sink, until Ctrl-C. Plain
- * env-configured main — Spring earns its way in at T6. TRADEBENCH_SINK picks jsonl (T3's
- * evidence files) or db (T4's real write path: Flyway-migrated Postgres behind the
- * single-instance advisory lock, taken BEFORE any IG contact).
+ * The capture entrypoint: session → stream → queues → sink, under the resilience belt, until
+ * Ctrl-C. Plain env-configured main — Spring earns its way in at T6. TRADEBENCH_SINK picks
+ * jsonl (T3's evidence files) or db (T4's real write path: Flyway-migrated Postgres behind the
+ * single-instance advisory lock, taken BEFORE any IG contact). The {@link Supervisor} runs in
+ * both modes — resilience is sink-independent; in jsonl its events simply have no home
+ * (decision #1).
  */
 public final class Main {
 
     private static final String USER = "default-user";
     private static final Duration HEARTBEAT = Duration.ofSeconds(60);
+    /** The supervisor's sweep cadence — an internal rhythm, not a tunable: the watchdog
+     * thresholds are 90s/210s, so a 1s sweep is responsive and cheap. */
+    private static final Duration SWEEP_INTERVAL = Duration.ofSeconds(1);
+    /** Between boot attempts while IG is merely unreachable — the login gate paces the logins
+     * themselves; this keeps a restart during an outage from spinning. */
+    private static final Duration BOOT_RETRY = Duration.ofSeconds(30);
 
     private Main() {
     }
 
-    public static void main(String[] args) throws Exception {
+    static void main() throws Exception {
         Map<String, String> env = System.getenv();
         String instance = required(env, "TRADEBENCH_INSTANCE");
         List<String> epics = Arrays.stream(required(env, "TRADEBENCH_EPICS").split(","))
@@ -65,6 +82,9 @@ public final class Main {
         Database database = null;
         SingleInstanceLock lock = null;
         CaptureStore sink;
+        EventLog eventLog;
+        GapStore gaps;
+        StatusStore statusStore;
         switch (sinkKind) {
             case "jsonl" -> {
                 Path captureDir = Path.of(required(env, "TRADEBENCH_CAPTURE_DIR"));
@@ -76,14 +96,25 @@ public final class Main {
                         new JsonlStore(Files.newBufferedWriter(file, StandardCharsets.UTF_8));
                 jsonl.writeMeta(USER, source, instance, epics, started);
                 sink = jsonl;
-                log(instance, "capturing to " + file.toAbsolutePath());
+                // jsonl is market-data-only (decision #1): gaps and service events have no home
+                // here, so they are discarded — the db sink is the one that persists observability.
+                eventLog = event -> { };
+                gaps = gap -> { };
+                statusStore = status -> { };
+                log(instance, "capturing to " + file.toAbsolutePath()
+                        + " (jsonl: gaps + service events are not persisted)");
             }
             case "db" -> {
                 String dbUrl = required(env, "TRADEBENCH_DB_URL");
                 database = Database.connect(dbUrl, required(env, "TRADEBENCH_DB_USER"),
                         required(env, "TRADEBENCH_DB_PASSWORD"));
                 lock = SingleInstanceLock.acquire(database);
-                sink = new PostgresStore(database.dataSource(), USER, source, instance);
+                sink = new PostgresStore(database.dataSource(), USER, source);
+                PostgresObservabilityStore observability = new PostgresObservabilityStore(
+                        database.dataSource(), USER, source, instance);
+                eventLog = observability;
+                gaps = observability;
+                statusStore = observability;
                 log(instance, "capturing to " + dbUrl + " (migrated; advisory lock held)");
             }
             default -> throw new IgFatalConfigException(
@@ -91,42 +122,56 @@ public final class Main {
         }
         Database db = database;
         SingleInstanceLock instanceLock = lock;
-        IgSessionManager sessions = new IgSessionManager(new JdkHttpTransport(),
-                igEnv, credentials,
-                new RequestPacer(RequestPacer.ACCOUNT_NON_TRADING_PER_MINUTE,
-                        clock::monotonicNanos, Sleeper.SYSTEM),
+        JdkHttpTransport http = new JdkHttpTransport();
+        RequestPacer pacer = new RequestPacer(RequestPacer.CONSERVATIVE_START,
+                clock::monotonicNanos, Sleeper.SYSTEM); // discovery sets the real budget after login
+        IgSessionManager sessions = new IgSessionManager(http, igEnv, credentials, pacer,
                 new LoginRateGate(clock::monotonicNanos, Sleeper.SYSTEM));
-        IgSession session = sessions.current();
-        log(instance, igEnv + " session on " + session.activeAccountId() + " via "
-                + session.lightstreamerEndpoint());
-
-        Buffers queues = new Buffers(Buffers.DEFAULT_TICK_CAPACITY);
-        Pump pump = new Pump(queues, sink, Sleeper.SYSTEM);
+        IgRestClient rest = new IgRestClient(http, igEnv, credentials, pacer);
+        Buffers queues = new Buffers(Buffers.DEFAULT_TICK_CAPACITY, clock::monotonicNanos);
+        Pump pump = new Pump(queues, sink, new GapDetector(), gaps, eventLog, Sleeper.SYSTEM);
         Thread pumpThread = new Thread(pump, "capture-pump");
 
-        IgStreamSession stream = new IgStreamClient(new LightstreamerTransport())
-                .connect(session, queues, new StreamTransport.ConnectionListener() {
-                    @Override
-                    public void onStatusChange(String status) {
-                        log(instance, "lightstreamer: " + status);
-                    }
-
-                    @Override
-                    public void onServerError(int code, String message) {
-                        log(instance, "lightstreamer SERVER ERROR " + code + ": " + message);
-                    }
-                });
-        // E1 doctrine (the service's policy, not the client's): every market streams the
-        // dual PRICE+CHART pair — ticks for precision, broker 1m bars for the healable record.
+        Tuning tuning = Tuning.playbook();
+        IgStreamControl control = new IgStreamControl(sessions,
+                new IgStreamClient(new LightstreamerTransport()), queues, epics,
+                message -> log(instance, message), Sleeper.SYSTEM, BOOT_RETRY,
+                clock::monotonicNanos, tuning.giveUpAfter());
+        Supervisor supervisor = new Supervisor(clock, tuning,
+                () -> 0.5 + ThreadLocalRandom.current().nextDouble(), eventLog, control, queues,
+                () -> {
+                    log(instance, "FATAL: recovery exhausted — the feed is dead; exiting for the"
+                            + " process supervisor to restart");
+                    // Not on the sweep thread: the shutdown hook joins it, and a thread parked
+                    // inside Runtime.exit never finishes — the join would time out every time.
+                    new Thread(() -> System.exit(1), "capture-exit").start();
+                },
+                Sleeper.SYSTEM, SWEEP_INTERVAL);
+        control.bind(supervisor);
+        control.start();
         for (String epic : epics) {
-            stream.subscribePrice(epic, stateListener(instance, "PRICE " + epic));
-            stream.subscribeChart1m(epic, stateListener(instance, "CHART " + epic));
+            supervisor.watch(epic);
         }
+        HealthProbe probe = new HealthProbe(instance, epics, queues, supervisor, clock, statusStore);
+        Thread supervisorThread = new Thread(supervisor, "capture-supervisor");
         pumpThread.start();
+        supervisorThread.start();
+        new PacerDiscovery(rest::applicationAllowance, pacer::setPerMinute, eventLog,
+                message -> log(instance, message), clock).discover(sessions.current());
 
         Runtime.getRuntime().addShutdownHook(new Thread(() -> {
             log(instance, "shutting down");
-            stream.close();
+            supervisor.closing(); // hush the farewell DISCONNECTED (§3.6)
+            supervisor.stop();
+            supervisorThread.interrupt();
+            try {
+                if (!supervisorThread.join(Duration.ofSeconds(5))) {
+                    log(instance, "supervisor did not stop within 5s — closing the stream anyway");
+                }
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+            }
+            control.close(); // only once the sweep thread is done — it owns the handles
             pump.stop();
             boolean pumpStopped = false;
             try {
@@ -146,7 +191,7 @@ public final class Main {
                 log(instance, "pump did not stop within 5s — leaving sink open to avoid a"
                         + " close/write race; file may miss its tail");
             }
-            log(instance, summary(queues, pump));
+            log(instance, summary(queues, pump, supervisor, probe));
         }, "capture-shutdown"));
 
         while (true) {
@@ -156,28 +201,23 @@ public final class Main {
                         + (pump.failure() != null ? "; cause: " + pump.failure() : ""));
                 System.exit(1);
             }
-            log(instance, summary(queues, pump));
+            if (!supervisorThread.isAlive()) {
+                log(instance, "FATAL: capture supervisor died — resilience is void from here");
+                System.exit(1);
+            }
+            probe.publish();
+            log(instance, summary(queues, pump, supervisor, probe));
         }
     }
 
-    private static StreamTransport.StateListener stateListener(String instance, String name) {
-        return new StreamTransport.StateListener() {
-            @Override
-            public void onSubscribed() {
-                log(instance, "subscribed: " + name);
-            }
-
-            @Override
-            public void onSubscriptionError(int code, String message) {
-                log(instance, "SUBSCRIPTION ERROR " + name + " " + code + ": " + message);
-            }
-        };
-    }
-
-    private static String summary(Buffers queues, Pump pump) {
+    private static String summary(Buffers queues, Pump pump, Supervisor supervisor,
+            HealthProbe probe) {
         return "ticks=" + queues.tickCount() + " bars=" + queues.barCount()
                 + " written=" + pump.writtenCount()
-                + " dropped=" + queues.droppedTicks() + " malformed=" + queues.malformedUpdates();
+                + " dropped=" + queues.droppedTicks() + " malformed=" + queues.malformedUpdates()
+                + " obsFailures=" + pump.observabilityFailures()
+                + " eventWriteFailures=" + supervisor.eventWriteFailures()
+                + " statusFailures=" + probe.statusFailures();
     }
 
     private static void closeQuietly(String instance, @Nullable AutoCloseable closeable) {

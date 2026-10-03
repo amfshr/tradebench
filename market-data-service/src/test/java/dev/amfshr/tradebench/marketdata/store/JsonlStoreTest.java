@@ -12,7 +12,6 @@ import org.junit.jupiter.api.Test;
 import dev.amfshr.tradebench.core.domain.Bar1m;
 import dev.amfshr.tradebench.core.domain.OhlcPrices;
 import dev.amfshr.tradebench.core.domain.Tick;
-import dev.amfshr.tradebench.marketdata.ingest.Buffers;
 
 /** Golden lines: the capture file IS a wire contract (T4's importer reads it). */
 class JsonlStoreTest {
@@ -20,7 +19,7 @@ class JsonlStoreTest {
     private static final String DAX = "IX.D.DAX.DAILY.IP";
 
     @Test
-    void writesTheFourLineKindsExactly() {
+    void writesTheThreeLineKindsExactly() {
         StringWriter out = new StringWriter();
         try (JsonlStore sink = new JsonlStore(out)) {
             sink.writeMeta("default-user", "ig-stream-demo", "capture-mac", List.of(DAX),
@@ -33,8 +32,6 @@ class JsonlStoreTest {
                     new OhlcPrices(new BigDecimal("24511.7"), new BigDecimal("24516.0"),
                             new BigDecimal("24509.5"), new BigDecimal("24513.2")),
                     321L));
-            sink.write(new Buffers.StateChange(DAX,
-                    Instant.parse("2026-09-25T16:30:00Z"), "CLOSED"));
         }
 
         assertEquals("""
@@ -46,8 +43,6 @@ class JsonlStoreTest {
                 {"kind":"bar","epic":"IX.D.DAX.DAILY.IP","startUtc":"2026-09-25T14:57:00Z",\
                 "bid":{"o":24510.5,"h":24514.8,"l":24508.3,"c":24512.0},\
                 "ask":{"o":24511.7,"h":24516.0,"l":24509.5,"c":24513.2},"ltv":321}
-                {"kind":"state","epic":"IX.D.DAX.DAILY.IP","utc":"2026-09-25T16:30:00Z",\
-                "dealFlag":"CLOSED"}
                 """, out.toString());
     }
 

@@ -1,6 +1,7 @@
 package dev.amfshr.tradebench.marketdata.supervise;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -62,5 +63,43 @@ class ReconnectClassifierTest {
         assertEquals(Note.GRACEFUL_CLOSE, classifier.noteFor("DISCONNECTED"));
         assertNull(classifier.onStatus("DISCONNECTED", 5 * S, 5_000),
                 "a scheduled stop must not write scare-lines into the warnings stream");
+    }
+
+    @Test
+    void aRebuildOpensTheOutageSoTheResumeCountsAndIsAReplacement() {
+        // Status may read CONNECTED throughout (silent-while-connected): the rebuild itself is the
+        // outage, and whether the torn-down connection's farewell ever arrives must not matter.
+        classifier.rebuilding(0, 0);
+
+        Reconnect summary = classifier.onStatus("CONNECTED:WS-STREAMING", 30 * S, 30_000);
+
+        assertNotNull(summary, "the new connection's STREAMING ends an outage the rebuild opened");
+        assertFalse(summary.replayed(), "we tore the buffer down — the data is owed a heal");
+        assertEquals(Duration.ofSeconds(30), summary.wallOutage());
+    }
+
+    @Test
+    void aRebuildInsideAnOutageKeepsItsStartAndMakesItAReplacement() {
+        classifier.onStatus(StuckSubstateEscalator.TRYING_RECOVERY, 0, 0); // alone: a lossless replay
+        classifier.rebuilding(10 * S, 10_000);
+
+        Reconnect summary = classifier.onStatus("CONNECTED:WS-STREAMING", 30 * S, 30_000);
+
+        assertEquals(Duration.ofSeconds(30), summary.wallOutage(),
+                "the outage began at the drop, not at the rebuild");
+        assertFalse(summary.replayed());
+    }
+
+    @Test
+    void aPollingFallbackEndsTheOutageWhileTheSensingHandshakeDoesNot() {
+        classifier.onStatus(StuckSubstateEscalator.WILL_RETRY, 0, 0);
+
+        assertNull(classifier.onStatus("CONNECTED:STREAM-SENSING", 10 * S, 10_000),
+                "the handshake is not data — the outage stays open");
+        Reconnect summary = classifier.onStatus("CONNECTED:HTTP-POLLING", 30 * S, 30_000);
+
+        assertNotNull(summary, "data flows on a polling fallback — that is the resume");
+        assertFalse(summary.replayed());
+        assertEquals(Duration.ofSeconds(30), summary.wallOutage());
     }
 }

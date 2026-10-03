@@ -21,10 +21,11 @@ import dev.amfshr.tradebench.marketdata.events.ServiceEvent;
 
 /**
  * The observability write path (E1-T5 slice B): events, bar gaps, and the health snapshot. Unlike
- * {@link PostgresStore} (single-threaded, the pump's), these writes come from the supervisor and
- * heartbeat threads, so each **borrows a pooled connection** for its one statement — low-frequency
- * work that must never contend with the capture hot path. Thread-safe by that design; the
- * instrument-id cache is concurrent.
+ * {@link PostgresStore} (one dedicated connection, the capture hot path), these writes come from
+ * the pump (gaps + market-state, slice C step 3) and — as slice C wires them — the heartbeat and
+ * supervisor threads, so each **borrows a pooled connection** for its one statement: low-frequency
+ * work that must never contend with the hot path. Thread-safe by that design; the instrument-id
+ * cache is concurrent.
  */
 public final class PostgresObservabilityStore implements EventLog, GapStore, StatusStore {
 

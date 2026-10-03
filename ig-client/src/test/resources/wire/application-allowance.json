@@ -1,0 +1,28 @@
+[
+  {
+    "name": "someone-elses-app",
+    "apiKey": "other-key",
+    "status": "ENABLED",
+    "allowanceAccountOverall": 30,
+    "allowanceAccountTrading": 100,
+    "allowanceAccountHistoricalData": 10000,
+    "allowanceApplicationOverall": 60,
+    "concurrentSubscriptionsLimit": 40,
+    "createdDate": "2026/01/02",
+    "allowEquities": false,
+    "allowQuoteOrders": false
+  },
+  {
+    "name": "tradebench-demo",
+    "apiKey": "placeholder-key",
+    "status": "ENABLED",
+    "allowanceAccountOverall": 10,
+    "allowanceAccountTrading": 100,
+    "allowanceAccountHistoricalData": 10000,
+    "allowanceApplicationOverall": 60,
+    "concurrentSubscriptionsLimit": 40,
+    "createdDate": "2026/09/27",
+    "allowEquities": false,
+    "allowQuoteOrders": false
+  }
+]
