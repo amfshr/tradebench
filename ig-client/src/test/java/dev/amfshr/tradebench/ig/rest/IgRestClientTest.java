@@ -15,6 +15,7 @@ import org.junit.jupiter.api.Test;
 import dev.amfshr.tradebench.ig.IgCredentials;
 import dev.amfshr.tradebench.ig.IgEnvironment;
 import dev.amfshr.tradebench.ig.error.IgRetryableException;
+import dev.amfshr.tradebench.ig.error.IgFatalConfigException;
 import dev.amfshr.tradebench.ig.http.HttpCall;
 import dev.amfshr.tradebench.ig.session.IgSession;
 import dev.amfshr.tradebench.ig.session.IgTokens;
@@ -189,5 +190,56 @@ class IgRestClientTest {
         assertEquals("error.public-api.exceeded-account-historical-data-allowance",
                 thrown.errorCode());
         assertEquals(403, thrown.httpStatus());
+    }
+
+    @Test
+    void applicationAllowanceReturnsOurKeysEntryExactly() throws Exception {
+        transport.enqueue(FakeTransport.json(200, Wire.fixture("application-allowance.json")));
+
+        ApplicationAllowance allowance = client.applicationAllowance(session);
+
+        // Ours is the SECOND entry in the fixture — the key match, not position, selects it.
+        assertEquals(new ApplicationAllowance("placeholder-key", 10, 60, 100, 10000, 40), allowance);
+        assertTrue(transport.calls.get(0).uri().toString().endsWith("/operations/application"));
+        assertEquals("1", transport.calls.get(0).headers().get("VERSION"));
+    }
+
+    @Test
+    void applicationAllowanceIsNullWhenOurKeyIsNotListed() throws Exception {
+        transport.enqueue(FakeTransport.json(200,
+                "[{\"apiKey\":\"other-key\",\"allowanceAccountOverall\":30}]"));
+
+        assertNull(client.applicationAllowance(session), "never a stand-in from another key");
+    }
+
+    @Test
+    void applicationAllowanceFailureIsClassifiedLikeEveryOtherCall() {
+        transport.enqueue(FakeTransport.json(403, "{\"errorCode\":\"error.security.api-key-invalid\"}"));
+
+        assertThrows(IgFatalConfigException.class, () -> client.applicationAllowance(session));
+    }
+
+    @Test
+    void applicationAllowanceRefusesOurEntryWithoutAUsableOverallFigure() {
+        // A missing or renamed field must never be laundered into "0 published" (then 1/min for life).
+        transport.enqueue(FakeTransport.json(200,
+                "[{\"apiKey\":\"placeholder-key\",\"allowanceApplicationOverall\":60}]"));
+
+        IllegalStateException thrown = assertThrows(IllegalStateException.class,
+                () -> client.applicationAllowance(session));
+
+        assertTrue(thrown.getMessage().contains("allowanceAccountOverall"));
+    }
+
+    @Test
+    void applicationAllowanceRefusesOurEntryWithoutAUsableApplicationFigure() {
+        // The key's own figure is load-bearing too (min(account, application)) — same refusal.
+        transport.enqueue(FakeTransport.json(200,
+                "[{\"apiKey\":\"placeholder-key\",\"allowanceAccountOverall\":30}]"));
+
+        IllegalStateException thrown = assertThrows(IllegalStateException.class,
+                () -> client.applicationAllowance(session));
+
+        assertTrue(thrown.getMessage().contains("allowanceApplicationOverall"));
     }
 }

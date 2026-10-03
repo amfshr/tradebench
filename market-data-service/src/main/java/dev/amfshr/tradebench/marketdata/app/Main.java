@@ -17,6 +17,7 @@ import dev.amfshr.tradebench.ig.IgCredentials;
 import dev.amfshr.tradebench.ig.IgEnvironment;
 import dev.amfshr.tradebench.ig.error.IgFatalConfigException;
 import dev.amfshr.tradebench.ig.http.JdkHttpTransport;
+import dev.amfshr.tradebench.ig.rest.IgRestClient;
 import dev.amfshr.tradebench.ig.rest.RequestPacer;
 import dev.amfshr.tradebench.ig.session.IgSessionManager;
 import dev.amfshr.tradebench.ig.session.LoginRateGate;
@@ -39,6 +40,7 @@ import dev.amfshr.tradebench.marketdata.ingest.Pump;
 import dev.amfshr.tradebench.marketdata.ingest.Buffers;
 import dev.amfshr.tradebench.marketdata.supervise.HealthProbe;
 import dev.amfshr.tradebench.marketdata.supervise.IgStreamControl;
+import dev.amfshr.tradebench.marketdata.supervise.PacerDiscovery;
 import dev.amfshr.tradebench.marketdata.supervise.Supervisor;
 import dev.amfshr.tradebench.marketdata.supervise.Tuning;
 
@@ -120,11 +122,12 @@ public final class Main {
         }
         Database db = database;
         SingleInstanceLock instanceLock = lock;
-        IgSessionManager sessions = new IgSessionManager(new JdkHttpTransport(),
-                igEnv, credentials,
-                new RequestPacer(RequestPacer.ACCOUNT_NON_TRADING_PER_MINUTE,
-                        clock::monotonicNanos, Sleeper.SYSTEM),
+        JdkHttpTransport http = new JdkHttpTransport();
+        RequestPacer pacer = new RequestPacer(RequestPacer.CONSERVATIVE_START,
+                clock::monotonicNanos, Sleeper.SYSTEM); // discovery sets the real budget after login
+        IgSessionManager sessions = new IgSessionManager(http, igEnv, credentials, pacer,
                 new LoginRateGate(clock::monotonicNanos, Sleeper.SYSTEM));
+        IgRestClient rest = new IgRestClient(http, igEnv, credentials, pacer);
         Buffers queues = new Buffers(Buffers.DEFAULT_TICK_CAPACITY, clock::monotonicNanos);
         Pump pump = new Pump(queues, sink, new GapDetector(), gaps, eventLog, Sleeper.SYSTEM);
         Thread pumpThread = new Thread(pump, "capture-pump");
@@ -151,6 +154,8 @@ public final class Main {
         Thread supervisorThread = new Thread(supervisor, "capture-supervisor");
         pumpThread.start();
         supervisorThread.start();
+        new PacerDiscovery(rest::applicationAllowance, pacer::setPerMinute, eventLog,
+                message -> log(instance, message), clock).discover(sessions.current());
 
         Runtime.getRuntime().addShutdownHook(new Thread(() -> {
             log(instance, "shutting down");

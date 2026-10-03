@@ -36,7 +36,7 @@ import dev.amfshr.tradebench.marketdata.store.EventLog;
  * is hit, or the broker rejects the configuration outright. <b>Slice C steps 2a–2b</b>:
  * connection resilience (reconnect classification, stuck-substate escalation, backoff,
  * exhaustion), the staleness watchdog (quiet vs dead), and witness quarantine (§3.5 blast
- * radius). Pacer discovery follows.
+ * radius).
  */
 public final class Supervisor implements StreamObserver, BeltView, Runnable {
 

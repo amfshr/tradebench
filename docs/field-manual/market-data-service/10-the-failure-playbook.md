@@ -47,6 +47,7 @@ re-serves them).
 | Recovery keeps failing | the **budget**: 10 min from an outage's first rebuild without streaming resuming (ceiling 10 rebuilds as a cap) | **give up**: `FEED_DEAD`, orderly `exit(1)`; the outer loop restarts us | the whole outage until IG returns | `FEED_DEAD{reason=budget|ceiling}`, exit code 1, restart counter | heal |
 | IG rejects the configuration itself (key, account, **wrong password**) | `IgFatalConfigException` — the §1.6 taxonomy's fatal families, now including `error.security.invalid-details` | **stop at once** — never climb a ladder against a lockout; at boot, fail before retrying | everything until a human fixes config | `FEED_DEAD{reason=fatal_config}` or a FATAL boot line, exit 1 | human |
 | IG unreachable at boot (we restarted into an outage) | login fails with a retryable error | **retry every 30s under the login gate, for the same 10-min budget**, then exit 1 | the outage | "boot attempt N" lines, then FATAL | heal |
+| IG enforces a smaller REST budget than it publishes (demo keys: 10/min, not 30) | `GET /operations/application` after login | start at 10/min, then apply min(`allowanceAccountOverall`, `allowanceApplicationOverall`) minus 5 headroom (≥1); an unlisted key or a failed read keeps the start | nothing — the pacer paces every REST caller | `PACER_DISCOVERED{account, application, published, used, headroom}`, or an `IG_API_ERROR` naming the read plus a "keeping the conservative start" line | — |
 | Postgres blips while we write an **event/gap/status** row | `PersistenceException` from the observability store | **count and continue** — the belt and the pump never die for a breadcrumb | the breadcrumbs written during the blip | `obsFailures=` / `eventWriteFailures=` / `statusFailures=` in the heartbeat | coverage truth is recomputed from `bars_1m` |
 | Postgres blips while we write a **tick or bar** | `PersistenceException` from `PostgresStore` | *today:* pump stops, process exits 1 within ≤60s, outer loop restarts | ~1–2 min of ticks (gone), a bar gap (healed) | FATAL line, exit 1 | heal — see *the pending decision* below |
 | The pump or the supervisor thread dies for any other reason | `Main`'s heartbeat: `!thread.isAlive()` | exit 1 | until restart | FATAL line | heal |
@@ -118,6 +119,7 @@ Every number, where it lives, and what it means:
 | 30s / 10 min | `Main.BOOT_RETRY` / the same `giveUpAfter` | boot retry spacing and budget |
 | 60s | `Main.HEARTBEAT` | the `capture_status` cadence, and how quickly a dead pump or supervisor thread is noticed and the process exits (a Postgres outage can add the probe's ~30s connection timeout per market — T9) |
 | 61s | `LoginRateGate.MIN_INTERVAL` | spacing between logins — IG caches login responses, so faster re-logins get stale tokens |
+| 10/min → published − 5 | `RequestPacer.CONSERVATIVE_START` → `PacerDiscovery.HEADROOM` | the REST budget: a conservative start, then the tighter of the account's and the key's real allowance (never the published constant — demo enforces 10/min) minus headroom for T6's heal, which spends the same key |
 | *deploy* | restart policy + delay (T7, pending) | the outer loop's cadence; see the ruling below |
 
 **A worked timeline — the server goes silent at T+0, one market open, IG down for twenty
@@ -264,8 +266,16 @@ user; nothing in the belt, the pump or the schema. See `backlog.md` B1.
   `STREAM-SENSING` handshake is streaming, so a resume onto a polling fallback ends the outage and
   resets the ladder (the degradation itself is `TRANSPORT_DOWNGRADED`); the two voices cannot
   disagree about what "resumed" means.
-- **Pending:** Tier-1 hold-and-retry for the sink (T9); pacer discovery (step 5); the T7
-  restart-policy contract; B1 multi-job.
+- **2026-10-03 — step 5:** the REST pacer starts at 10/min and is set after login from
+  `GET /operations/application`: min(`allowanceAccountOverall`, `allowanceApplicationOverall`) − 5
+  headroom, at least 1 — the account figure is shared by every key on the account (a demo and a
+  live key both draw on it), so whichever is tighter is the one IG enforces first (ruled
+  2026-10-03, Alex) — recorded as `PACER_DISCOVERED{account, application, published, used,
+  headroom}`; an unlisted key or a failed read keeps the start
+  and says so — an `IG_API_ERROR` and a log line (never a stand-in from another key); an entry
+  without a usable figure is refused at the boundary, never laundered into a 1/min budget.
+- **Pending:** Tier-1 hold-and-retry for the sink (T9); the T7 restart-policy contract; B1
+  multi-job.
 
 ## The scars this chapter answers
 

@@ -143,7 +143,11 @@ outage (the feed is already dead; one process per job, B1) and the only cure for
 process — so err short. **Also ruled 2026-10-03:** observability writes are best-effort-but-loud in
 both the pump (step 3) and the belt (step-6 review) — counted, surfaced by the heartbeat, never
 fatal — while the sink stays fail-closed (its hold-and-retry refinement is **T9**); shutdown stops
-and joins the sweep thread before closing the stream.
+and joins the sweep thread before closing the stream. Pacer discovery (step 5): start at 10/min,
+then min(`allowanceAccountOverall`, `allowanceApplicationOverall`) − **5** headroom (≥1) from
+`GET /operations/application` — ruled 2026-10-03 (Alex): the account figure is shared by every key
+on the account, so the tighter of the two binds; both are refused at the boundary when missing or
+non-positive; an unlisted key or a failed read keeps the start and says so (`IG_API_ERROR` + log).
 **Build slices:** A pure cores (supervise/coverage decision logic + scenario tests) →
 B store side (EventLog, V2 bar_gaps, drift regen) → C shell (Supervisor, HealthProbe,
 Main rewiring, heartbeat, pacer discovery).

@@ -26,8 +26,8 @@ import dev.amfshr.tradebench.ig.http.HttpTransport;
 import dev.amfshr.tradebench.ig.session.IgSession;
 
 /**
- * The REST v3 endpoints E1 needs: market details (dealing-rules snapshot) and historical
- * prices (T6's heal path). Methods take the {@link IgSession} explicitly — retry/rebuild
+ * The REST endpoints E1 needs: market details (dealing-rules snapshot) and historical prices
+ * (T6's heal path) on v3, and the account's real request budget on v1. Methods take the {@link IgSession} explicitly — retry/rebuild
  * policy belongs to the caller's supervisor, never to the wire layer.
  */
 public final class IgRestClient {
@@ -146,6 +146,36 @@ public final class IgRestClient {
                     + "' — refusing a partial candle (the heal classifies this as failed)");
         }
         return node.get(field).decimalValue();
+    }
+
+    /** The real allowances for OUR key from {@code GET /operations/application} (v1), or null if
+     * IG does not list it — another key's budget is never a stand-in. */
+    public @Nullable ApplicationAllowance applicationAllowance(IgSession session)
+            throws IOException, InterruptedException {
+        HttpResult result = get(session, "/operations/application", 1);
+        if (result.status() != 200) {
+            throw IgErrors.from(mapper, result, "GET /operations/application");
+        }
+        for (JsonNode node : mapper.readTree(result.body())) {
+            if (credentials.apiKey().equals(node.path("apiKey").asText())) {
+                return new ApplicationAllowance(node.path("apiKey").asText(),
+                        positive(node, "allowanceAccountOverall"),
+                        positive(node, "allowanceApplicationOverall"),
+                        node.path("allowanceAccountTrading").asInt(),
+                        node.path("allowanceAccountHistoricalData").asInt(),
+                        node.path("concurrentSubscriptionsLimit").asInt());
+            }
+        }
+        return null;
+    }
+
+    // Both overall figures feed the pacer: a missing one must never read as 0 (then 1/min for life).
+    private static int positive(JsonNode node, String field) {
+        if (!node.hasNonNull(field) || node.get(field).asInt() < 1) {
+            throw new IllegalStateException("GET /operations/application: our entry carries no usable "
+                    + field + " — refusing to invent a budget");
+        }
+        return node.get(field).asInt();
     }
 
     private static @Nullable BigDecimal decimalOrNull(JsonNode node, String field) {

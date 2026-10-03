@@ -13,16 +13,20 @@ import dev.amfshr.tradebench.ig.time.Sleeper;
  * tooling got 403'd precisely because pacing lived only in the service (engineering playbook
  * §4.6).
  *
- * <p>Default budget: the per-account non-trading limit of 30/min (§6) — the binding one,
- * because it is shared across every service on the account (the per-key limit is 60/min).
+ * <p>The published per-account non-trading limit is 30/min (§6) — the binding one, shared across
+ * every service on the account (the per-key limit is 60/min) — but a service starts at
+ * {@link #CONSERVATIVE_START} and lets post-login discovery set the real figure.
  */
 public final class RequestPacer {
 
     public static final int ACCOUNT_NON_TRADING_PER_MINUTE = 30;
+    /** Where a service starts until discovery reads the real budget: field evidence shows demo keys
+     * enforce 10/min, not the published 30 — never assume the constant (E1 plan T5 §). */
+    public static final int CONSERVATIVE_START = 10;
 
     private static final Duration WINDOW = Duration.ofMinutes(1);
 
-    private final int permitsPerWindow;
+    private int permitsPerWindow;
     private final LongSupplier monotonicNanos;
     private final Sleeper sleeper;
     private final Deque<Long> grantsInWindow = new ArrayDeque<>();
@@ -34,6 +38,16 @@ public final class RequestPacer {
         this.permitsPerWindow = permitsPerWindow;
         this.monotonicNanos = monotonicNanos;
         this.sleeper = sleeper;
+    }
+
+    /** Post-login discovery sets the real budget. The window keeps its grants, so a lower budget
+     * bites on the very next {@code acquire()} and a raise too takes effect on the next acquire — a waiter already
+     * sleeping finishes on the old budget. */
+    public synchronized void setPerMinute(int permitsPerWindow) {
+        if (permitsPerWindow < 1) {
+            throw new IllegalArgumentException("permitsPerWindow must be >= 1");
+        }
+        this.permitsPerWindow = permitsPerWindow;
     }
 
     /** Blocks until a request slot is free within the sliding one-minute window. */

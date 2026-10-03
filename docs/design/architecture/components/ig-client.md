@@ -9,8 +9,9 @@ vendor-neutral seams and decides nothing. Resilience policy lives in the consume
 - **Session** (`ig.session`): `IgSessionManager` — login → account switch → token re-read;
   validate-before-relogin; `LoginRateGate` staggers logins >60s (one API key per account, D16).
 - **REST** (`ig.rest`): `IgRestClient` — markets/prices/allowance, keyed on `snapshotTimeUTC`,
-  fail-loud (never guesses a timestamp); exact `BigDecimal` bid/ask; a sliding-window
-  `RequestPacer`.
+  fail-loud (never guesses a timestamp); exact `BigDecimal` bid/ask; plus the account's real
+  request budget (`GET /operations/application` → `ApplicationAllowance`, our key only, refused if
+  the figure is unusable); a sliding-window `RequestPacer` whose budget discovery sets after login.
 - **Streaming** (`ig.stream`): `StreamTransport` seam with `LightstreamerTransport` the only
   vendor-aware class; `StreamParsers` pure and never-throwing; `IgStreamSession` splits
   `subscribePrice` / `subscribeChart1m` — pairing is the *service's* policy, not the client's.
