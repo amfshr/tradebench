@@ -71,6 +71,11 @@ follow that journey and the resilience that keeps it honest.
   — what a message bus buys over a database read, the three consumer shapes,
   persist-then-publish, and replay-then-tail.
 
+- [The failure playbook](market-data-service/10-the-failure-playbook.md) — scenario-first:
+  what breaks, what the belt does, what each outage costs, who finds out, how it heals; every
+  clock and how they interact; the threads and the one race a fence can't cover; the three
+  database tiers; the dated rulings behind every number.
+
 ## How to read it
 
 Every chapter stands alone — each defines its own jargon and links onward — so if one thing is

@@ -90,7 +90,7 @@ class PumpTest {
 
     @Test
     void drainsBarsFirstThenTicksAndRoutesStateChangesToTheEventLog() {
-        Buffers queues = new Buffers(10);
+        Buffers queues = new Buffers(10, () -> 0L);
         RecordingSink sink = new RecordingSink();
         FakeGapStore gaps = new FakeGapStore();
         FakeEventLog events = new FakeEventLog();
@@ -117,7 +117,7 @@ class PumpTest {
 
     @Test
     void aSealedBarRevealingAGapRecordsItAndEmitsABarGapEvent() {
-        Buffers queues = new Buffers(10);
+        Buffers queues = new Buffers(10, () -> 0L);
         RecordingSink sink = new RecordingSink();
         FakeGapStore gaps = new FakeGapStore();
         FakeEventLog events = new FakeEventLog();
@@ -142,7 +142,7 @@ class PumpTest {
 
     @Test
     void aFailingObservabilityWriteNeitherStopsThePumpNorStallsTheProductPlane() {
-        Buffers queues = new Buffers(10);
+        Buffers queues = new Buffers(10, () -> 0L);
         RecordingSink sink = new RecordingSink();
         queues.onSealedBar(bar(0));
         queues.onSealedBar(bar(180));   // reveals a gap -> gaps.record is attempted and fails
@@ -164,7 +164,7 @@ class PumpTest {
 
     @Test
     void aFailingEventWriteOnAStateChangeDoesNotHaltCapture() {
-        Buffers queues = new Buffers(10);
+        Buffers queues = new Buffers(10, () -> 0L);
         RecordingSink sink = new RecordingSink();
         queues.onTick(tick(10));     // null -> DEAL: a state change whose event write will fail
         queues.onSealedBar(bar(60)); // a seed bar -> no gap, so only the state path writes an event
@@ -187,7 +187,7 @@ class PumpTest {
     @Test
     void idleCycleFlushesTheSink() throws InterruptedException {
         RecordingSink sink = new RecordingSink();
-        Pump pump = new Pump(new Buffers(10), sink, new GapDetector(), new FakeGapStore(),
+        Pump pump = new Pump(new Buffers(10, () -> 0L), sink, new GapDetector(), new FakeGapStore(),
                 new FakeEventLog(), NO_SLEEP);
 
         pump.cycle();
@@ -197,7 +197,7 @@ class PumpTest {
 
     @Test
     void stoppedRunStillDrainsTheTail() {
-        Buffers queues = new Buffers(10);
+        Buffers queues = new Buffers(10, () -> 0L);
         RecordingSink sink = new RecordingSink();
         queues.onSealedBar(bar(60));
         Pump pump = new Pump(queues, sink, new GapDetector(), new FakeGapStore(),
@@ -213,7 +213,7 @@ class PumpTest {
 
     @Test
     void sinkFailureStopsThePumpKeepsTheBarAndKeepsTheCause() {
-        Buffers queues = new Buffers(10);
+        Buffers queues = new Buffers(10, () -> 0L);
         queues.onSealedBar(bar(60));
         UncheckedIOException boom = new UncheckedIOException("disk full",
                 new java.io.IOException("disk full"));

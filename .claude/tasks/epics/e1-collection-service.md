@@ -123,6 +123,24 @@ conservative, adjust minus headroom post-login) · exhaustion = clean exit(0), c
 restart policy is the outer loop at T7 · all §8 timings in one `Tuning` record with
 playbook defaults as named constants (policy, not machine config; env overrides only when
 actually needed).
+**Amended (Alex, 2026-10-03, slice C step 6) — exhaustion re-ruled:** recovery is a **time
+budget**, not a rebuild count — `Tuning.giveUpAfter` = **10 min** of continuous no-streaming
+from an outage's first rebuild (the 10-rebuild ceiling stays as a cap; rung cadence is
+detector-driven — a 10-rung ladder spans 20 min–3.5 h depending on which detector drives
+it — so a count was never the number it looked like) →
+`FEED_DEAD` (detail `reason`: budget · ceiling · fatal_config) → orderly **`exit(1)`**, not 0:
+the mission failed, and 1 restarts under every policy (`always` / `unless-stopped` /
+`on-failure`) instead of making `restart: always` load-bearing. Boot retries *retryable* IG
+errors under the login gate (30s between attempts, bounded by the same 10-min budget — the
+error taxonomy defaults unknown codes to retryable, so an unbounded boot loop would retry a
+wrong password forever) and fails loud on a rejected configuration or an exhausted budget, so
+a restart during an outage never becomes a login storm; a rejected configuration mid-ladder
+stops recovery at once, and `error.security.invalid-details` (wrong identifier/password) is
+now classified fatal. A rebuild opens the outage in the classifier (the resume is a
+replacement) and superseded connections are gated, so the ladder reset never races the
+farewell `DISCONNECTED`. *Why:* a JVM restart is ≈ free during an IG
+outage (the feed is already dead; one process per job, B1) and the only cure for a wedged
+process — so err short.
 **Build slices:** A pure cores (supervise/coverage decision logic + scenario tests) →
 B store side (EventLog, V2 bar_gaps, drift regen) → C shell (Supervisor, HealthProbe,
 Main rewiring, heartbeat, pacer discovery).

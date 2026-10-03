@@ -45,9 +45,7 @@ class SupervisorTest {
         stream = new FakeStream();
         freshness = new FakeFreshness();
         exhausted = new AtomicBoolean();
-        // jitter = 1.0 → deterministic backoff; Sleeper/interval unused (tests drive sweep() directly).
-        supervisor = new Supervisor(clock, Tuning.playbook(), () -> 1.0, events, stream, freshness,
-                () -> exhausted.set(true), Sleeper.SYSTEM, Duration.ofSeconds(1));
+        supervisor = supervisorWith(Tuning.playbook());
     }
 
     @Test
@@ -106,6 +104,8 @@ class SupervisorTest {
 
     @Test
     void rebuildsAreBackoffPacedThenGiveUpLoud() {
+        // The rung ceiling in isolation: a one-day budget keeps the time budget out of the way.
+        supervisor = supervisorWith(Tuning.playbook().withGiveUpAfter(Duration.ofDays(1)));
         int ceiling = Tuning.playbook().maxConsecutiveFailures();
         supervisor.onStatusChange(WILL_RETRY);
         supervisor.sweep(); // records the stuck substate
@@ -122,6 +122,126 @@ class SupervisorTest {
         assertTrue(exhausted.get());
         assertEquals(ceiling, stream.rebuilds); // no rebuild past the ceiling
         assertEquals(1, count(EventType.FEED_DEAD));
+        assertEquals("ceiling", single(EventType.FEED_DEAD).detail().get("reason").asText());
+    }
+
+    @Test
+    void recoveryGivesUpOnTheTimeBudgetExactlyAtTheBoundary() {
+        Duration budget = Tuning.playbook().giveUpAfter();
+        supervisor.onStatusChange(WILL_RETRY);
+        supervisor.sweep();
+        clock.advance(Duration.ofSeconds(120));
+        supervisor.sweep(); // the first rebuild of this outage starts the budget clock
+        assertEquals(1, stream.rebuilds);
+
+        clock.advance(budget.minusSeconds(1));
+        supervisor.sweep();
+        assertFalse(exhausted.get(), "one second inside the budget: still recovering");
+        int rebuildsBeforeGivingUp = stream.rebuilds;
+
+        clock.advance(Duration.ofSeconds(1));
+        supervisor.sweep();
+        assertTrue(exhausted.get(), "the budget, not the rung ceiling, ends recovery");
+        assertTrue(stream.rebuilds < Tuning.playbook().maxConsecutiveFailures());
+        assertEquals(rebuildsBeforeGivingUp, stream.rebuilds, "no rebuild once given up");
+        assertEquals("budget", single(EventType.FEED_DEAD).detail().get("reason").asText());
+
+        clock.advance(Duration.ofSeconds(120));
+        supervisor.sweep();
+        assertEquals(1, count(EventType.FEED_DEAD), "given up once — never re-announced");
+        assertEquals(rebuildsBeforeGivingUp, stream.rebuilds);
+    }
+
+    @Test
+    void aResumeRestartsTheRecoveryBudget() {
+        Duration budget = Tuning.playbook().giveUpAfter();
+        supervisor.onStatusChange(WILL_RETRY);
+        supervisor.sweep();
+        clock.advance(Duration.ofSeconds(120));
+        supervisor.sweep(); // outage 1: its first rebuild starts a budget clock
+        assertEquals(1, stream.rebuilds);
+
+        clock.advance(Duration.ofSeconds(300));
+        supervisor.onStatusChange(STREAMING); // recovery succeeded — the ladder and budget reset
+        supervisor.sweep();
+
+        supervisor.onStatusChange(WILL_RETRY); // outage 2: a fresh ladder
+        clock.advance(Duration.ofSeconds(120));
+        supervisor.sweep();
+        assertEquals(2, stream.rebuilds);
+
+        clock.advance(budget.minusSeconds(1)); // well past outage 1's budget, one second inside outage 2's
+        supervisor.sweep();
+        assertFalse(exhausted.get(), "the budget runs from THIS outage's first rebuild");
+        clock.advance(Duration.ofSeconds(1));
+        supervisor.sweep();
+        assertTrue(exhausted.get());
+    }
+
+    @Test
+    void aRejectedConfigurationEndsRecoveryAtOnce() {
+        stream.fatal = true; // the broker rejects the credentials/account on rebuild
+        supervisor.onStatusChange(WILL_RETRY);
+        supervisor.sweep();
+        clock.advance(Duration.ofSeconds(120));
+        supervisor.sweep();
+
+        assertEquals(1, stream.rebuilds);
+        assertTrue(exhausted.get(), "never climb a ladder against a lockout");
+        assertEquals("fatal_config", single(EventType.FEED_DEAD).detail().get("reason").asText());
+
+        clock.advance(Duration.ofSeconds(120));
+        supervisor.sweep();
+        assertEquals(1, stream.rebuilds, "latched — no further attempts");
+    }
+
+    @Test
+    void aFailingEventWriteNeverStopsTheBelt() {
+        events.failWrites = true; // Postgres is down — the breadcrumb cannot be written
+        supervisor.onStatusChange(WILL_RETRY);
+        supervisor.sweep();
+        clock.advance(Duration.ofSeconds(120));
+        supervisor.sweep(); // must not throw — the sweep thread must survive
+
+        assertEquals(1, stream.rebuilds, "the remedy still happens; observability is downstream");
+        assertEquals(1, supervisor.eventWriteFailures(), "counted — loud, not silent");
+    }
+
+    @Test
+    void aFailingEventWriteOnGiveUpStillHandsOverToTheRunner() {
+        events.failWrites = true;
+        stream.fatal = true;
+        supervisor.onStatusChange(WILL_RETRY);
+        supervisor.sweep();
+        clock.advance(Duration.ofSeconds(120));
+        supervisor.sweep();
+
+        assertTrue(exhausted.get(), "an unwritable FEED_DEAD must not swallow the hand-over");
+    }
+
+    @Test
+    void aWatchdogRebuildResetsTheLadderEvenWhenTheFarewellNeverArrives() {
+        supervisor.watch(DAX);
+        freshness.flag.put(DAX, "DEAL");
+        supervisor.sweep();
+        advanceAndSweep(Duration.ofSeconds(460)); // status STREAMING throughout — silent while connected
+        assertEquals(1, stream.rebuilds);
+
+        supervisor.onStatusChange(STREAMING); // the NEW connection comes up; the old farewell never arrives
+        supervisor.sweep();
+
+        ServiceEvent reconnect = single(EventType.RECONNECT);
+        assertFalse(reconnect.detail().get("replayed").asBoolean(),
+                "a rebuild tears the buffer down — the outage's data is owed a heal");
+        for (int step = 0; step < 130; step++) { // 650s of a healthy feed, past the budget
+            clock.advance(Duration.ofSeconds(5));
+            freshness.tick.put(DAX, clock.monotonicNanos());
+            freshness.bar.put(DAX, clock.monotonicNanos()); // bars too, or the dead-CHART signal fires
+            supervisor.sweep();
+        }
+        assertFalse(exhausted.get(), "the resume reset the ladder — no spurious give-up");
+        assertEquals(0, count(EventType.FEED_DEAD));
+        assertEquals(1, stream.rebuilds);
     }
 
     @Test
@@ -276,6 +396,12 @@ class SupervisorTest {
 
     // --- helpers + fakes --------------------------------------------------------------------
 
+    /** jitter = 1.0 → deterministic backoff; Sleeper/interval unused (tests drive sweep() directly). */
+    private Supervisor supervisorWith(Tuning tuning) {
+        return new Supervisor(clock, tuning, () -> 1.0, events, stream, freshness,
+                () -> exhausted.set(true), Sleeper.SYSTEM, Duration.ofSeconds(1));
+    }
+
     /** Enqueue a market's subscription rejection up to the strike ceiling — the escalation point
      * at which the witness rule renders its verdict. */
     private void failToTheStrikeCeiling(String epic) {
@@ -343,9 +469,13 @@ class SupervisorTest {
 
     private static final class RecordingEvents implements EventLog {
         final List<ServiceEvent> written = new ArrayList<>();
+        boolean failWrites; // when true, every write throws — Postgres is down
 
         @Override
         public void write(ServiceEvent event) {
+            if (failWrites) {
+                throw new IllegalStateException("service_events unavailable");
+            }
             written.add(event);
         }
     }
@@ -355,10 +485,12 @@ class SupervisorTest {
         final List<String> resubscribed = new ArrayList<>();
         final List<String> quarantined = new ArrayList<>();
         boolean quarantineRefused; // when true, quarantine() reports a refused unsubscribe
+        boolean fatal; // when true, rebuild() reports the broker rejected the configuration
 
         @Override
-        public void rebuild() {
+        public boolean rebuild() {
             rebuilds++;
+            return !fatal;
         }
 
         @Override

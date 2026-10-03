@@ -6,8 +6,9 @@ import org.jspecify.annotations.Nullable;
 
 /**
  * Answers the operational question after streaming resumes: did we lose data? (§3.6)
- * A WILL-RETRY sighting means the server abandoned lossless recovery — the outage's data
- * is gone and a heal is owed; otherwise the server replayed and there is no gap. Also
+ * A WILL-RETRY sighting means the server abandoned lossless recovery, and our own rebuild
+ * tears the connection down — either way the outage's data is gone and a heal is owed;
+ * otherwise the server replayed and there is no gap. Also
  * annotates host sleep (a lid-closed 16 minutes once reported as "0.4s offline") and
  * flags silent transport downgrades.
  */
@@ -25,7 +26,7 @@ public final class ReconnectClassifier {
     private final Tuning tuning;
     private boolean closing;
     private boolean inOutage;
-    private boolean sawWillRetry;
+    private boolean dataGone;
     private long outageStartMono;
     private long outageStartWallMillis;
 
@@ -36,6 +37,20 @@ public final class ReconnectClassifier {
     /** Set before an intentional close so the farewell DISCONNECTED is hushed (§3.6). */
     public void closing() {
         closing = true;
+    }
+
+    /** The Supervisor is tearing the connection down to rebuild it. The outage is open from here
+     * if it was not already, and the eventual STREAMING is a replacement, never a lossless replay
+     * — so the ladder reset never depends on the torn-down connection's farewell DISCONNECTED
+     * beating the new connection's STREAMING to the queue (status may read CONNECTED throughout a
+     * silent-while-connected outage). */
+    public void rebuilding(long monotonicNanos, long wallMillis) {
+        if (!inOutage) {
+            inOutage = true;
+            outageStartMono = monotonicNanos;
+            outageStartWallMillis = wallMillis;
+        }
+        dataGone = true; // lossless recovery is off the table — we tore the connection down
     }
 
     public @Nullable Note noteFor(String status) {
@@ -53,12 +68,12 @@ public final class ReconnectClassifier {
         if (status.startsWith("DISCONNECTED") && !closing) {
             if (!inOutage) {
                 inOutage = true;
-                sawWillRetry = false;
+                dataGone = false;
                 outageStartMono = monotonicNanos;
                 outageStartWallMillis = wallMillis;
             }
             if (StuckSubstateEscalator.WILL_RETRY.equals(status)) {
-                sawWillRetry = true;
+                dataGone = true;
             }
             return null;
         }
@@ -68,7 +83,7 @@ public final class ReconnectClassifier {
             Duration awake = Duration.ofNanos(monotonicNanos - outageStartMono);
             boolean slept =
                     wall.minus(awake).compareTo(tuning.hostSleepSkew()) > 0;
-            return new Reconnect(!sawWillRetry, wall, awake, slept);
+            return new Reconnect(!dataGone, wall, awake, slept);
         }
         return null;
     }

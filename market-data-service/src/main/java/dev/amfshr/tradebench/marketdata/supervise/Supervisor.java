@@ -8,6 +8,7 @@ import java.util.Map;
 import java.util.Queue;
 import java.util.Set;
 import java.util.concurrent.ConcurrentLinkedQueue;
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.DoubleSupplier;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -16,7 +17,6 @@ import com.fasterxml.jackson.databind.node.ObjectNode;
 import org.jspecify.annotations.Nullable;
 
 import dev.amfshr.tradebench.core.time.Clock;
-import dev.amfshr.tradebench.ig.stream.StreamTransport;
 import dev.amfshr.tradebench.ig.time.Sleeper;
 import dev.amfshr.tradebench.marketdata.events.EventType;
 import dev.amfshr.tradebench.marketdata.events.ServiceEvent;
@@ -30,12 +30,13 @@ import dev.amfshr.tradebench.marketdata.store.EventLog;
  * {@code capture-supervisor} thread drains that queue, feeds the cores (so the cores stay
  * single-threaded, lock-free), emits {@link ServiceEvent}s, and runs the time-based checks each
  * sweep — executing remedies through {@link StreamControl}, paced by {@link BackoffPolicy}, until
- * recovery is exhausted ({@code onExhausted}). <b>Slice C steps 2a–2b</b>: connection resilience
- * (reconnect classification, stuck-substate escalation, backoff, exhaustion), the staleness
- * watchdog (quiet vs dead), and witness quarantine (§3.5 blast radius). The gap/state wiring, the
- * heartbeat, pacer discovery, and the {@code Main} rewiring follow.
+ * recovery is given up ({@code onExhausted}): the recovery budget runs out, the rebuild ceiling
+ * is hit, or the broker rejects the configuration outright. <b>Slice C steps 2a–2b</b>:
+ * connection resilience (reconnect classification, stuck-substate escalation, backoff,
+ * exhaustion), the staleness watchdog (quiet vs dead), and witness quarantine (§3.5 blast
+ * radius). The heartbeat and pacer discovery follow.
  */
-public final class Supervisor implements StreamTransport.ConnectionListener, Runnable {
+public final class Supervisor implements StreamObserver, Runnable {
 
     private static final ObjectMapper MAPPER = new ObjectMapper();
 
@@ -46,12 +47,14 @@ public final class Supervisor implements StreamTransport.ConnectionListener, Run
     private final Runnable onExhausted;
     private final Sleeper sleeper;
     private final Duration sweepInterval;
+    private final long giveUpAfterNanos;
 
     private final ReconnectClassifier reconnects;
     private final StuckSubstateEscalator stuck;
     private final StalenessWatchdog watchdog;
     private final WitnessQuarantine witness;
     private final BackoffPolicy backoff;
+    private final AtomicLong eventWriteFailures = new AtomicLong();
 
     private final Queue<Observation> observations = new ConcurrentLinkedQueue<>();
 
@@ -61,6 +64,8 @@ public final class Supervisor implements StreamTransport.ConnectionListener, Run
     private final Map<String, Long> lastFedBar = new HashMap<>();
     private int consecutiveFailures;
     private long lastRebuildMono = Long.MIN_VALUE;
+    private long firstFailureMono = Long.MIN_VALUE;
+    private boolean gaveUp;
     private volatile boolean running = true;
 
     public Supervisor(Clock clock, Tuning tuning, DoubleSupplier jitter, EventLog events,
@@ -73,6 +78,7 @@ public final class Supervisor implements StreamTransport.ConnectionListener, Run
         this.onExhausted = onExhausted;
         this.sleeper = sleeper;
         this.sweepInterval = sweepInterval;
+        this.giveUpAfterNanos = tuning.giveUpAfter().toNanos();
         this.reconnects = new ReconnectClassifier(tuning);
         this.stuck = new StuckSubstateEscalator(tuning);
         this.watchdog = new StalenessWatchdog(tuning);
@@ -94,11 +100,13 @@ public final class Supervisor implements StreamTransport.ConnectionListener, Run
     }
 
     /** A market's PRICE or CHART leg confirmed subscribed (LS callback thread; §3.5 witness). */
+    @Override
     public void onSubscribed(String epic, WitnessQuarantine.Kind kind) {
         observations.add(new Observation.Subscribed(epic, kind));
     }
 
     /** A market's subscription was rejected (LS callback thread; §3.5 strike). */
+    @Override
     public void onSubscriptionError(String epic, int code, String message) {
         observations.add(new Observation.SubscriptionError(epic, code, message,
                 clock.monotonicNanos(), clock.wallInstant()));
@@ -146,14 +154,18 @@ public final class Supervisor implements StreamTransport.ConnectionListener, Run
         running = false;
     }
 
-    /** One pass: apply every pending observation, then the time-based escalation check. */
+    /** One pass: apply every pending observation, then the time-based checks — the recovery
+     * budget first (it must not depend on how often a detector re-fires), then escalation. */
     void sweep() {
+        if (gaveUp) {
+            return; // recovery has ended — the runner is taking over
+        }
         Observation observation;
         while ((observation = observations.poll()) != null) {
             if (observation instanceof Observation.Status status) {
                 applyStatus(status);
             } else if (observation instanceof Observation.ServerError(int code, String message, Instant at)) {
-                events.write(ServiceEvent.of(EventType.IG_API_ERROR, at)
+                record(ServiceEvent.of(EventType.IG_API_ERROR, at)
                         .withDetail(MAPPER.createObjectNode()
                                 .put("code", code)
                                 .put("message", message)));
@@ -162,6 +174,11 @@ public final class Supervisor implements StreamTransport.ConnectionListener, Run
             } else if (observation instanceof Observation.SubscriptionError error) {
                 applyJudgment(witness.onSubscriptionError(error.epic(), error.monotonicNanos()), error);
             }
+        }
+        if (consecutiveFailures > 0
+                && clock.monotonicNanos() - firstFailureMono >= giveUpAfterNanos) {
+            giveUp("budget", clock.wallInstant());
+            return;
         }
         if (stuck.rebuildDue(clock.monotonicNanos())) {
             rebuild(EventType.STUCK_SUBSTATE_ESCALATED, clock.wallInstant());
@@ -197,7 +214,7 @@ public final class Supervisor implements StreamTransport.ConnectionListener, Run
 
     private void applyRemedy(StalenessWatchdog.Remedy remedy, Instant occurredAt) {
         if (remedy.action() == StalenessWatchdog.Action.RESUBSCRIBE) {
-            events.write(ServiceEvent.of(EventType.WATCHDOG_STALE, occurredAt).forEpic(remedy.epic())
+            record(ServiceEvent.of(EventType.WATCHDOG_STALE, occurredAt).forEpic(remedy.epic())
                     .withDetail(MAPPER.createObjectNode()
                             .put("action", "resubscribe")
                             .put("signal", remedy.signal().name())));
@@ -231,7 +248,7 @@ public final class Supervisor implements StreamTransport.ConnectionListener, Run
     /** Isolate one provably market-shaped failure: record it, stop watching it, and unsubscribe its
      * pair. A refused unsubscribe double-delivers, so it escalates to a session rebuild (§3.5). */
     private void quarantineMarket(String epic, Observation.SubscriptionError error) {
-        events.write(ServiceEvent.of(EventType.MARKET_QUARANTINED, error.at()).forEpic(epic)
+        record(ServiceEvent.of(EventType.MARKET_QUARANTINED, error.at()).forEpic(epic)
                 .withDetail(MAPPER.createObjectNode()
                         .put("code", error.code())
                         .put("message", error.message())));
@@ -243,16 +260,16 @@ public final class Supervisor implements StreamTransport.ConnectionListener, Run
 
     private void applyStatus(Observation.Status status) {
         if (reconnects.noteFor(status.status()) == ReconnectClassifier.Note.TRANSPORT_DOWNGRADED) {
-            events.write(ServiceEvent.of(EventType.TRANSPORT_DOWNGRADED,
+            record(ServiceEvent.of(EventType.TRANSPORT_DOWNGRADED,
                     Instant.ofEpochMilli(status.wallMillis())));
         }
         // A GRACEFUL_CLOSE note is intentionally silent — that is the hush (§3.6).
         ReconnectClassifier.Reconnect reconnect =
                 reconnects.onStatus(status.status(), status.monotonicNanos(), status.wallMillis());
         if (reconnect != null) {
-            consecutiveFailures = 0; // streaming resumed — the backoff ladder resets
-            lastRebuildMono = Long.MIN_VALUE;
-            events.write(new ServiceEvent(EventType.RECONNECT,
+            consecutiveFailures = 0; // streaming resumed — the ladder resets; the next outage's
+            lastRebuildMono = Long.MIN_VALUE; // first rebuild restarts the budget clock
+            record(new ServiceEvent(EventType.RECONNECT,
                     reconnect.replayed() ? Severity.INFO : Severity.WARN, null,
                     Instant.ofEpochMilli(status.wallMillis()), null,
                     MAPPER.createObjectNode()
@@ -275,15 +292,20 @@ public final class Supervisor implements StreamTransport.ConnectionListener, Run
      * exhausted), so it stays a faithful record of rebuilds that happened. */
     private void rebuild(EventType reason, Instant occurredAt, @Nullable String epic,
             @Nullable ObjectNode detail) {
+        if (gaveUp) {
+            return;
+        }
         long now = clock.monotonicNanos();
         if (consecutiveFailures > 0
                 && now - lastRebuildMono < backoff.delayFor(consecutiveFailures).toNanos()) {
             return; // not yet — space rebuilds so a re-login storm never trips IG's throttles (§3.2)
         }
         if (backoff.exhausted(consecutiveFailures)) {
-            events.write(ServiceEvent.of(EventType.FEED_DEAD, occurredAt));
-            onExhausted.run();
+            giveUp("ceiling", occurredAt);
             return;
+        }
+        if (consecutiveFailures == 0) {
+            firstFailureMono = now; // the recovery budget runs from an outage's first rebuild
         }
         consecutiveFailures++;
         lastRebuildMono = now;
@@ -294,11 +316,41 @@ public final class Supervisor implements StreamTransport.ConnectionListener, Run
         if (detail != null) {
             reasonEvent = reasonEvent.withDetail(detail);
         }
-        events.write(reasonEvent);
-        stream.rebuild();
+        record(reasonEvent);
+        reconnects.rebuilding(now, occurredAt.toEpochMilli()); // the outage is open from here, farewell or not
+        if (!stream.rebuild()) {
+            giveUp("fatal_config", occurredAt); // never climb a ladder against a lockout
+            return;
+        }
         witness.onSessionRebuilt(); // strikes reset; quarantine persists (exit is restart-only)
         for (String survivor : watched) {
             witness.onSubscribeStarted(survivor, now); // the new session re-subscribes the survivors
+        }
+    }
+
+    /** End recovery loud, exactly once: {@code FEED_DEAD} says why, sweeping stops, and the
+     * runner takes over (in {@code Main}, an orderly exit for the process supervisor to restart). */
+    private void giveUp(String reason, Instant occurredAt) {
+        gaveUp = true;
+        running = false;
+        record(ServiceEvent.of(EventType.FEED_DEAD, occurredAt)
+                .withDetail(MAPPER.createObjectNode().put("reason", reason)));
+        onExhausted.run();
+    }
+
+    /** Event writes that failed and were swallowed — the belt never dies for a breadcrumb (the
+     * pump ruling, applied here too); nonzero is the alarm, surfaced by the heartbeat. */
+    public long eventWriteFailures() {
+        return eventWriteFailures.get();
+    }
+
+    // Observability is downstream of the decision: a failing write is counted, never allowed to
+    // kill the sweep thread — and giveUp() must always reach onExhausted.
+    private void record(ServiceEvent event) {
+        try {
+            events.write(event);
+        } catch (RuntimeException e) {
+            eventWriteFailures.incrementAndGet();
         }
     }
 

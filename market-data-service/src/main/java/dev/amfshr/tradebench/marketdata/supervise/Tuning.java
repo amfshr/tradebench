@@ -6,6 +6,8 @@ import java.time.Duration;
  * Every load-bearing resilience number (playbook §8) in one place. These are policy
  * constants proven against live incidents, not machine config — code defaults are
  * deliberate (T5 nod ruling); env overrides arrive only if we ever actually tune.
+ * {@code giveUpAfter} bounds a whole recovery (ruled 2026-10-03): rung cadence is
+ * detector-driven, so the budget is a clock, not a count.
  */
 public record Tuning(
         Duration tickSilent,
@@ -19,6 +21,7 @@ public record Tuning(
         Duration backoffCap,
         Duration rebuildFloor,
         int maxConsecutiveFailures,
+        Duration giveUpAfter,
         int subscriptionStrikes,
         Duration subscribeConfirmWindow,
         Duration hostSleepSkew,
@@ -45,9 +48,20 @@ public record Tuning(
                 Duration.ofSeconds(60),
                 Duration.ofSeconds(5),
                 10,
+                Duration.ofMinutes(10),
                 3,
                 Duration.ofSeconds(30),
                 Duration.ofSeconds(5),
                 Duration.ofSeconds(10));
+    }
+
+    /** The same policy with a different recovery budget — lets a test pin the rebuild ceiling
+     * (or the budget) in isolation. */
+    public Tuning withGiveUpAfter(Duration giveUpAfter) {
+        return new Tuning(tickSilent, barSilentWhileTicksFlow, willRetryRebuild,
+                tryingRecoveryRebuild, watchdogGraceBase, watchdogGraceCap,
+                watchdogMaxResubscribes, backoffBase, backoffCap, rebuildFloor,
+                maxConsecutiveFailures, giveUpAfter, subscriptionStrikes, subscribeConfirmWindow,
+                hostSleepSkew, processFreezeJump);
     }
 }

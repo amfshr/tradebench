@@ -4,7 +4,9 @@ Part of the Tradebench Field Manual. T5's supervision layer exists because the p
 long enough, unattended enough, to collect real outages — and every class in
 `market-data-service/.../supervise/` and `.../coverage/` is a specific incident with a
 name. This chapter explains the pattern they share, tours each core, then follows the
-`Supervisor` shell (slice C) that composes them into a running service.
+`Supervisor` shell (slice C) that composes them into a running service. Chapter 10 is its
+companion read the other way round — the **failure playbook**: what breaks, what we do, what it
+costs, and the rulings behind every number used here.
 
 ## The jargon
 
@@ -38,7 +40,7 @@ flowchart LR
     O --> C
     C -->|"Remedy · Judgment · Gap · boolean<br><i>values, never actions</i>"| S
     S -->|"~1s cadence, both clocks"| C
-    S -->|"resubscribe · rebuild · back off · exit(0)"| W
+    S -->|"resubscribe · rebuild · back off · exit(1)"| W
     W -.->|new observations| O
 ```
 
@@ -119,8 +121,12 @@ launder the elapsed time.
 so tests are exact), capped at 60s — then the part IG taught us: a **5s floor on every
 rebuild, including the first**, because rapid re-logins hit IG's response cache and come
 back with stale tokens; being slower here is being correct. And nothing retries forever:
-`exhausted` at 10 consecutive failures → the Supervisor exits **0**, cleanly — a
-deliberate stop with a written record, not a crash loop hammering a broker at 3am.
+recovery is **budgeted** — `giveUpAfter`, 10 minutes of continuous no-streaming from an
+outage's first rebuild (the 10-rebuild ceiling stays as a cap; rung cadence is set by the
+detectors, so a full ten-rung ladder spans anywhere from 20 minutes to 3.5 hours depending
+on which one drives it — which is why the budget is a clock, not a count) → the Supervisor gives up with `FEED_DEAD` and the runner exits **1** — a deliberate
+stop with a written record, restarted by the process supervisor, not a crash loop hammering
+a broker at 3am.
 
 **`ReconnectClassifier`** — after streaming resumes, the only operational question: *did
 we lose data?* Lightstreamer's contract makes it answerable: if the outage contained a
@@ -189,12 +195,18 @@ That push/pull split is the whole reason the control queue stays tiny and the sw
 cheap — and it is why the ticks you see flowing in chapter 4 never appear in this chapter's
 queue.
 
-**The sweep.** One pass does two things, in order. First it drains the observation queue:
+**The sweep.** One pass does three things, in order. First it drains the observation queue:
 each `Status` feeds `ReconnectClassifier` and `StuckSubstateEscalator` (emitting a
 `RECONNECT` or `TRANSPORT_DOWNGRADED` event when the classifier returns one); each
-`ServerError` writes an `IG_API_ERROR`. Then the time-based checks — if the escalator says a
-rebuild is due, do it; then `checkStaleness()`. Nothing blocks; the pass is microseconds of
-CPU. **Every event named here is a `ServiceEvent` written through the `EventLog` seam into
+`ServerError` writes an `IG_API_ERROR`. Second, the recovery budget: if the first rebuild of
+this outage was `giveUpAfter` ago and streaming never resumed, give up — checked here, after
+the drain (a queued resume resets it first) and before any detector, so it never depends on
+how often a detector re-fires. Third, the detectors — if the escalator says a rebuild is due,
+do it; then `checkStaleness()`. Nothing blocks; the pass is microseconds of CPU. Event writes
+are **best-effort here as in the pump**: a failing write is counted (`eventWriteFailures`,
+surfaced by the heartbeat), never allowed to kill the sweep thread — observability is
+downstream of the decision. **Every event named here is a `ServiceEvent` written through the
+`EventLog` seam into
 `service_events`** — slice B (merged, PR #11) gave the belt its durable voice, so the reason
 a 3am rebuild happened is a row, not a lost log line; the catalogue is D25's `EventType`, the
 schema lives in `docs/design/observability-and-data-model.md`.
@@ -237,31 +249,45 @@ via the increment-1 handles, the connection and every other market untouched (§
 **Pacing, and giving up loud.** `rebuild()` carries the backoff discipline the core only
 describes. It refuses to fire again inside the current backoff window (so a run of sweeps
 cannot become a re-login storm against IG, §3.2); otherwise it bumps `consecutiveFailures`,
-stamps the monotonic time, writes the reason event, and calls `stream.rebuild()`. When the
-ladder is exhausted it writes `FEED_DEAD` and calls `onExhausted` — an injected `Runnable`
-that in `Main` is a clean `exit(0)`: a deliberate stop with a written record, never a crash
-loop. A successful reconnect (a `RECONNECT` from the classifier) resets the ladder
-(`consecutiveFailures = 0`) so the next outage starts fresh.
+stamps the monotonic time, writes the reason event, and calls `stream.rebuild()`. Recovery
+ends in one of three ways — the **time budget** (`giveUpAfter`, checked every sweep, so it
+does not depend on how often a detector re-fires), the rebuild **ceiling** as a cap, or
+`stream.rebuild()` reporting that the broker **rejected the configuration** (never climb a
+ladder against a lockout). Each writes `FEED_DEAD` with a `reason`, latches, and calls
+`onExhausted` — an injected `Runnable` that in `Main` is `exit(1)`: a deliberate stop with a
+written record, restarted from a clean slate by the process supervisor under any restart
+policy. It is not a crash loop: boot retries a merely-unreachable IG under the login gate,
+within the same budget, and fails loud on a rejected configuration or an exhausted budget. A
+successful reconnect (a `RECONNECT` from the classifier) resets the ladder and its budget so
+the next outage starts fresh. `rebuild()` also tells the classifier the outage is open — so
+that reset never depends on the old connection's farewell `DISCONNECTED` beating the new
+connection's `STREAMING` to the queue — and `IgStreamControl` gates each connection's
+callbacks by generation, so nothing a superseded connection says can open a phantom outage
+or strike the new session.
 
 **The seams, and why they are interfaces.** The shell touches the world through exactly two
-injected ports — `StreamControl` (`rebuild()` / `resubscribe(epic)`) and `MarketFreshness`
-(the pulled last-seen clocks) — plus the `onExhausted` hook and an injected `Clock` and
-`Sleeper`. In production `Main` wires `StreamControl` to `IgSessionManager` +
-`IgStreamSession` and `MarketFreshness` to the pump's `Buffers` (step 6, still landing). In
-tests they are fakes — and *that is the point*. Because every effect is a seam and every
-core takes a `long` clock, `SupervisorTest` drives `sweep()` directly with a `FakeClock` and
-asserts on recorded events and fake rebuild/resubscribe counts: thirteen whole outages —
+injected ports — `StreamControl` (`rebuild()` / `resubscribe(epic)` / `quarantine(epic)`)
+and `MarketFreshness` (the pulled last-seen clocks) — plus the `onExhausted` hook and an
+injected `Clock` and `Sleeper`. In production `Main` wires `StreamControl` to
+`IgStreamControl` — the one class that owns the IG session and the Lightstreamer stream,
+over the `IgSessions` and `StreamTransport` seams — and `MarketFreshness` to the pump's
+`Buffers`, which stamps each market's last arrival on the monotonic clock as it queues it.
+The control loop has one back-edge — the stream reports status and subscription outcomes to
+the Supervisor as a `StreamObserver` — and `Main` ties it off with a single `bind()` at the
+composition root. In tests they are fakes — and *that is the point*. Because every effect is
+a seam and every core takes a `long` clock, `SupervisorTest` drives `sweep()` directly with a
+`FakeClock` and asserts on recorded events and fake rebuild/resubscribe counts: twenty whole
+outages —
 replayed reconnect, stuck substate, backoff-then-give-up, host-sleep, open-market silence,
 two-markets-together — run as millisecond unit tests with no real sleeps and no sockets. The
 same seam is the hook for the recorded-fixture replay tester (the simulator pillar): a
 `MarketFreshness` fed from a *captured* session, driving the real `Supervisor` against
 recorded silence.
 
-**Still landing on `e1-t5c-supervisor-shell`.** Step 2a (connection resilience) and 2b's
-watchdog wiring are in; the branch still owes witness-quarantine wiring (`forget()` on a
-quarantined market), the gap and `market_state_change` events, the heartbeat writing
-`capture_status`, pacer discovery, and the `Main` rewiring that swaps the test fakes for the
-real session and buffers. This chapter grows with them.
+**Still landing on `e1-t5c-supervisor-shell`.** Connection resilience, the watchdog, witness
+quarantine, the gap and `market_state_change` events, and the `Main` rewiring (the belt now
+drives the real session) are in; the branch still owes the heartbeat writing
+`capture_status` and pacer discovery. This chapter grows with them.
 
 ## The scars, in one line each
 

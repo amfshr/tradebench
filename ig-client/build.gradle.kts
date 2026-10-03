@@ -3,6 +3,7 @@
 // Spring in (phase-1 build plan §2). Depends on nothing of ours.
 plugins {
     `java-library`
+    `java-test-fixtures` // the fake transport, shared with the modules that test above the seam
 }
 
 group = "dev.amfshr.tradebench"

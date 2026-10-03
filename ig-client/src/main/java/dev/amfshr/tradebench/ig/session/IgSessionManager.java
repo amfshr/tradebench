@@ -37,7 +37,7 @@ import dev.amfshr.tradebench.ig.rest.RequestPacer;
  * cached tokens with a cheap GET /session and only logs in fresh when they are genuinely
  * dead — rapid re-logins hit IG's response cache and receive stale tokens.
  */
-public final class IgSessionManager {
+public final class IgSessionManager implements IgSessions {
 
     /** Benign: PUT /session when already on the target account (§1.4). */
     private static final String ALREADY_ON_ACCOUNT = "error.switch.accountid-must-be-different";
@@ -60,7 +60,7 @@ public final class IgSessionManager {
         this.loginGate = loginGate;
     }
 
-    /** The current session, logging in fresh only if none exists yet. */
+    @Override
     public synchronized IgSession current() throws IOException, InterruptedException {
         if (session == null) {
             session = freshLogin();
@@ -68,10 +68,9 @@ public final class IgSessionManager {
         return session;
     }
 
-    /**
-     * The rebuild path after any failure: validate the cached session with a side-effect-free
-     * GET /session; only when the tokens are genuinely dead, drop it and log in fresh.
-     */
+    /** Validates the cached session with a side-effect-free GET /session; only when the tokens
+     * are genuinely dead does it drop them and log in fresh. */
+    @Override
     public synchronized IgSession afterFailure() throws IOException, InterruptedException {
         if (session != null && stillValid(session)) {
             return session;
