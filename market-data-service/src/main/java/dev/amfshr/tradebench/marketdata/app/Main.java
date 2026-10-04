@@ -11,6 +11,7 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ThreadLocalRandom;
+import java.util.function.DoubleSupplier;
 
 import dev.amfshr.tradebench.core.time.SystemClock;
 import dev.amfshr.tradebench.ig.IgCredentials;
@@ -38,6 +39,7 @@ import dev.amfshr.tradebench.marketdata.store.PostgresObservabilityStore;
 import dev.amfshr.tradebench.marketdata.coverage.GapDetector;
 import dev.amfshr.tradebench.marketdata.ingest.Pump;
 import dev.amfshr.tradebench.marketdata.ingest.Buffers;
+import dev.amfshr.tradebench.marketdata.supervise.BackoffPolicy;
 import dev.amfshr.tradebench.marketdata.supervise.HealthProbe;
 import dev.amfshr.tradebench.marketdata.supervise.IgStreamControl;
 import dev.amfshr.tradebench.marketdata.supervise.PacerDiscovery;
@@ -129,16 +131,22 @@ public final class Main {
                 new LoginRateGate(clock::monotonicNanos, Sleeper.SYSTEM));
         IgRestClient rest = new IgRestClient(http, igEnv, credentials, pacer);
         Buffers queues = new Buffers(Buffers.DEFAULT_TICK_CAPACITY, clock::monotonicNanos);
-        Pump pump = new Pump(queues, sink, new GapDetector(), gaps, eventLog, Sleeper.SYSTEM);
+        Tuning tuning = Tuning.playbook();
+        DoubleSupplier jitter = () -> 0.5 + ThreadLocalRandom.current().nextDouble();
+        Pump pump = new Pump(queues, sink, new GapDetector(), gaps, eventLog, Sleeper.SYSTEM, clock,
+                new BackoffPolicy(tuning, jitter), message -> log(instance, message), cause -> {
+                    log(instance, "FATAL: capture pump died — capture is void from here; cause: "
+                            + cause + "; exiting for the process supervisor to restart");
+                    // Off the pump thread: the shutdown hook joins it (see the belt's exit).
+                    new Thread(() -> System.exit(1), "capture-exit").start();
+                });
         Thread pumpThread = new Thread(pump, "capture-pump");
 
-        Tuning tuning = Tuning.playbook();
         IgStreamControl control = new IgStreamControl(sessions,
                 new IgStreamClient(new LightstreamerTransport()), queues, epics,
                 message -> log(instance, message), Sleeper.SYSTEM, BOOT_RETRY,
                 clock::monotonicNanos, tuning.giveUpAfter());
-        Supervisor supervisor = new Supervisor(clock, tuning,
-                () -> 0.5 + ThreadLocalRandom.current().nextDouble(), eventLog, control, queues,
+        Supervisor supervisor = new Supervisor(clock, tuning, jitter, eventLog, control, queues,
                 () -> {
                     log(instance, "FATAL: recovery exhausted — the feed is dead; exiting for the"
                             + " process supervisor to restart");

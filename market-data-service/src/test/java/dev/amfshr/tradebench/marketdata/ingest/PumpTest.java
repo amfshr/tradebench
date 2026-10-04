@@ -4,8 +4,14 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.io.UncheckedIOException;
+import java.sql.SQLException;
+import java.time.Duration;
+import java.util.ArrayDeque;
+import java.util.Deque;
+import java.util.function.Consumer;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.ArrayList;
@@ -15,6 +21,7 @@ import org.junit.jupiter.api.Test;
 
 import dev.amfshr.tradebench.core.domain.Bar1m;
 import dev.amfshr.tradebench.core.domain.Tick;
+import dev.amfshr.tradebench.core.time.Clock;
 import dev.amfshr.tradebench.ig.stream.Ohlc;
 import dev.amfshr.tradebench.ig.stream.SealedBarUpdate;
 import dev.amfshr.tradebench.ig.stream.TickUpdate;
@@ -27,11 +34,20 @@ import dev.amfshr.tradebench.marketdata.events.Severity;
 import dev.amfshr.tradebench.marketdata.store.CaptureStore;
 import dev.amfshr.tradebench.marketdata.store.EventLog;
 import dev.amfshr.tradebench.marketdata.store.GapStore;
+import dev.amfshr.tradebench.marketdata.store.PersistenceException;
+import dev.amfshr.tradebench.marketdata.supervise.BackoffPolicy;
+import dev.amfshr.tradebench.marketdata.supervise.Tuning;
 
 class PumpTest {
 
     private static final String DAX = "IX.D.DAX.DAILY.IP";
     private static final Sleeper NO_SLEEP = duration -> {
+    };
+    /** jitter = 1.0: the playbook ladder exactly — 1s base doubling under a 5s floor, 60s cap. */
+    private static final BackoffPolicy BACKOFF = new BackoffPolicy(Tuning.playbook(), () -> 1.0);
+    private static final Consumer<String> LOG_NOWHERE = message -> {
+    };
+    private static final Consumer<RuntimeException> NO_DEATH = cause -> {
     };
 
     private static class RecordingSink implements CaptureStore {
@@ -103,7 +119,7 @@ class PumpTest {
         queues.onTick(tick(10));   // null -> DEAL is a transition: one state change
         queues.onTick(tick(11));   // still DEAL: no new state change
         queues.onSealedBar(bar(60));
-        Pump pump = new Pump(queues, sink, new GapDetector(), gaps, events, NO_SLEEP);
+        Pump pump = new Pump(queues, sink, new GapDetector(), gaps, events, NO_SLEEP, new FakeClock(), BACKOFF, LOG_NOWHERE, NO_DEATH);
 
         int worked = pump.drainOnce();
 
@@ -129,7 +145,7 @@ class PumpTest {
         FakeEventLog events = new FakeEventLog();
         queues.onSealedBar(bar(0));     // minute 0 seeds the watermark
         queues.onSealedBar(bar(180));   // minute 3 -> minutes 1 and 2 are missing
-        Pump pump = new Pump(queues, sink, new GapDetector(), gaps, events, NO_SLEEP);
+        Pump pump = new Pump(queues, sink, new GapDetector(), gaps, events, NO_SLEEP, new FakeClock(), BACKOFF, LOG_NOWHERE, NO_DEATH);
 
         pump.drainOnce();
 
@@ -155,7 +171,7 @@ class PumpTest {
         GapStore boom = gap -> {
             throw new RuntimeException("bar_gaps insert failed");
         };
-        Pump pump = new Pump(queues, sink, new GapDetector(), boom, new FakeEventLog(), NO_SLEEP);
+        Pump pump = new Pump(queues, sink, new GapDetector(), boom, new FakeEventLog(), NO_SLEEP, new FakeClock(), BACKOFF, LOG_NOWHERE, NO_DEATH);
         pump.stop();
 
         pump.run();
@@ -177,7 +193,7 @@ class PumpTest {
         EventLog boom = event -> {
             throw new RuntimeException("service_events insert failed");
         };
-        Pump pump = new Pump(queues, sink, new GapDetector(), new FakeGapStore(), boom, NO_SLEEP);
+        Pump pump = new Pump(queues, sink, new GapDetector(), new FakeGapStore(), boom, NO_SLEEP, new FakeClock(), BACKOFF, LOG_NOWHERE, NO_DEATH);
         pump.stop();
 
         pump.run();
@@ -194,7 +210,7 @@ class PumpTest {
     void idleCycleFlushesTheSink() throws InterruptedException {
         RecordingSink sink = new RecordingSink();
         Pump pump = new Pump(new Buffers(10, () -> 0L), sink, new GapDetector(), new FakeGapStore(),
-                new FakeEventLog(), NO_SLEEP);
+                new FakeEventLog(), NO_SLEEP, new FakeClock(), BACKOFF, LOG_NOWHERE, NO_DEATH);
 
         pump.cycle();
 
@@ -207,7 +223,7 @@ class PumpTest {
         RecordingSink sink = new RecordingSink();
         queues.onSealedBar(bar(60));
         Pump pump = new Pump(queues, sink, new GapDetector(), new FakeGapStore(),
-                new FakeEventLog(), NO_SLEEP);
+                new FakeEventLog(), NO_SLEEP, new FakeClock(), BACKOFF, LOG_NOWHERE, NO_DEATH);
         pump.stop();
 
         pump.run();
@@ -232,15 +248,250 @@ class PumpTest {
                 throw boom;
             }
         };
+        List<RuntimeException> deaths = new ArrayList<>();
         Pump pump = new Pump(queues, failingSink, new GapDetector(), new FakeGapStore(),
-                new FakeEventLog(), NO_SLEEP);
+                new FakeEventLog(), NO_SLEEP, new FakeClock(), BACKOFF, LOG_NOWHERE, deaths::add);
 
         pump.run();
 
         assertSame(boom, pump.failure(), "the cause survives for the runner to report");
+        assertEquals(List.of(boom), deaths, "onDeath fires at once — not a heartbeat later");
         assertEquals(1, failingSink.barAttempts,
                 "no re-drain into a broken sink — it would mask the original failure");
         assertNotNull(queues.peekBarNow(),
                 "ack-after-apply: the unwritten bar stays queued, not silently lost");
+    }
+
+    // --- E1-T9: hold-and-retry -----------------------------------------------------------------
+
+    private static PersistenceException retryable(String what) {
+        return new PersistenceException(what, new SQLException(what, "08006"));
+    }
+
+    private static PersistenceException terminal(String what) {
+        return new PersistenceException(what, new SQLException(what, "23505"));
+    }
+
+    private static final class FakeClock implements Clock {
+        long nanos;
+        Instant wall = Instant.parse("2026-09-28T09:00:00Z");
+
+        @Override
+        public Instant wallInstant() {
+            return wall;
+        }
+
+        @Override
+        public long monotonicNanos() {
+            return nanos;
+        }
+
+        void advance(Duration by) {
+            nanos += by.toNanos();
+            wall = wall.plus(by);
+        }
+
+        long seconds() {
+            return nanos / 1_000_000_000L;
+        }
+    }
+
+    /** Sleeping advances the fake clock by exactly the request, so a hold's waits are measurable;
+     * a runaway hold fails the test instead of hanging it. */
+    private static final class FakeSleeper implements Sleeper {
+        private final FakeClock clock;
+        int sleeps;
+        Runnable onSleep = () -> {
+        };
+
+        FakeSleeper(FakeClock clock) {
+            this.clock = clock;
+        }
+
+        @Override
+        public void sleep(Duration duration) {
+            if (++sleeps > 100_000) {
+                throw new IllegalStateException("runaway hold — stop() not honoured?");
+            }
+            clock.advance(duration);
+            onSleep.run();
+        }
+    }
+
+    /** A sink whose next writes/flushes fail as armed, in order, and whose recover() may refuse. */
+    private static final class FlakySink extends RecordingSink {
+        final Deque<RuntimeException> armed = new ArrayDeque<>();
+        final List<Long> recoverCalledAtSeconds = new ArrayList<>();
+        int recoverRefusals;
+        private final FakeClock clock;
+
+        FlakySink(FakeClock clock) {
+            this.clock = clock;
+        }
+
+        private void failIfArmed() {
+            RuntimeException next = armed.poll();
+            if (next != null) {
+                throw next;
+            }
+        }
+
+        @Override
+        public void write(Bar1m bar) {
+            failIfArmed();
+            super.write(bar);
+        }
+
+        @Override
+        public void write(Tick tick) {
+            failIfArmed();
+            super.write(tick);
+        }
+
+        @Override
+        public void flush() {
+            failIfArmed();
+            super.flush();
+        }
+
+        @Override
+        public void recover() {
+            recoverCalledAtSeconds.add(clock.seconds());
+            super.recover();
+            if (recoverRefusals-- > 0) {
+                throw retryable("still down");
+            }
+        }
+    }
+
+    private record Rig(Buffers queues, FlakySink sink, FakeEventLog events, FakeClock clock,
+            FakeSleeper sleeper, List<String> log, List<RuntimeException> deaths, Pump pump) {
+    }
+
+    private static Rig rig(int tickCapacity) {
+        FakeClock clock = new FakeClock();
+        FakeSleeper sleeper = new FakeSleeper(clock);
+        Buffers queues = new Buffers(tickCapacity, () -> clock.nanos);
+        FlakySink sink = new FlakySink(clock);
+        FakeEventLog events = new FakeEventLog();
+        List<String> log = new ArrayList<>();
+        List<RuntimeException> deaths = new ArrayList<>();
+        Pump pump = new Pump(queues, sink, new GapDetector(), new FakeGapStore(), events, sleeper,
+                clock, BACKOFF, log::add, deaths::add);
+        return new Rig(queues, sink, events, clock, sleeper, log, deaths, pump);
+    }
+
+    @Test
+    void aRetryableSinkFailureHoldsThenRecoversAndTheBarLandsExactlyOnce() throws InterruptedException {
+        Rig r = rig(10);
+        r.queues().onSealedBar(bar(60));
+        r.sink().armed.add(retryable("bar write failed"));
+
+        r.pump().cycle(); // the write fails → hold → one wait → recover
+        r.pump().cycle(); // the bar is re-drained into the recovered sink
+
+        assertEquals(List.of("bar@60"), r.sink().order, "held, then written once — never lost, never doubled");
+        assertEquals(List.of(5L), r.sink().recoverCalledAtSeconds, "the first retry waits the 5s floor");
+        assertEquals(1, r.pump().sinkFailures());
+        assertTrue(r.deaths().isEmpty(), "a blip is not a death");
+        ServiceEvent event = r.events().events.get(0);
+        assertEquals(EventType.SINK_FAILURE, event.type());
+        assertEquals(Instant.parse("2026-09-28T09:00:00Z"), event.eventTimeUtc(),
+                "the episode is dated from its first failure, not its recovery");
+        assertEquals(5_000, event.detail().get("outageMs").asLong());
+        assertEquals(1, event.detail().get("attempts").asInt());
+        assertEquals(0, event.detail().get("ticksShed").asLong());
+        assertTrue(r.log().get(0).contains("holding 1 queued write"), r.log().get(0));
+    }
+
+    @Test
+    void recoveryAttemptsAreBackoffPacedFromTheFloor() throws InterruptedException {
+        Rig r = rig(10);
+        r.queues().onSealedBar(bar(60));
+        r.sink().armed.add(retryable("bar write failed"));
+        r.sink().recoverRefusals = 3; // the database stays down through three retries
+
+        r.pump().cycle();
+
+        assertEquals(List.of(5L, 10L, 15L, 23L), r.sink().recoverCalledAtSeconds,
+                "playbook §8 backoff: 1s base doubling under a 5s floor — 5, 5, 5, then 8");
+        assertEquals(4, r.events().events.get(0).detail().get("attempts").asInt());
+        assertEquals(23_000, r.events().events.get(0).detail().get("outageMs").asLong());
+        assertEquals(1, r.pump().sinkFailures(), "one episode, however many retries");
+    }
+
+    @Test
+    void aTerminalSinkFailureStopsThePumpAtOnceAndReportsTheDeath() {
+        Rig r = rig(10);
+        r.queues().onSealedBar(bar(60));
+        PersistenceException boom = terminal("unique violation");
+        r.sink().armed.add(boom);
+
+        r.pump().run();
+
+        assertSame(boom, r.pump().failure());
+        assertEquals(List.of(boom), r.deaths(), "the runner hears it now, not a heartbeat later");
+        assertTrue(r.sink().recoverCalledAtSeconds.isEmpty(), "never retry what we cannot name");
+        assertNotNull(r.queues().peekBarNow(), "ack-after-apply: the bar stays queued");
+    }
+
+    @Test
+    void stopDuringAHoldEndsItAtTheNextSliceWithoutADeath() {
+        Rig r = rig(10);
+        r.queues().onSealedBar(bar(60));
+        r.sink().armed.add(retryable("bar write failed"));
+        r.sink().armed.add(retryable("still down at shutdown")); // the tail drain meets a dead sink
+        r.sink().recoverRefusals = Integer.MAX_VALUE; // the database never comes back
+        r.sleeper().onSleep = () -> {
+            if (r.sleeper().sleeps == 7) {
+                r.pump().stop(); // Ctrl-C mid-wait
+            }
+        };
+
+        r.pump().run();
+
+        assertEquals(7, r.sleeper().sleeps,
+                "stop() is honoured at the next 250ms slice, not at the end of the 5s wait");
+        assertTrue(r.sink().recoverCalledAtSeconds.isEmpty());
+        assertNotNull(r.pump().failure(), "the tail drain's failure is recorded for the summary");
+        assertTrue(r.deaths().isEmpty(),
+                "a stop is not a death — an exit from inside the shutdown hook would deadlock");
+        assertNotNull(r.queues().peekBarNow());
+    }
+
+    @Test
+    void aFailingRecoveryEventIsCountedNotThrown() throws InterruptedException {
+        FakeClock clock = new FakeClock();
+        FakeSleeper sleeper = new FakeSleeper(clock);
+        Buffers queues = new Buffers(10, () -> clock.nanos);
+        FlakySink sink = new FlakySink(clock);
+        queues.onSealedBar(bar(60));
+        sink.armed.add(retryable("bar write failed"));
+        EventLog boom = event -> {
+            throw new RuntimeException("service_events insert failed");
+        };
+        Pump pump = new Pump(queues, sink, new GapDetector(), new FakeGapStore(), boom, sleeper,
+                clock, BACKOFF, LOG_NOWHERE, NO_DEATH);
+
+        pump.cycle();
+        pump.cycle();
+
+        assertEquals(List.of("bar@60"), sink.order);
+        assertEquals(1, pump.observabilityFailures(), "the breadcrumb is Tier 2 — counted, never thrown");
+    }
+
+    @Test
+    void aHoldThatOutlivesTheTickQueueIsAnnouncedAsLossy() throws InterruptedException {
+        Rig r = rig(2); // a tiny tick queue: shedding starts on the third tick
+        r.queues().onSealedBar(bar(60));
+        r.sink().armed.add(retryable("bar write failed"));
+        r.sleeper().onSleep = () -> r.queues().onTick(tick(r.sleeper().sleeps)); // ticks keep arriving
+
+        r.pump().cycle();
+
+        assertEquals(18, r.queues().droppedTicks(), "20 ticks arrived during the 5s hold; the queue holds 2");
+        assertTrue(r.log().stream().anyMatch(line -> line.contains("lossy")),
+                "the moment the hold stops being lossless is announced");
+        assertEquals(18, r.events().events.get(0).detail().get("ticksShed").asLong());
     }
 }
