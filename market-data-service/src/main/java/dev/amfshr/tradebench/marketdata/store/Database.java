@@ -22,7 +22,6 @@ public final class Database implements AutoCloseable {
 
     static final Duration CONNECTION_TIMEOUT = Duration.ofSeconds(5);
 
-
     private final HikariDataSource dataSource;
     private final String jdbcUrl;
     private final String user;

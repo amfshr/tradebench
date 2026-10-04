@@ -80,8 +80,8 @@ under pressure (chapter 3); pretending ticks are guaranteed after that would be 
 `TICK_BATCH = 5_000` bounds one drain's tick work so a firehose can't starve the bar
 queue between passes.
 
-**When the sink breaks, the pump stops — loudly, once.** `run()` catches the
-`RuntimeException` and asks one question: is it a **blip**? A failure the sink calls
+**When the sink breaks, the pump asks one question: blip, or not?** `cycle()` catches the
+`PersistenceException` and classifies it. A failure the sink calls
 retryable (`PersistenceException.retryable()` — connection loss, a shutdown, resource
 exhaustion, a rollback, a pool timeout; chapter 10 has the taxonomy) **holds**: the bar is
 still queued, the store still holds its tick batch, and `cycle()` backs off on the belt's
@@ -90,8 +90,9 @@ still queued, the store still holds its tick batch, and `cycle()` backs off on t
 time budget — chapter 10 has the argument. Anything else is terminal: the pump stores it in
 the `volatile failure` field and exits the loop. It does *not* retry into the broken sink:
 the test asserts `barAttempts == 1`, because a re-drain would throw a fresh exception and
-bury the original cause — masking the first error is the sin. It then reports through
-`onDeath`, and `Main` exits the process at once with `FATAL: capture pump died` — not a
+bury the original cause — masking the first error is the sin. It then writes a best-effort
+`DB_ERROR{cause, queued}` (the console learns why capture died), reports through `onDeath`,
+and `Main` exits the process at once with `FATAL: capture pump died` — not a
 heartbeat later; the heartbeat's liveness check is the backstop — fail closed, fail loud (P9).
 
 **Shutdown is a tail drain.** `stop()` just flips `running`; `run()` then performs one

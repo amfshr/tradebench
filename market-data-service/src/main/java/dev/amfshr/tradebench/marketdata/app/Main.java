@@ -199,6 +199,11 @@ public final class Main {
                 log(instance, "pump did not stop within 5s — leaving sink open to avoid a"
                         + " close/write race; file may miss its tail");
             }
+            if (pump.failure() != null) {
+                log(instance, "pump failure at shutdown: " + pump.failure() + " — "
+                        + queues.pendingWrites() + " queued writes and the sink's held batch were"
+                        + " not written");
+            }
             log(instance, summary(queues, pump, supervisor, probe));
         }, "capture-shutdown"));
 

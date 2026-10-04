@@ -227,8 +227,20 @@ public final class Pump implements Runnable {
         } catch (RuntimeException e) {
             failure = e;
             if (running) {
+                recordDeath(e); // best-effort, so the console learns why capture died (D28)
                 onDeath.accept(e); // died in service, not stopped — the runner acts at once
             }
+        }
+    }
+
+    private void recordDeath(RuntimeException cause) {
+        try {
+            events.write(ServiceEvent.of(EventType.DB_ERROR, clock.wallInstant())
+                    .withDetail(mapper.createObjectNode()
+                            .put("cause", String.valueOf(cause))
+                            .put("queued", queues.pendingWrites())));
+        } catch (RuntimeException e) {
+            observabilityFailures.incrementAndGet();
         }
     }
 
@@ -236,7 +248,8 @@ public final class Pump implements Runnable {
         running = false;
     }
 
-    /** Events actually written to the sink — the heartbeat's honest number. */
+    /** Writes the sink accepted — a batched tick counts when the store takes it, not when it
+     * lands — the heartbeat's honest number, within one per tick-side blip. */
     public long writtenCount() {
         return written.get();
     }

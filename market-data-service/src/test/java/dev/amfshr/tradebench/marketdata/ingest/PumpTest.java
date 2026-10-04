@@ -17,6 +17,7 @@ import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 
+import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.Test;
 
 import dev.amfshr.tradebench.core.domain.Bar1m;
@@ -323,6 +324,7 @@ class PumpTest {
         final Deque<RuntimeException> armed = new ArrayDeque<>();
         final List<Long> recoverCalledAtSeconds = new ArrayList<>();
         int recoverRefusals;
+        @Nullable RuntimeException recoverFailure; // thrown by the next recover(), once
         private final FakeClock clock;
 
         FlakySink(FakeClock clock) {
@@ -358,6 +360,11 @@ class PumpTest {
         public void recover() {
             recoverCalledAtSeconds.add(clock.seconds());
             super.recover();
+            if (recoverFailure != null) {
+                RuntimeException once = recoverFailure;
+                recoverFailure = null;
+                throw once;
+            }
             if (recoverRefusals-- > 0) {
                 throw retryable("still down");
             }
@@ -401,6 +408,8 @@ class PumpTest {
         assertEquals(5_000, event.detail().get("outageMs").asLong());
         assertEquals(1, event.detail().get("attempts").asInt());
         assertEquals(0, event.detail().get("ticksShed").asLong());
+        assertEquals(1, event.detail().get("queuedAtRecovery").asInt(), "the bar, still queued");
+        assertTrue(event.detail().get("cause").asText().contains("bar write failed"));
         assertTrue(r.log().get(0).contains("holding 1 queued write"), r.log().get(0));
     }
 
@@ -433,6 +442,79 @@ class PumpTest {
         assertEquals(List.of(boom), r.deaths(), "the runner hears it now, not a heartbeat later");
         assertTrue(r.sink().recoverCalledAtSeconds.isEmpty(), "never retry what we cannot name");
         assertNotNull(r.queues().peekBarNow(), "ack-after-apply: the bar stays queued");
+        ServiceEvent death = r.events().events.get(0);
+        assertEquals(EventType.DB_ERROR, death.type(), "the console learns why capture died");
+        assertTrue(death.detail().get("cause").asText().contains("unique violation"));
+        assertEquals(1, death.detail().get("queued").asInt());
+    }
+
+    @Test
+    void aFailingDeathEventStillReportsTheDeath() {
+        FakeClock clock = new FakeClock();
+        Buffers queues = new Buffers(10, () -> clock.nanos);
+        FlakySink sink = new FlakySink(clock);
+        queues.onSealedBar(bar(60));
+        PersistenceException boom = terminal("unique violation");
+        sink.armed.add(boom);
+        EventLog down = event -> {
+            throw new RuntimeException("service_events insert failed");
+        };
+        List<RuntimeException> deaths = new ArrayList<>();
+        Pump pump = new Pump(queues, sink, new GapDetector(), new FakeGapStore(), down,
+                new FakeSleeper(clock), clock, BACKOFF, LOG_NOWHERE, deaths::add);
+
+        pump.run();
+
+        assertEquals(List.of(boom), deaths, "the breadcrumb is Tier 2 — it never blocks the exit");
+        assertEquals(1, pump.observabilityFailures());
+    }
+
+    @Test
+    void aTerminalFailureDuringRecoveryStopsThePumpAtOnce() {
+        Rig r = rig(10);
+        r.queues().onSealedBar(bar(60));
+        r.sink().armed.add(retryable("bar write failed"));
+        PersistenceException boom = terminal("relation ticks does not exist"); // back, without our table
+        r.sink().recoverFailure = boom;
+
+        r.pump().run();
+
+        assertSame(boom, r.pump().failure());
+        assertEquals(List.of(boom), r.deaths());
+        assertEquals(1, r.sink().recoverCalledAtSeconds.size(), "one attempt — never retry what we cannot name");
+        assertTrue(r.events().events.stream().noneMatch(e -> e.type() == EventType.SINK_FAILURE),
+                "no recovery happened, so no recovery is recorded");
+    }
+
+    @Test
+    void anIdleFlushBlipHoldsLikeAnyOther() throws InterruptedException {
+        Rig r = rig(10); // nothing queued — the quiet-market case
+        r.sink().armed.add(retryable("tick batch flush failed"));
+
+        r.pump().cycle(); // idle → the flush fails → hold → recover at 5s
+        r.pump().cycle(); // idle again → the flush succeeds
+
+        assertEquals(List.of(5L), r.sink().recoverCalledAtSeconds);
+        assertEquals(1, r.pump().sinkFailures());
+        assertEquals(1, r.sink().flushes, "the retried flush is the first that counts");
+        assertTrue(r.deaths().isEmpty());
+    }
+
+    @Test
+    void aTickWriteBlipHoldsAndTheStreamResumes() throws InterruptedException {
+        Rig r = rig(10);
+        r.queues().onTick(tick(10));
+        r.sink().armed.add(retryable("tick write failed")); // the store holds the tick; the pump holds the line
+
+        r.pump().cycle(); // the write fails → hold → recover at 5s
+        r.queues().onTick(tick(11));
+        r.pump().cycle();
+
+        assertEquals(List.of(5L), r.sink().recoverCalledAtSeconds);
+        assertEquals(1, r.pump().sinkFailures());
+        assertEquals(List.of("tick@11"), r.sink().order,
+                "capture resumes — the failed tick is the store's to re-send (chapter 5)");
+        assertTrue(r.deaths().isEmpty());
     }
 
     @Test
@@ -483,15 +565,19 @@ class PumpTest {
     @Test
     void aHoldThatOutlivesTheTickQueueIsAnnouncedAsLossy() throws InterruptedException {
         Rig r = rig(2); // a tiny tick queue: shedding starts on the third tick
+        for (int i = 0; i < 5; i++) {
+            r.queues().onTick(tick(100 + i)); // 3 shed before the outage — the episode must not count them
+        }
         r.queues().onSealedBar(bar(60));
         r.sink().armed.add(retryable("bar write failed"));
         r.sleeper().onSleep = () -> r.queues().onTick(tick(r.sleeper().sleeps)); // ticks keep arriving
 
         r.pump().cycle();
 
-        assertEquals(18, r.queues().droppedTicks(), "20 ticks arrived during the 5s hold; the queue holds 2");
+        assertEquals(23, r.queues().droppedTicks(), "3 before + 20 during the 5s hold into a full queue");
         assertTrue(r.log().stream().anyMatch(line -> line.contains("lossy")),
                 "the moment the hold stops being lossless is announced");
-        assertEquals(18, r.events().events.get(0).detail().get("ticksShed").asLong());
+        assertEquals(20, r.events().events.get(0).detail().get("ticksShed").asLong(),
+                "the episode's own shedding, not the lifetime count");
     }
 }

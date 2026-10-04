@@ -389,16 +389,18 @@ stream possibly being at fault, and a retry loop failing only on the database pr
 fine. The 10-minute alternative (symmetry with `Tuning.giveUpAfter`) is on record with that cost.
 **(2) The blip taxonomy** — `PersistenceException.retryable()`, known-transient only: SQLSTATE
 classes 08 (connection), 57 (operator intervention), 53 (insufficient resources), 40 (transaction
-rollback), plus the pool's connection timeout; the first state in the cause chain decides. Anything
+rollback), plus the pool's connection timeout; the first state in the cause chain decides (so a
+rotated password, which the pool surfaces as its timeout wrapping `28P01`, holds — loudly — rather
+than exits: holding loses nothing, an exit loses everything held). Anything
 else — integrity, syntax, authorisation, data, an unknown or missing state — is terminal and fails
 closed at once. This inverts the ig-client taxonomy's lesson: unknown-means-retryable is what forced
 a bounded boot loop. **(3) Backoff** is the belt's `BackoffPolicy` with the playbook tuning (5s
 floor, doubling, 60s cap) — no new policy record (P6). The floor also clears HikariCP's 500ms
 alive-bypass window, so the second attempt gets a validated connection. **(4) Recording:** nothing
-is attempted while the database is down; one `SINK_FAILURE{outageMs, attempts, ticksShed,
-queuedAtRecovery}` on recovery, dated from the first failure, written Tier-2; `sinkFailures=` on the
-heartbeat line counts episodes; the dead-man alarm fires meanwhile. `DB_ERROR` is reserved for the
-terminal case. **(5) Immediate exit:** the pump reports a terminal failure through `onDeath` and
+is attempted while the database is down; one `SINK_FAILURE{cause, outageMs, attempts,
+ticksShed, queuedAtRecovery}` on recovery, dated from the first failure, written Tier-2; `sinkFailures=` on the
+heartbeat line counts episodes; the dead-man alarm fires meanwhile. `DB_ERROR{cause, queued}` is
+written best-effort before a terminal exit, so the console learns why capture died. **(5) Immediate exit:** the pump reports a terminal failure through `onDeath` and
 `Main` exits 1 from its own thread at once — never on a deliberate stop, since an exit from inside
 the shutdown hook would deadlock. **(6) The shared pool's `connectionTimeout` is 5s**
 (`Database.CONNECTION_TIMEOUT`): the heartbeat is held at most 5s per market during an outage and

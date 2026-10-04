@@ -49,8 +49,8 @@ re-serves them).
 | IG unreachable at boot (we restarted into an outage) | login fails with a retryable error | **retry every 30s under the login gate, for the same 10-min budget**, then exit 1; any other exception at boot fails loud at once (exit 1 with its trace) | the outage | "boot attempt N" lines, then FATAL | heal |
 | IG enforces a smaller REST budget than it publishes (demo keys: 10/min, not 30) | `GET /operations/application` after login | start at 10/min, then apply min(`allowanceAccountOverall`, `allowanceApplicationOverall`) minus 5 headroom (≥1); an unlisted key or a failed read keeps the start | nothing — the pacer paces every REST caller | `PACER_DISCOVERED{account, application, published, used, headroom}`, or an `IG_API_ERROR` naming the read plus a "keeping the conservative start" line | — |
 | Postgres blips while we write an **event/gap/status** row | `PersistenceException` from the observability store | **count and continue** — the belt and the pump never die for a breadcrumb | the breadcrumbs written during the blip | `obsFailures=` / `eventWriteFailures=` / `statusFailures=` in the heartbeat | coverage truth is recomputed from `bars_1m` |
-| Postgres blips while we write a **tick or bar** | a `PersistenceException` the taxonomy calls **retryable** (SQLSTATE 08 / 57 / 53 / 40, or the pool's timeout) | **hold**: bars stay queued, the store keeps its tick batch; back off 5s → 60s; `recover()` re-acquires a pooled connection and re-binds the held ticks; resume. No time budget — the queues bound the hold (ticks shed-oldest at 100 000 ≈ 18 h; bars unbounded) and the moment shedding starts is announced | nothing while the hold is lossless; ticks once the queue sheds | `sinkFailures=` in the heartbeat, the log's narration, `SINK_FAILURE{outageMs, attempts, ticksShed, queuedAtRecovery}` on recovery; the dead-man alarm (stale `capture_status`) fires meanwhile, correctly | — (nothing to heal while lossless) |
-| Postgres rejects a tick/bar write for a reason that is **not weather** (integrity, schema, authorisation, data, an unknown or missing state) | `PersistenceException.retryable() == false` | **stop at once**: the pump dies, `onDeath` logs the cause, `exit(1)` now — not a heartbeat later | whatever was held | FATAL line with the cause, exit 1 | human |
+| Postgres blips while we write a **tick or bar** | a `PersistenceException` the taxonomy calls **retryable** (SQLSTATE 08 / 57 / 53 / 40, or the pool's timeout) | **hold**: bars stay queued, the store keeps its tick batch; back off 5s → 60s; `recover()` re-acquires a pooled connection and re-binds the held ticks; resume. No time budget — the queues bound the hold (ticks shed-oldest at 100 000 ≈ 18 h; bars unbounded) and the moment shedding starts is announced | nothing while the hold is lossless; ticks once the queue sheds | `sinkFailures=` in the heartbeat, the log's narration, `SINK_FAILURE{cause, outageMs, attempts, ticksShed, queuedAtRecovery}` on recovery; the dead-man alarm (stale `capture_status`) fires meanwhile, correctly | — (nothing to heal while lossless) |
+| Postgres rejects a tick/bar write for a reason that is **not weather** (integrity, schema, authorisation, data, an unknown or missing state) | `PersistenceException.retryable() == false` | **stop at once**: the pump dies, a best-effort `DB_ERROR{cause, queued}` is written, `onDeath` logs the cause, `exit(1)` now — not a heartbeat later | whatever was held | `DB_ERROR` + a FATAL line with the cause, exit 1 | human |
 | The pump or the supervisor thread dies for any other reason | `Main`'s heartbeat: `!thread.isAlive()` | exit 1 | until restart | FATAL line | heal |
 
 ## The principles — eight rules and the reason for each
@@ -210,20 +210,27 @@ deliberately. The data is already safe while we hold: bars stay queued (ack-afte
 `PostgresStore` keeps its own copy of the pending tick batch, added before anything about a write
 can fail and acknowledged only once `executeBatch` returns, so a connection that dies mid-batch
 loses nothing; `recover()` re-acquires a pooled connection, re-prepares, re-binds the held ticks,
-and only then discards the dead objects — a recovery that fails changes nothing. A restart would
+and only then discards the dead objects — a recovery that fails changes nothing. Until `recover()`
+runs, the store **refuses** every write and flush: the driver drops its batch on a failed
+`executeBatch`, so a retry on the same statement would send nothing and acknowledge everything (the
+ticket's review found exactly that path in the shutdown tail drain). A restart would
 gain nothing against a database outage and would lose everything held, the opposite of P8; the
 belt's `exit(1)` is about the JVM or the stream possibly being the fault, and a retry loop that
 fails only on the database proves the JVM is fine. What bounds the hold is the queues: bars are
 unbounded (and tiny — one a minute per market), ticks shed-oldest at 100 000 (about eighteen
 hours of DAX), and the moment shedding starts the pump says so (`the hold is now lossy`). What
 makes it loud: `sinkFailures=` on the heartbeat line, the log's narration, one
-`SINK_FAILURE{outageMs, attempts, ticksShed, queuedAtRecovery}` dated from the first failure and
+`SINK_FAILURE{cause, outageMs, attempts, ticksShed, queuedAtRecovery}` dated from the first failure and
 written once the database is back (nothing is attempted while it is down — it would fail and count
 as noise), and the dead-man alarm — `capture_status` goes stale too — firing in the console
 meanwhile, correctly. What counts as a blip is the **taxonomy** on
 `PersistenceException.retryable()`: known-transient only — SQLSTATE classes 08 (connection), 57
 (operator intervention: a shutdown, a crash), 53 (insufficient resources), 40 (transaction
 rollback), plus the pool's own connection timeout; the first state in the cause chain decides.
+One consequence to know: through the pool, a rotated password surfaces as the pool's timeout wrapping
+`28P01`, so a bad password at recovery **holds forever, loudly** rather than exiting — the pool
+timeout is retryable whatever it wraps, and holding loses nothing where an exit would lose everything
+held (P8); the dead-man alarm says so meanwhile.
 Everything else — 23 integrity, 42 syntax, 28 authorisation, 22 data, an unknown or missing
 state — is terminal: the pump dies, `onDeath` logs the cause and exits 1 *now*, not a heartbeat
 later (never on a deliberate stop, where an exit from inside the shutdown hook would deadlock).

@@ -63,7 +63,7 @@ The write methods split by criticality, mirroring the queues:
   V1), so healed rows sit beside streamed rows with provenance intact rather than
   overwriting it (P8).
 - **Ticks batch** — `addBatch()`, flushed by `flush()` (the pump's idle moments) or when
-  `++pendingTicks >= TICK_BATCH_LIMIT` (500). That second trigger matters more than it
+  `pending.size() >= TICK_BATCH_LIMIT` (500). That second trigger matters more than it
   looks: under a busy stream the pump never idles, so **the batch-full path is the only
   flush there is** — which is why `PostgresStoreTest` drives exactly 499 writes, then the
   500th, and asserts the rows landed with no explicit flush. Boundary equalities get

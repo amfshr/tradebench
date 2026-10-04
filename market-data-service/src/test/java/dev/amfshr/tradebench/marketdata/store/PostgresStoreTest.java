@@ -268,6 +268,27 @@ class PostgresStoreTest extends PostgresTestBase {
         sink.recover(); // the setUp store's connection was killed too — leave it closable
     }
 
+    @Test
+    void aBrokenStoreRefusesWritesAndFlushesUntilRecovered() throws SQLException {
+        sink.write(tick(DAX, "2026-09-28T07:00:01Z", "1.1", "1.2"));
+        sink.write(tick(DAX, "2026-09-28T07:00:02Z", "1.3", "1.4"));
+        sink.write(tick(DAX, "2026-09-28T07:00:03Z", "1.5", "1.6"));
+        killOtherBackends();
+        assertThrows(PersistenceException.class, sink::flush);
+
+        // pgjdbc drops its batch before executing: a second flush on the same statement would send
+        // nothing and acknowledge everything — the store must refuse rather than lie.
+        PersistenceException refused = assertThrows(PersistenceException.class, sink::flush);
+        assertTrue(refused.retryable(), "the refusal carries the original failure's classification");
+        assertThrows(PersistenceException.class,
+                () -> sink.write(bar("2026-09-28T07:00:00Z", "24512.0", 10L)));
+        assertEquals(0, count("ticks"), "nothing acknowledged, nothing landed");
+
+        sink.recover();
+        sink.flush();
+        assertEquals(3, count("ticks"), "acknowledged only once it landed");
+    }
+
     /** A pool whose {@code getConnection} can be made to time out, as Hikari's does while Postgres
      * is down (the real pool is behind it, so everything else is real). */
     private static final class FlakyDataSource implements DataSource {

@@ -27,7 +27,9 @@ import dev.amfshr.tradebench.core.domain.Tick;
  * {@link PersistenceException#retryable() retryable} failure leaves it intact for
  * {@link #recover()}, which re-acquires a pooled connection, re-prepares, and re-binds every held
  * tick (E1-T9 hold-and-retry; the dedupe constraint makes a re-sent batch idempotent). After a
- * failure the caller must {@code recover()} before writing again. Market data only (decision #1)
+ * failure every write and flush is <b>refused</b> until {@code recover()}: the driver drops its
+ * batch on a failed {@code executeBatch}, so a retry on the same statement would send nothing and
+ * acknowledge everything. Market data only (decision #1)
  * — service events and bar gaps go to the observability store, never here. Single-threaded by
  * contract: only the pump calls a sink.
  */
@@ -58,6 +60,7 @@ public final class PostgresStore implements CaptureStore {
     private Connection connection;
     private PreparedStatement tickInsert;
     private PreparedStatement barUpsert;
+    private  SQLException brokenBy; // the failure that broke the sink — set until recover()
 
     public PostgresStore(DataSource dataSource, String userName, String sourceName) {
         this.dataSource = dataSource;
@@ -77,6 +80,7 @@ public final class PostgresStore implements CaptureStore {
     @Override
     public void write(Tick tick) {
         pending.add(tick); // held before anything can fail — recover() re-binds from here
+        refuseIfBroken();
         try {
             bind(tickInsert, connection, tick);
             tickInsert.addBatch();
@@ -84,12 +88,14 @@ public final class PostgresStore implements CaptureStore {
                 flush();
             }
         } catch (SQLException e) {
+            brokenBy = e;
             throw new PersistenceException("tick write failed", e);
         }
     }
 
     @Override
     public void write(Bar1m bar) {
+        refuseIfBroken();
         try {
             barUpsert.setShort(1, userId);
             barUpsert.setShort(2, sourceId);
@@ -104,6 +110,7 @@ public final class PostgresStore implements CaptureStore {
             }
             barUpsert.executeUpdate();
         } catch (SQLException e) {
+            brokenBy = e;
             throw new PersistenceException("bar write failed", e);
         }
     }
@@ -113,10 +120,12 @@ public final class PostgresStore implements CaptureStore {
         if (pending.isEmpty()) {
             return;
         }
+        refuseIfBroken();
         try {
             tickInsert.executeBatch();
             pending.clear(); // acknowledged only once the batch has landed
         } catch (SQLException e) {
+            brokenBy = e; // the driver has already dropped its batch — only recover() can re-send it
             throw new PersistenceException("tick batch flush failed", e);
         }
     }
@@ -143,6 +152,14 @@ public final class PostgresStore implements CaptureStore {
         connection = fresh;
         tickInsert = freshTicks;
         barUpsert = freshBars;
+        brokenBy = null;
+    }
+
+    private void refuseIfBroken() {
+        if (brokenBy != null) {
+            throw new PersistenceException("sink is broken since an earlier failure — recover() first",
+                    brokenBy);
+        }
     }
 
     @Override
@@ -181,7 +198,10 @@ public final class PostgresStore implements CaptureStore {
         return id;
     }
 
-    private static short lookupId(Connection on, String sql, String name, String kind) {
+    // Throws the SQLException through, so every SQL failure reaches a write's catch and breaks
+    // the sink; only the constructor wraps it.
+    private static short lookupId(Connection on, String sql, String name, String kind)
+            throws SQLException {
         try (PreparedStatement statement = on.prepareStatement(sql)) {
             statement.setString(1, name);
             try (ResultSet result = statement.executeQuery()) {
@@ -192,8 +212,6 @@ public final class PostgresStore implements CaptureStore {
                 }
                 return result.getShort(1);
             }
-        } catch (SQLException e) {
-            throw new PersistenceException(kind + " lookup failed", e);
         }
     }
 

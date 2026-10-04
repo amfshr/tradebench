@@ -267,7 +267,8 @@ ruling on making Tradebench the primary capture — recorded in `docs/decisions.
 
 **Goal:** a Postgres blip during a tick/bar write costs *nothing* the queues were already holding —
 the sink holds the data, reconnects, retries, and says so loudly; it stops (and the process exits 1
-at once) only when a budget expires. Refines the fail-closed contract, never removes it (P8 data
+at once) only on a failure the taxonomy calls terminal — never on a time budget (ruled 2026-10-04,
+D28). Refines the fail-closed contract, never removes it (P8 data
 collected forever · P9 fail closed, fail loud · CLAUDE.md: the DB is downstream of decisions, never
 upstream).
 
@@ -294,16 +295,16 @@ belt; both recorded in ch. 10, "The rulings behind it").
    `eventWriteFailures=`), plus a `SINK_FAILURE` / `DB_ERROR` service event once the DB is writable
    again (both already in the D25 `EventType` catalogue). The dead-man (box-down) alarm — stale
    `capture_status`, slice C step 4 — fires meanwhile, correctly.
-4. **Bounded.** A retry budget, then stop + `exit(1)` as today. **Decision: (TBD)** — default
-   proposal **10 min** (symmetry with `Tuning.giveUpAfter`); on record: a longer budget costs
-   nothing while the queues hold (bars unbounded; ticks ~18 h), so it could reasonably be longer,
-   or tied to queue pressure (give up only when the tick queue begins shedding).
+4. **Bounded by the queues, not a clock** (ruled 2026-10-04 — D28 (1)): no retry budget. The hold
+   is bounded by what the queues can hold (bars unbounded; ticks shed-oldest at 100 000 ≈ 18 h) and
+   the moment shedding starts is announced; a terminal failure stops the pump and exits 1 at once.
+   The 10-min default stays on record with its cost: a restart loses what is held and fixes nothing.
 5. **Pump death → immediate exit.** Not today's up-to-60s heartbeat latency: an uncaught-exception
    path or a fatal callback from the pump to `Main`.
 6. **Tests to doctrine (G5).** A failing sink write against a recovering fake DB → no data lost,
-   the retry succeeds, the counter is incremented, the event is written on recovery; the budget
-   boundary exact; failure-mode tests for the budget-expiry path; every behavioural test
-   mutation-verified. `PumpTest.sinkFailureStopsThePumpKeepsTheBarAndKeepsTheCause` is the current
+   the retry succeeds, the counter is incremented, the event is written on recovery; boundaries
+   exact (the 5s floor, the ladder, the 500th write); failure-mode tests on the terminal,
+   stop-mid-hold and still-down paths; every behavioural test mutation-verified. `PumpTest.sinkFailureStopsThePumpKeepsTheBarAndKeepsTheCause` is the current
    fail-closed contract this ticket refines, not removes.
 
 **Not in scope:** the Tier-2 best-effort policy; the belt; the schema.
@@ -331,13 +332,16 @@ Tier-1 row and "the pending decision", which this ticket closes) · ch. 4 (the p
 step-3 pump ruling (observability best-effort-but-loud, sink fail-closed — ch. 10, "The rulings
 behind it").
 
-**DoD anchor:** a Postgres restart of ≤ budget length loses zero bars and zero ticks; the heartbeat
-shows the failure count; a `SINK_FAILURE`/`DB_ERROR` event records the episode on recovery; past the
-budget the pump stops and the process exits 1 immediately; all behavioural tests mutation-verified;
-ch. 10's Tier-1 row updated from "today: stop and restart" to the landed policy.
+**DoD anchor (amended 2026-10-04 to D28):** any outage while the tick queue is not shedding loses zero
+bars and zero ticks; the heartbeat shows the failure count; a `SINK_FAILURE` event records the episode
+on recovery (a `DB_ERROR` the terminal exit); a terminal failure stops the pump and the process exits
+1 immediately; all behavioural tests mutation-verified; ch. 10's Tier-1 row updated from "today: stop
+and restart" to the landed policy.
 
 **Added 2026-10-03 (step-4 doctrine review, F3):** the observability pool (`Database`: Hikari, max 4,
 default 30s `connectionTimeout`) is shared by the belt's event writes and the heartbeat's
 `capture_status` upserts, so a Postgres outage can hold the sweep thread ~30s per event and the
 heartbeat ~30s per market — delaying the dead-pump notice past the ≤60s promise. Decide here: a
 short `connectionTimeout` for observability writes, or a dedicated small pool (config — Alex).
+**Ruled 2026-10-04 (D28 (6)):** a 5s `connectionTimeout` on the shared pool
+(`Database.CONNECTION_TIMEOUT`, pinned); no dedicated pool.
