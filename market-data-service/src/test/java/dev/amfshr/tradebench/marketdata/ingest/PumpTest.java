@@ -37,6 +37,7 @@ class PumpTest {
     private static class RecordingSink implements CaptureStore {
         final List<String> order = new ArrayList<>();
         int flushes;
+        int recoveries;
 
         @Override
         public void write(Bar1m bar) {
@@ -51,6 +52,11 @@ class PumpTest {
         @Override
         public void flush() {
             flushes++;
+        }
+
+        @Override
+        public void recover() {
+            recoveries++;
         }
 
         @Override

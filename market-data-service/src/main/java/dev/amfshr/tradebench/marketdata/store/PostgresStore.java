@@ -7,10 +7,14 @@ import java.sql.SQLException;
 import java.time.Instant;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 import javax.sql.DataSource;
+
+import org.jspecify.annotations.Nullable;
 
 import dev.amfshr.tradebench.core.domain.Bar1m;
 import dev.amfshr.tradebench.core.domain.OhlcPrices;
@@ -19,9 +23,13 @@ import dev.amfshr.tradebench.core.domain.Tick;
 /**
  * The real write path (T4): bars apply immediately (ack-after-apply — the pump removes a bar
  * from its queue only after this write returns); ticks batch and land on {@link #flush()} or
- * when the batch fills (best-effort by design, like their queue). Market data only (decision
- * #1) — service events and bar gaps go to the observability store, never here. Single-threaded
- * by contract: only the pump calls a sink.
+ * when the batch fills. The pending batch is <b>held here</b>, not only in the driver: a
+ * {@link PersistenceException#retryable() retryable} failure leaves it intact for
+ * {@link #recover()}, which re-acquires a pooled connection, re-prepares, and re-binds every held
+ * tick (E1-T9 hold-and-retry; the dedupe constraint makes a re-sent batch idempotent). After a
+ * failure the caller must {@code recover()} before writing again. Market data only (decision #1)
+ * — service events and bar gaps go to the observability store, never here. Single-threaded by
+ * contract: only the pump calls a sink.
  */
 public final class PostgresStore implements CaptureStore {
 
@@ -42,20 +50,23 @@ public final class PostgresStore implements CaptureStore {
                 ask_l = EXCLUDED.ask_l, ask_c = EXCLUDED.ask_c,
                 ltv = EXCLUDED.ltv""";
 
-    private final Connection connection;
-    private final PreparedStatement tickInsert;
-    private final PreparedStatement barUpsert;
+    private final DataSource dataSource;
     private final short userId;
     private final short sourceId;
     private final Map<String, Short> instrumentIds = new HashMap<>();
-    private int pendingTicks;
+    private final List<Tick> pending = new ArrayList<>(); // the batch, owned here
+    private Connection connection;
+    private PreparedStatement tickInsert;
+    private PreparedStatement barUpsert;
 
     public PostgresStore(DataSource dataSource, String userName, String sourceName) {
+        this.dataSource = dataSource;
         try {
             this.connection = dataSource.getConnection();
-            this.userId = lookupId("SELECT id FROM users WHERE name = ?", userName, "user");
-            this.sourceId = lookupId("SELECT id FROM sources WHERE name = ?", sourceName,
-                    "source");
+            this.userId = lookupId(connection, "SELECT id FROM users WHERE name = ?", userName,
+                    "user");
+            this.sourceId = lookupId(connection, "SELECT id FROM sources WHERE name = ?",
+                    sourceName, "source");
             this.tickInsert = connection.prepareStatement(INSERT_TICK);
             this.barUpsert = connection.prepareStatement(UPSERT_BAR);
         } catch (SQLException e) {
@@ -65,15 +76,11 @@ public final class PostgresStore implements CaptureStore {
 
     @Override
     public void write(Tick tick) {
+        pending.add(tick); // held before anything can fail — recover() re-binds from here
         try {
-            tickInsert.setShort(1, userId);
-            tickInsert.setShort(2, sourceId);
-            tickInsert.setShort(3, instrumentId(tick.epic()));
-            tickInsert.setObject(4, utc(tick.timestamp()));
-            tickInsert.setBigDecimal(5, tick.bid());
-            tickInsert.setBigDecimal(6, tick.ask());
+            bind(tickInsert, connection, tick);
             tickInsert.addBatch();
-            if (++pendingTicks >= TICK_BATCH_LIMIT) {
+            if (pending.size() >= TICK_BATCH_LIMIT) {
                 flush();
             }
         } catch (SQLException e) {
@@ -86,7 +93,7 @@ public final class PostgresStore implements CaptureStore {
         try {
             barUpsert.setShort(1, userId);
             barUpsert.setShort(2, sourceId);
-            barUpsert.setShort(3, instrumentId(bar.epic()));
+            barUpsert.setShort(3, instrumentId(connection, bar.epic()));
             barUpsert.setObject(4, utc(bar.startUtc()));
             setOhlc(barUpsert, 5, bar.bid());
             setOhlc(barUpsert, 9, bar.ask());
@@ -103,15 +110,39 @@ public final class PostgresStore implements CaptureStore {
 
     @Override
     public void flush() {
-        if (pendingTicks == 0) {
+        if (pending.isEmpty()) {
             return;
         }
         try {
             tickInsert.executeBatch();
-            pendingTicks = 0;
+            pending.clear(); // acknowledged only once the batch has landed
         } catch (SQLException e) {
             throw new PersistenceException("tick batch flush failed", e);
         }
+    }
+
+    @Override
+    public void recover() {
+        @Nullable Connection fresh = null;
+        @Nullable PreparedStatement freshTicks = null;
+        @Nullable PreparedStatement freshBars = null;
+        try {
+            fresh = dataSource.getConnection();
+            freshTicks = fresh.prepareStatement(INSERT_TICK);
+            freshBars = fresh.prepareStatement(UPSERT_BAR);
+            for (Tick held : pending) {
+                bind(freshTicks, fresh, held);
+                freshTicks.addBatch();
+            }
+        } catch (SQLException e) {
+            closeQuietly(freshTicks, freshBars, fresh);
+            throw new PersistenceException("sink recovery failed — still unavailable", e);
+        }
+        // Only once the fresh set is whole do the suspect ones go: a failed recovery changes nothing.
+        closeQuietly(tickInsert, barUpsert, connection);
+        connection = fresh;
+        tickInsert = freshTicks;
+        barUpsert = freshBars;
     }
 
     @Override
@@ -126,23 +157,32 @@ public final class PostgresStore implements CaptureStore {
         }
     }
 
-    private short instrumentId(String epic) throws SQLException {
+    private void bind(PreparedStatement insert, Connection on, Tick tick) throws SQLException {
+        insert.setShort(1, userId);
+        insert.setShort(2, sourceId);
+        insert.setShort(3, instrumentId(on, tick.epic()));
+        insert.setObject(4, utc(tick.timestamp()));
+        insert.setBigDecimal(5, tick.bid());
+        insert.setBigDecimal(6, tick.ask());
+    }
+
+    private short instrumentId(Connection on, String epic) throws SQLException {
         Short cached = instrumentIds.get(epic);
         if (cached != null) {
             return cached;
         }
-        try (PreparedStatement insert = connection.prepareStatement(
+        try (PreparedStatement insert = on.prepareStatement(
                 "INSERT INTO instruments (epic) VALUES (?) ON CONFLICT (epic) DO NOTHING")) {
             insert.setString(1, epic);
             insert.executeUpdate();
         }
-        short id = lookupId("SELECT id FROM instruments WHERE epic = ?", epic, "instrument");
+        short id = lookupId(on, "SELECT id FROM instruments WHERE epic = ?", epic, "instrument");
         instrumentIds.put(epic, id);
         return id;
     }
 
-    private short lookupId(String sql, String name, String kind) {
-        try (PreparedStatement statement = connection.prepareStatement(sql)) {
+    private static short lookupId(Connection on, String sql, String name, String kind) {
+        try (PreparedStatement statement = on.prepareStatement(sql)) {
             statement.setString(1, name);
             try (ResultSet result = statement.executeQuery()) {
                 if (!result.next()) {
@@ -154,6 +194,19 @@ public final class PostgresStore implements CaptureStore {
             }
         } catch (SQLException e) {
             throw new PersistenceException(kind + " lookup failed", e);
+        }
+    }
+
+    // Discarding dead or superseded JDBC objects: a failure to close them has nothing to act on.
+    private static void closeQuietly(@Nullable AutoCloseable... closeables) {
+        for (AutoCloseable closeable : closeables) {
+            if (closeable != null) {
+                try {
+                    closeable.close();
+                } catch (Exception e) {
+                    // already dead
+                }
+            }
         }
     }
 

@@ -16,6 +16,12 @@ public interface CaptureStore extends AutoCloseable {
 
     void flush();
 
+    /** Re-establish the sink after a {@link PersistenceException#retryable() retryable} failure,
+     * keeping everything not yet acknowledged (the pending tick batch; bars stay queued by the
+     * pump). Throws {@link PersistenceException} while the sink is still unavailable — the pump
+     * backs off and calls again. A sink with nothing to re-establish does nothing. */
+    void recover();
+
     @Override
     void close();
 }
