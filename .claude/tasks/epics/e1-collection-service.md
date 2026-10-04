@@ -261,9 +261,9 @@ ruling on making Tradebench the primary capture — recorded in `docs/decisions.
 **Note:** deltas are expected (clock edges, reconnect windows); the bar is *explained*, not
 *zero*.
 
-## T9 — Sink blip resilience: hold-and-retry for the capture sink ⬜ (ticketed 2026-10-03; unblocked — T5 landed 2026-10-04; sequence vs T6: TBD, Alex)
+## T9 — Sink blip resilience: hold-and-retry for the capture sink 🔶 (ticketed 2026-10-03; started 2026-10-04 — ruled before T6)
 
-**Type** build · **Branch** `—` · **Started** — · **Blocked by** —
+**Type** build · **Branch** `e1-t9-sink-hold-and-retry` · **Started** 2026-10-04 · **Blocked by** —
 
 **Goal:** a Postgres blip during a tick/bar write costs *nothing* the queues were already holding —
 the sink holds the data, reconnects, retries, and says so loudly; it stops (and the process exits 1
@@ -308,8 +308,9 @@ belt; both recorded in ch. 10, "The rulings behind it").
 
 **Not in scope:** the Tier-2 best-effort policy; the belt; the schema.
 
-**Sequencing:** T5 slice C merged (PR #12, 2026-10-04) — unblocked; its slot vs T6 is Alex's call (below).
-**Sequence vs T6 (the EOD heal): (TBD, Alex)** — recorded here, not decided.
+**Sequencing:** T5 slice C merged (PR #12, 2026-10-04) — unblocked.
+**Sequence vs T6 (the EOD heal): ruled 2026-10-04 (Alex) — T9 first.** It is small and fully in hand
+and protects live capture now; T6 leans on pacer discovery and the unrun demo smoke (T5 residual 1).
 
 **In-ticket decisions:** the retry budget (approach item 4) — Alex rules; the default proposal is
 10 min.
