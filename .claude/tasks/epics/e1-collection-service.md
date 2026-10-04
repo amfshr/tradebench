@@ -312,8 +312,17 @@ belt; both recorded in ch. 10, "The rulings behind it").
 **Sequence vs T6 (the EOD heal): ruled 2026-10-04 (Alex) — T9 first.** It is small and fully in hand
 and protects live capture now; T6 leans on pacer discovery and the unrun demo smoke (T5 residual 1).
 
-**In-ticket decisions:** the retry budget (approach item 4) — Alex rules; the default proposal is
-10 min.
+**In-ticket decisions — ruled 2026-10-04 (Alex, the design nod; logged as D28):** (1) **no time
+budget** — the queues bound the hold and shedding is announced (the 10-min default is on record with
+its cost: a restart loses what is held and fixes nothing); (2) the **blip taxonomy** — SQLSTATE 08 /
+57 / 53 / 40 + the pool timeout retry, all else terminal at once; (3) **backoff** = the belt's
+`BackoffPolicy` with the playbook tuning; (4) **recording** — one `SINK_FAILURE` on recovery, nothing
+attempted while down, `sinkFailures=` on the heartbeat; (5) **immediate exit** via `onDeath` (never on
+a stop); (6) **pool `connectionTimeout` 5s**, no dedicated Tier-2 pool.
+**Increments:** A store side (`5e0b7aa`: `PersistenceException.retryable`, `CaptureStore.recover`,
+`PostgresStore` holds its batch; 9 tests, 8 mutations) · B the pump (`bf78387`: hold / backoff /
+recover / `SINK_FAILURE` / `onDeath`; 6 scenarios, 9 mutations) · C composition + docs (heartbeat
+`sinkFailures=`, `Database.CONNECTION_TIMEOUT` 5s pinned; ch. 4, 5, 10; D28).
 
 **Cross-references:** P8 · P9 · CLAUDE.md "the DB is downstream of decisions" · Field Manual ch. 10
 (`docs/field-manual/market-data-service/10-the-failure-playbook.md`, "When the database fails" — the

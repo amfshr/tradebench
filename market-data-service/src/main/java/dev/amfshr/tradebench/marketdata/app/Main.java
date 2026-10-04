@@ -223,6 +223,7 @@ public final class Main {
         return "ticks=" + queues.tickCount() + " bars=" + queues.barCount()
                 + " written=" + pump.writtenCount()
                 + " dropped=" + queues.droppedTicks() + " malformed=" + queues.malformedUpdates()
+                + " sinkFailures=" + pump.sinkFailures()
                 + " obsFailures=" + pump.observabilityFailures()
                 + " eventWriteFailures=" + supervisor.eventWriteFailures()
                 + " statusFailures=" + probe.statusFailures();

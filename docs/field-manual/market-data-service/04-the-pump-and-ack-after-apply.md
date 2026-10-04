@@ -81,17 +81,26 @@ under pressure (chapter 3); pretending ticks are guaranteed after that would be 
 queue between passes.
 
 **When the sink breaks, the pump stops — loudly, once.** `run()` catches the
-`RuntimeException`, stores it in the `volatile failure` field, and exits the loop. It
-does *not* retry into the broken sink: the test asserts `barAttempts == 1`, because a
-re-drain would throw a fresh exception and bury the original cause — masking the first
-error is the sin. The main thread's heartbeat notices the dead pump thread and exits the
-process with `FATAL: capture pump died` (`app/Main.java`) — fail closed, fail loud (P9).
+`RuntimeException` and asks one question: is it a **blip**? A failure the sink calls
+retryable (`PersistenceException.retryable()` — connection loss, a shutdown, resource
+exhaustion, a rollback, a pool timeout; chapter 10 has the taxonomy) **holds**: the bar is
+still queued, the store still holds its tick batch, and `cycle()` backs off on the belt's
+`BackoffPolicy` (5s floor, 60s cap), asks the sink to `recover()`, and resumes
+(`PumpTest.aRetryableSinkFailureHoldsThenRecoversAndTheBarLandsExactlyOnce`). There is no
+time budget — chapter 10 has the argument. Anything else is terminal: the pump stores it in
+the `volatile failure` field and exits the loop. It does *not* retry into the broken sink:
+the test asserts `barAttempts == 1`, because a re-drain would throw a fresh exception and
+bury the original cause — masking the first error is the sin. It then reports through
+`onDeath`, and `Main` exits the process at once with `FATAL: capture pump died` — not a
+heartbeat later; the heartbeat's liveness check is the backstop — fail closed, fail loud (P9).
 
 **Shutdown is a tail drain.** `stop()` just flips `running`; `run()` then performs one
 final `drainOnce()` + `flush()` so the day's last minute survives a Ctrl-C
 (`PumpTest.stoppedRunStillDrainsTheTail`). Main's shutdown hook orders the funeral:
 close the stream (stop the faucet), `pump.stop()`, join with a 5-second budget, and only
-then close the sink — never close a sink a pump might still be writing to.
+then close the sink — never close a sink a pump might still be writing to. A hold notices
+`stop()` within a 250ms slice, and a stop never fires `onDeath`: an exit from inside the
+shutdown hook would deadlock on its own join.
 
 Two small honesty details. The idle branch of `cycle()` calls `sink.flush()` before
 sleeping — quiet moments are when buffered ticks (Postgres batch, JSONL writer buffer)

@@ -49,7 +49,8 @@ re-serves them).
 | IG unreachable at boot (we restarted into an outage) | login fails with a retryable error | **retry every 30s under the login gate, for the same 10-min budget**, then exit 1; any other exception at boot fails loud at once (exit 1 with its trace) | the outage | "boot attempt N" lines, then FATAL | heal |
 | IG enforces a smaller REST budget than it publishes (demo keys: 10/min, not 30) | `GET /operations/application` after login | start at 10/min, then apply min(`allowanceAccountOverall`, `allowanceApplicationOverall`) minus 5 headroom (≥1); an unlisted key or a failed read keeps the start | nothing — the pacer paces every REST caller | `PACER_DISCOVERED{account, application, published, used, headroom}`, or an `IG_API_ERROR` naming the read plus a "keeping the conservative start" line | — |
 | Postgres blips while we write an **event/gap/status** row | `PersistenceException` from the observability store | **count and continue** — the belt and the pump never die for a breadcrumb | the breadcrumbs written during the blip | `obsFailures=` / `eventWriteFailures=` / `statusFailures=` in the heartbeat | coverage truth is recomputed from `bars_1m` |
-| Postgres blips while we write a **tick or bar** | `PersistenceException` from `PostgresStore` | *today:* pump stops, process exits 1 within ≤60s, outer loop restarts | ~1–2 min of ticks (gone), a bar gap (healed) | FATAL line, exit 1 | heal — see *the pending decision* below |
+| Postgres blips while we write a **tick or bar** | a `PersistenceException` the taxonomy calls **retryable** (SQLSTATE 08 / 57 / 53 / 40, or the pool's timeout) | **hold**: bars stay queued, the store keeps its tick batch; back off 5s → 60s; `recover()` re-acquires a pooled connection and re-binds the held ticks; resume. No time budget — the queues bound the hold (ticks shed-oldest at 100 000 ≈ 18 h; bars unbounded) and the moment shedding starts is announced | nothing while the hold is lossless; ticks once the queue sheds | `sinkFailures=` in the heartbeat, the log's narration, `SINK_FAILURE{outageMs, attempts, ticksShed, queuedAtRecovery}` on recovery; the dead-man alarm (stale `capture_status`) fires meanwhile, correctly | — (nothing to heal while lossless) |
+| Postgres rejects a tick/bar write for a reason that is **not weather** (integrity, schema, authorisation, data, an unknown or missing state) | `PersistenceException.retryable() == false` | **stop at once**: the pump dies, `onDeath` logs the cause, `exit(1)` now — not a heartbeat later | whatever was held | FATAL line with the cause, exit 1 | human |
 | The pump or the supervisor thread dies for any other reason | `Main`'s heartbeat: `!thread.isAlive()` | exit 1 | until restart | FATAL line | heal |
 
 ## The principles — eight rules and the reason for each
@@ -117,7 +118,10 @@ Every number, where it lives, and what it means:
 | 5s / 10s | `hostSleepSkew` / `processFreezeJump` | the clock-divergence discriminators (chapter 7) |
 | 1s | `Main.SWEEP_INTERVAL` | the supervisor's cadence — the detectors assume it |
 | 30s / 10 min | `Main.BOOT_RETRY` / the same `giveUpAfter` | boot retry spacing and budget |
-| 60s | `Main.HEARTBEAT` | the `capture_status` cadence, and how quickly a dead pump or supervisor thread is noticed and the process exits (a Postgres outage can add the probe's ~30s connection timeout per market — T9) |
+| 60s | `Main.HEARTBEAT` | the `capture_status` cadence, and the backstop for a dead supervisor thread (a dead pump is reported by `onDeath` at once); a Postgres outage adds at most the pool's 5s timeout per market |
+| 5s floor → 60s cap | the belt's `BackoffPolicy`, via `Pump` | the sink's retry pacing during a hold — the floor also clears HikariCP's 500ms alive-bypass window, so the second attempt gets a validated connection |
+| 5s | `Database.CONNECTION_TIMEOUT` | how long a Tier-2 write or a sink recovery waits for a pooled connection while Postgres is down — the heartbeat's worst case per market |
+| 250ms | `Pump.HOLD_SLICE` | how quickly a hold notices `stop()` |
 | 61s | `LoginRateGate.MIN_INTERVAL` | spacing between logins — IG caches login responses, so faster re-logins get stale tokens |
 | 10/min → published − 5 | `RequestPacer.CONSERVATIVE_START` → `PacerDiscovery.HEADROOM` | the REST budget: a conservative start, then the tighter of the account's and the key's real allowance (never the published constant — demo enforces 10/min) minus headroom for T6's heal, which spends the same key |
 | *deploy* | restart policy + delay (T7, pending) | the outer loop's cadence; see the ruling below |
@@ -147,8 +151,8 @@ Four threads touch the belt. Knowing which owns what is most of what there is to
 |---|---|---|
 | Lightstreamer callback threads | nothing of ours | stamp a clock, enqueue — and that is all |
 | `capture-supervisor` (the sweep) | the cores, `watched`, `IgStreamControl`'s handles | everything decided and executed |
-| `capture-pump` | the sink, the gap detector | write market data; derive gaps and state events |
-| main (heartbeat) | the health probe | watch the other two live; exit 1 if one dies; publish `capture_status` through the shared pool — a Postgres outage can hold it ~30s per market (the pool's connection timeout), so a dead pump may be noticed later than 60s until T9 bounds the pool |
+| `capture-pump` | the sink, the gap detector | write market data; derive gaps and state events; hold and retry through a sink outage (E1-T9) |
+| main (heartbeat) | the health probe | watch the other two live; exit 1 if one dies; publish `capture_status` through the shared pool — a Postgres outage holds it at most 5s per market (`Database.CONNECTION_TIMEOUT`); a dead pump is reported by `onDeath` at once, so this check is the backstop |
 
 Three fences make the hand-offs safe. **Queue** — what a callback wrote before `add()` is visible
 to the sweep after `poll()`; the pump has the same contract with `Buffers`. **`Thread.start()`**
@@ -195,18 +199,42 @@ Three kinds of write, three answers — decided by *what the write protects*:
 
 | Tier | Writes | Policy | Why |
 |---|---|---|---|
-| 1 — the product | ticks, bars (`PostgresStore`, pump thread, one dedicated connection) | **fail closed** — today: stop the pump, exit 1 within the heartbeat, restart | irreplaceable data must never be silently dropped; a broken sink must never be written into |
+| 1 — the product | ticks, bars (`PostgresStore`, pump thread, one pooled connection kept for the store's life — swapped by `recover()` after a blip) | **fail closed, by holding**: a retryable failure keeps bars queued and the tick batch held, backs off 5s → 60s, recovers the connection, resumes — no time budget; anything not known-transient stops the pump and the process exits 1 at once | irreplaceable data must never be silently dropped — and a restart would drop exactly what the hold protects; a broken sink must never be written into, so only a *recovered* one is |
 | 2 — observability | events, gaps, status (observability store, a pooled connection per write) | **best-effort, counted, continue** | breadcrumbs; the store self-heals on the next write; coverage truth is recomputed from `bars_1m` |
 | 3 — decisions | none | never touch the DB | principle 1 |
 
-**The pending decision (Tier 1).** Stop-and-restart is *a* fail-closed answer but a crude one:
-a five-second Postgres blip costs a minute or two of ticks we were holding perfectly well in
-memory — bars stay queued (ack-after-apply), and the tick queue holds 100 000 ticks, about
-eighteen hours of DAX. The better fail-closed is **hold and retry**: on a failed write,
-re-acquire the sink's connection from the pool, re-prepare, retry with backoff, keep the pending
-tick batch, count loudly, and only stop when a budget expires — with the pump's death becoming
-an immediate exit rather than a heartbeat-latency one. This is proposed, not built; it is its
-own ticket with the budget as the open decision.
+**The Tier-1 ruling (2026-10-04, E1-T9).** Stop-and-restart was *a* fail-closed answer but a
+crude one: a five-second Postgres blip cost a minute or two of ticks we were holding perfectly
+well in memory. The landed answer is **hold and retry**, and it has **no time budget** —
+deliberately. The data is already safe while we hold: bars stay queued (ack-after-apply) and
+`PostgresStore` keeps its own copy of the pending tick batch, added before anything about a write
+can fail and acknowledged only once `executeBatch` returns, so a connection that dies mid-batch
+loses nothing; `recover()` re-acquires a pooled connection, re-prepares, re-binds the held ticks,
+and only then discards the dead objects — a recovery that fails changes nothing. A restart would
+gain nothing against a database outage and would lose everything held, the opposite of P8; the
+belt's `exit(1)` is about the JVM or the stream possibly being the fault, and a retry loop that
+fails only on the database proves the JVM is fine. What bounds the hold is the queues: bars are
+unbounded (and tiny — one a minute per market), ticks shed-oldest at 100 000 (about eighteen
+hours of DAX), and the moment shedding starts the pump says so (`the hold is now lossy`). What
+makes it loud: `sinkFailures=` on the heartbeat line, the log's narration, one
+`SINK_FAILURE{outageMs, attempts, ticksShed, queuedAtRecovery}` dated from the first failure and
+written once the database is back (nothing is attempted while it is down — it would fail and count
+as noise), and the dead-man alarm — `capture_status` goes stale too — firing in the console
+meanwhile, correctly. What counts as a blip is the **taxonomy** on
+`PersistenceException.retryable()`: known-transient only — SQLSTATE classes 08 (connection), 57
+(operator intervention: a shutdown, a crash), 53 (insufficient resources), 40 (transaction
+rollback), plus the pool's own connection timeout; the first state in the cause chain decides.
+Everything else — 23 integrity, 42 syntax, 28 authorisation, 22 data, an unknown or missing
+state — is terminal: the pump dies, `onDeath` logs the cause and exits 1 *now*, not a heartbeat
+later (never on a deliberate stop, where an exit from inside the shutdown hook would deadlock).
+The retry pacing is the belt's own `BackoffPolicy` — 5s floor, doubling, 60s cap — and the floor
+earns its keep twice: it spaces reconnects, and it clears HikariCP's 500ms alive-bypass window,
+inside which the pool hands a just-returned dead connection out unvalidated (the Testcontainers
+tests had to evict the pool by hand to see what backoff gives production for free). The shared
+pool's `connectionTimeout` is **5s** (`Database.CONNECTION_TIMEOUT`): a Tier-2 write or a sink
+recovery waits at most that long while Postgres is down, so the heartbeat's worst case is 5s per
+market and `recover()` fails fast into the backoff instead of hanging. All six choices were ruled
+on 2026-10-04 and are logged as **D28**.
 
 ## Giving up, loudly
 
@@ -279,8 +307,12 @@ in-ticket record.
   headroom}`; an unlisted key or a failed read keeps the start
   and says so — an `IG_API_ERROR` and a log line (never a stand-in from another key); an entry
   without a usable figure is refused at the boundary, never laundered into a 1/min budget.
-- **Pending:** Tier-1 hold-and-retry for the sink (T9); the T7 restart-policy contract; B1
-  multi-job.
+- **2026-10-04 — E1-T9:** Tier 1 refined to hold-and-retry with **no time budget** (the queues
+  bound it; shedding is announced); the blip taxonomy on `PersistenceException.retryable()`
+  (SQLSTATE 08 / 57 / 53 / 40 + the pool timeout retry; all else terminal, at once); the belt's
+  `BackoffPolicy` reused for the sink; one `SINK_FAILURE` on recovery; `onDeath` → immediate
+  `exit(1)` (never on a stop); the pool's `connectionTimeout` 5s. Logged as **D28**.
+- **Pending:** the T7 restart-policy contract; B1 multi-job.
 
 ## The scars this chapter answers
 
@@ -288,5 +320,5 @@ Silent-while-connected (2h56m) → the watchdog's worldview and the escalator. T
 episodes, grace, pacing. IG's login cache → the backoff floor and the login gate. "0.4s offline"
 → dual-duration reporting and host-sleep immunity. A review's eye → the belt dying for a
 breadcrumb, an unbounded login loop, a shutdown that didn't wait, a farewell that could arrive
-after the greeting. None of these are hypothetical; that is why the numbers live in code under
+after the greeting. A five-second blip that cost minutes → the sink that holds. None of these are hypothetical; that is why the numbers live in code under
 version control and the reasons live here.

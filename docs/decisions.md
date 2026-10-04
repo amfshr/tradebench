@@ -376,3 +376,31 @@ ladder (the degradation is `TRANSPORT_DOWNGRADED`), and the two voices cannot di
 was ruled in-ticket (E1 plan T5 §; chapter 10 "The rulings behind it"), but they are contracts other
 work depends on, and G2 says a decision lives in the log, not only in the plan that made it.
 Supersedes the 09-28 nod's "exhaustion = clean exit(0)".
+
+## D28 — Tier 1 refined: the capture sink holds and retries, with no time budget; the blip taxonomy; terminal failures exit at once — **Accepted** (2026-10-04, Alex)
+
+Refines D27's Tier 1 (E1-T9). **(1) No time budget.** A retryable sink failure holds: bars stay
+queued (ack-after-apply), `PostgresStore` keeps its own copy of the pending tick batch, the pump
+backs off and asks the sink to `recover()` until it does. The hold is bounded by the queues — bars
+unbounded (one a minute per market), ticks shed-oldest at 100 000 (≈ 18 h) — and the moment the tick
+queue begins shedding is announced. **Why not a budget:** a restart gains nothing against a database
+outage and loses everything held, the opposite of P8; the belt's `exit(1)` is about the JVM or the
+stream possibly being at fault, and a retry loop failing only on the database proves the JVM is
+fine. The 10-minute alternative (symmetry with `Tuning.giveUpAfter`) is on record with that cost.
+**(2) The blip taxonomy** — `PersistenceException.retryable()`, known-transient only: SQLSTATE
+classes 08 (connection), 57 (operator intervention), 53 (insufficient resources), 40 (transaction
+rollback), plus the pool's connection timeout; the first state in the cause chain decides. Anything
+else — integrity, syntax, authorisation, data, an unknown or missing state — is terminal and fails
+closed at once. This inverts the ig-client taxonomy's lesson: unknown-means-retryable is what forced
+a bounded boot loop. **(3) Backoff** is the belt's `BackoffPolicy` with the playbook tuning (5s
+floor, doubling, 60s cap) — no new policy record (P6). The floor also clears HikariCP's 500ms
+alive-bypass window, so the second attempt gets a validated connection. **(4) Recording:** nothing
+is attempted while the database is down; one `SINK_FAILURE{outageMs, attempts, ticksShed,
+queuedAtRecovery}` on recovery, dated from the first failure, written Tier-2; `sinkFailures=` on the
+heartbeat line counts episodes; the dead-man alarm fires meanwhile. `DB_ERROR` is reserved for the
+terminal case. **(5) Immediate exit:** the pump reports a terminal failure through `onDeath` and
+`Main` exits 1 from its own thread at once — never on a deliberate stop, since an exit from inside
+the shutdown hook would deadlock. **(6) The shared pool's `connectionTimeout` is 5s**
+(`Database.CONNECTION_TIMEOUT`): the heartbeat is held at most 5s per market during an outage and
+`recover()` fails fast into the backoff; no dedicated Tier-2 pool. Field Manual ch. 10 "When the
+database fails" carries the full argument.
