@@ -115,6 +115,13 @@ use the pool — that story is chapter 6. **Testcontainers, manual lifecycle**
 (`PostgresTestBase`): plain `@BeforeAll`/`@AfterAll`, one container per test class, no
 JUnit-extension dependency — fewer moving parts between a red test and its cause.
 
+One scar from the dev database (2026-10-05): **an applied migration is immutable, comments
+included.** The 28 September date sweep touched a comment in `V1__baseline.sql` after the local
+database had already run it, and the next start failed Flyway's checksum validation before capture
+could begin. The fix is `flyway repair` — or its one-line equivalent, `UPDATE flyway_schema_history
+SET checksum = <resolved> WHERE version = '1'` — never a second edit to the applied script. A
+comment that must change belongs in a new migration, or nowhere.
+
 ## The scars
 
 > **Scar** — **Duplicate rows from replay** · playbook §4.1

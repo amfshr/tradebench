@@ -123,6 +123,10 @@ What exists now (Epic 1, tickets T1–T5 merged):
   and a ten-minute recovery budget, quarantine judgment for multi-market blast radius, gap
   detection whose test fixture is a real captured outage, and a heartbeat that publishes each
   market's capture status for the console.
+- **A sink that holds** (T9) — a database blip no longer costs data: bars stay queued, the tick
+  batch is held in the store, the pump backs off and reconnects, and capture resumes with nothing
+  lost; only a failure that is not weather stops the process. Proven with a 152-second outage
+  drill on the dev database.
 
 Next along the spine: the daily heal → Parquet archive → digest email cycle (T6), cloud
 deploy (T7), and a week-long shadow-diff against the Python prototype as the epic's

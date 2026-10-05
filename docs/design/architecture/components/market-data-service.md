@@ -3,8 +3,8 @@
 **What it is.** Tradebench's first deployed artifact (D2): a standalone service that streams
 IG ticks + sealed 1m bars into Postgres, losslessly and self-reportingly (the daily heal +
 Parquet archive is **T6-era, planned**). The composition root is plain `Main` today; Spring
-enters at T6. *Built through E1-T5 — the resilience belt is merged (PR #12, 2026-10-04); the daily heal is
-T6.*
+enters at T6. *Built through E1-T5 and T9 — the resilience belt (PR #12, 2026-10-04) and the sink's
+hold-and-retry (PR #13, 2026-10-05) are merged; the daily heal is T6.*
 
 ## Package map
 

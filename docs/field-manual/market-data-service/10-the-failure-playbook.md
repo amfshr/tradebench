@@ -241,7 +241,11 @@ tests had to evict the pool by hand to see what backoff gives production for fre
 pool's `connectionTimeout` is **5s** (`Database.CONNECTION_TIMEOUT`): a Tier-2 write or a sink
 recovery waits at most that long while Postgres is down, so the heartbeat's worst case is 5s per
 market and `recover()` fails fast into the backoff instead of hanging. All six choices were ruled
-on 2026-10-04 and are logged as **D28**.
+on 2026-10-04 and are logged as **D28**. **Proven in anger on 2026-10-05:** a 152-second
+`docker stop` of the dev Postgres mid-capture — the failure fired on the idle flush, seven retries at
+5 / 5 / 5 / 11 / 13 / 43 / 39 s, `sink recovered after 152s and 7 attempt(s); 303 queued writes to
+drain`, every minute's bars and ticks present afterwards, one `sink_failure` row, no `bar_gaps` row.
+The drill routine, the log and the verification queries live in the E1 plan (T9 §).
 
 ## Giving up, loudly
 

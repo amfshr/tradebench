@@ -85,6 +85,11 @@ multi-user era / E8 — not re-litigated here; E9 is Alex's stated trigger.)
 | 2 — Alex, demo, 3 markets | `default-user` | `ig-stream-demo` | Alex `IG_DEMO_*` | `alex-demo` |
 | 3 — brother, his choice, several | new `users` row | `ig-stream-live` or `-demo` | his own `IG_*` set | `brother-…` |
 
+**Added 2026-10-05 (the T9 outage drill):** with many markets per instance, make `HealthProbe.publish()`
+fail fast after the first pool-timeout failure in a heartbeat, so a database outage costs one 5s stall
+per heartbeat rather than one per market (observed with one market: each heartbeat during the outage
+slipped by exactly the pool's 5s `CONNECTION_TIMEOUT`; harmless at N=1, a whole minute at N=12).
+
 ## B2 — ig-client REST resilience (platform-wide), and revisit "resilience lives in the consumer"
 
 **Captured** 2026-10-02 · **First consumer** E1-T6 (heal retry) · **Broad surface** E6 Execution (OMS) · **Relates to** E1-T2 (ig-client), D16, `docs/design/architecture/components/ig-client.md`, the trading-ig research (retry patterns)
@@ -215,3 +220,20 @@ maybe creating an agent/skill for this and adding that to the AI pipeline and SD
 random/spontaneous or after each epic — strengthen the skills and AI to do retrospectives,
 multiple-workflow sessions, support, docs updates, end-to-end tasks and validation tickets,
 structuring the tickets into slices and build steps more formally, etc."
+
+## B8 — Tick-queue overflow during a prolonged sink hold: spill-to-disk (jsonl) vs simply raising `Buffers.DEFAULT_TICK_CAPACITY`
+
+**Captured** 2026-10-05 (Alex's question during the E1-T9 ticket review; his own assessment: "unlikely") · **Trigger** a real outage that ever approaches the tick-queue bound (`ticksShed` > 0 in a `SINK_FAILURE`, or the shedding announcement in the log) — not scheduled · **Relates to** E1-T9 / D28 (1) (the hold is bounded by the queues; shedding announced) · D27 (Tier 1 fail-closed) · `Buffers.DEFAULT_TICK_CAPACITY` = 100 000 · `ticks_dedupe` (V1 — replay idempotent) · the dead-man alarm (E1-T5 slice C, stale `capture_status`) · P8 · P9 · Field Manual ch. 10 "When the database fails"
+
+The hold (E1-T9) is **lossless until the tick queue sheds** — 100 000 ticks ≈ 18 h of DAX at the normal
+rate; bars are unbounded. The dead-man alarm fires within minutes of an outage, so a multi-hour database
+outage is an **operator problem first** — the queue bound is the backstop behind a human, not the first
+line. Two ways to move the bound if it ever matters:
+- **Spill-to-disk (jsonl):** a second durability path — and with it disk-full handling, replay ordering,
+  dedupe on replay (though `ticks_dedupe` already makes a replay idempotent), and a replayer to test. Real
+  machinery for a case Alex rates unlikely.
+- **Simply raise `Buffers.DEFAULT_TICK_CAPACITY`:** the cheap alternative — 100k ticks ≈ 10 MB, so several
+  times that is still small; one constant, no new path.
+
+Not scheduled; revisit if a real outage ever approaches the queue bound (the 2026-10-05 drill's 152s outage
+shed 0 ticks and peaked at 303 queued writes — far below it).

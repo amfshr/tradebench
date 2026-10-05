@@ -261,7 +261,7 @@ ruling on making Tradebench the primary capture — recorded in `docs/decisions.
 **Note:** deltas are expected (clock edges, reconnect windows); the bar is *explained*, not
 *zero*.
 
-## T9 — Sink blip resilience: hold-and-retry for the capture sink 🔶 (ticketed 2026-10-03; started 2026-10-04 — ruled before T6)
+## T9 — Sink blip resilience: hold-and-retry for the capture sink ✅ (PR #13, 2026-10-05 — complete)
 
 **Type** build · **Branch** `e1-t9-sink-hold-and-retry` · **Started** 2026-10-04 · **Blocked by** —
 
@@ -272,8 +272,8 @@ D28). Refines the fail-closed contract, never removes it (P8 data
 collected forever · P9 fail closed, fail loud · CLAUDE.md: the DB is downstream of decisions, never
 upstream).
 
-**Problem (the 2026-10-03 step-6 doctrine-review discussion; Field Manual ch. 10, "When the
-database fails — the pending decision"):** today a failed tick/bar write (`PersistenceException`
+**Problem — as it stood before this ticket (the 2026-10-03 step-6 doctrine-review discussion; Field
+Manual ch. 10, then headed "When the database fails — the pending decision"):** a failed tick/bar write (`PersistenceException`
 from `PostgresStore`, which holds one dedicated connection + its prepared statements for its
 lifetime) stops the pump; `Main`'s heartbeat notices within ≤60s (`Main.HEARTBEAT`) and
 `System.exit(1)`s; the outer loop restarts the job. Fail-closed, but crude: a five-second blip costs
@@ -320,19 +320,26 @@ its cost: a restart loses what is held and fixes nothing); (2) the **blip taxono
 `BackoffPolicy` with the playbook tuning; (4) **recording** — one `SINK_FAILURE` on recovery, nothing
 attempted while down, `sinkFailures=` on the heartbeat; (5) **immediate exit** via `onDeath` (never on
 a stop); (6) **pool `connectionTimeout` 5s**, no dedicated Tier-2 pool.
-**Increments:** A store side (`5e0b7aa`: `PersistenceException.retryable`, `CaptureStore.recover`,
-`PostgresStore` holds its batch; 9 tests, 8 mutations) · B the pump (`bf78387`: hold / backoff /
-recover / `SINK_FAILURE` / `onDeath`; 6 scenarios, 9 mutations) · C composition + docs (heartbeat
-`sinkFailures=`, `Database.CONNECTION_TIMEOUT` 5s pinned; ch. 4, 5, 10; D28).
+**Increments — all merged in PR #13 (Alex, 2026-10-05, merge commit `64bb872`):** A store side
+(`5e0b7aa`: `PersistenceException.retryable`, `CaptureStore.recover`, `PostgresStore` holds its batch;
+9 tests, 8 mutations) · B the pump (`bf78387`: hold / backoff / recover / `SINK_FAILURE` / `onDeath`;
+6 scenarios, 9 mutations) · C composition + docs (`a7773f3`: heartbeat `sinkFailures=`,
+`Database.CONNECTION_TIMEOUT` 5s pinned; ch. 4, 5, 10 + foundations ch. 2; D28; 1 mutation) · the
+ticket-level doctrine review (`215ad09`: pass-with-findings F1–F8, all fixed on-branch — **F1 a real
+defect**: pgjdbc drops its batch on a failed `executeBatch`, so a retry on the same statement would have
+acknowledged nothing; the store now refuses every write/flush until `recover()` succeeds; the terminal,
+idle-flush and tick-write paths pinned; `DB_ERROR` written before a terminal exit; 8 mutations). 26
+mutations in all, every restore identical (the PR body carries the per-test table). Tests at merge:
+market-data-service 164 · ig-client 92 · docs site 63 · 0 failures.
 
 **Cross-references:** P8 · P9 · CLAUDE.md "the DB is downstream of decisions" · Field Manual ch. 10
 (`docs/field-manual/market-data-service/10-the-failure-playbook.md`, "When the database fails" — the
-Tier-1 row and "the pending decision", which this ticket closes) · ch. 4 (the pump, ack-after-apply)
+Tier-1 row — now the landed policy — and the former "the pending decision", which this ticket closed) · ch. 4 (the pump, ack-after-apply)
 · ch. 5 (the capture store) · D25 (`EventType.SINK_FAILURE` / `DB_ERROR`) · the 2026-10-03 slice C
 step-3 pump ruling (observability best-effort-but-loud, sink fail-closed — ch. 10, "The rulings
 behind it").
 
-**DoD anchor (amended 2026-10-04 to D28):** any outage while the tick queue is not shedding loses zero
+**DoD anchor (amended 2026-10-04 to D28) — met 2026-10-05 (the tests at merge + the outage drill below):** any outage while the tick queue is not shedding loses zero
 bars and zero ticks; the heartbeat shows the failure count; a `SINK_FAILURE` event records the episode
 on recovery (a `DB_ERROR` the terminal exit); a terminal failure stops the pump and the process exits
 1 immediately; all behavioural tests mutation-verified; ch. 10's Tier-1 row updated from "today: stop
@@ -345,3 +352,90 @@ heartbeat ~30s per market — delaying the dead-pump notice past the ≤60s prom
 short `connectionTimeout` for observability writes, or a dedicated small pool (config — Alex).
 **Ruled 2026-10-04 (D28 (6)):** a 5s `connectionTimeout` on the shared pool
 (`Database.CONNECTION_TIMEOUT`, pinned); no dedicated pool.
+
+**Proven in anger — the outage drill (2026-10-05; Alex at the keyboard, Claude verifying the DB).** The
+DoD's "zero bars and zero ticks" claim exercised against the real stack during live DAX capture: the local
+Postgres stopped, a 152-second sink outage held and drained. Written so it can be repeated.
+
+*Gate:* the drill only proves anything **while the market is ticking** — confirm `ticks=` rising across two
+heartbeats before stopping the database; a flat `ticks=` proves nothing either way.
+
+*Setup:* the local Postgres is compose service `postgres` (`compose.yaml`: container `tradebench-postgres`,
+host port 5435, db `market_data`, user from `.env`'s `TRADEBENCH_DB_USER`); capture runs via
+`scripts/run-capture.sh`, which sources `.env` (`TRADEBENCH_SINK=db`).
+
+*Routine (UTC):*
+1. `docker compose up -d postgres`
+2. `scripts/run-capture.sh` — this run: capture began 16:31:00Z; Flyway applied V2 on this start.
+3. Wait for two heartbeats with `ticks=` rising (the gate).
+4. `docker stop tradebench-postgres`
+5. `sleep 90` — the pump notices recovery only at its next scheduled attempt, so the outage it measures
+   runs longer than the database's actual downtime (152s here).
+6. `docker start tradebench-postgres`
+7. Read the log: the `sink unavailable — holding` line, the `sink retry n in …` ladder, `sink recovered
+   after …`, and the heartbeats around them.
+8. Verify with psql — `docker exec -it tradebench-postgres psql -U tradebench -d market_data` — the five
+   queries below.
+
+*Pre-drill scar (recorded so it is not re-learned):* Flyway refused to start — **checksum mismatch on
+V1**: the 2026-09-28 date sweep had edited a comment in `V1__baseline.sql` after the dev database had
+already run it. Fixed by the `flyway repair` equivalent — `UPDATE flyway_schema_history SET checksum =
+<resolved> WHERE version = '1'` — after which V2 applied normally. Lesson: **an applied migration is
+immutable, comments included.**
+
+*Log (trimmed, UTC):*
+
+```
+16:34:01 ticks=295 bars=3 written=298 dropped=0 … sinkFailures=0 … statusFailures=0
+16:34:26 sink unavailable — holding 0 queued writes: PersistenceException: tick batch flush failed
+16:34:26 sink retry 1 in 5s
+16:34:36 sink still unavailable after attempt 1: … sink recovery failed — still unavailable
+16:34:46 sink still unavailable after attempt 2 … retry 3 in 5s
+16:34:56 sink still unavailable after attempt 3 … retry 4 in 11s
+16:35:06 ticks=397 bars=4 written=333 … sinkFailures=1 … statusFailures=1
+16:35:12 sink still unavailable after attempt 4 … retry 5 in 13s
+16:35:31 sink still unavailable after attempt 5 … retry 6 in 43s
+16:36:11 ticks=525 bars=5 written=333 … sinkFailures=1 … statusFailures=2
+16:36:20 sink still unavailable after attempt 6 … retry 7 in 39s
+16:36:59 sink recovered after 152s and 7 attempt(s); 303 queued writes to drain
+16:37:11 ticks=653 bars=6 written=659 … sinkFailures=1 … statusFailures=2
+16:40:11 ticks=932 bars=9 written=940 … sinkFailures=1 … statusFailures=2
+```
+
+*Reading the log:* the failure fired on the **idle-flush path** (the review's F3 case); each retry took
+~5s longer than its wait — the pool's 5s `connectionTimeout` (D28 (6)) failing fast inside `recover()`;
+the waits 5 / 5 / 5 / 11 / 13 / 43 / 39s show the floor, the jittered doubling and the 60s cap of the belt's
+`BackoffPolicy` (D28 (3)); `written=` froze at 333 while `ticks=` kept rising — **held, not lost**;
+heartbeats slipped ~5s during the outage (the Tier-2 `capture_status` upsert timing out — the documented
+worst case; `statusFailures=` 0 → 1 → 2 on the two in-outage heartbeats); recovery drained 303 queued
+writes and `written=` (659) matched `ticks=` + `bars=` (653 + 6) on the next heartbeat.
+
+*Verification (psql — the five queries; replace `<drill start>` with the capture start, here
+`2026-10-05 16:31:00Z`):*
+
+```sql
+select event_time_utc, event_type, severity, detail from service_events where upper(event_type) in ('SINK_FAILURE','DB_ERROR') order by event_time_utc desc limit 5;
+select start_utc, start_utc - lag(start_utc) over (order by start_utc) as step from bars_1m b join instruments i on i.id = b.instrument_id where i.epic = 'IX.D.DAX.DAILY.IP' and start_utc >= '<drill start>' order by start_utc;
+select gap_from_utc, gap_to_utc, missing_minutes, detected_at_utc from bar_gaps order by detected_at_utc desc limit 5;
+select date_trunc('minute', ts_utc) as minute, count(*) from ticks where ts_utc >= '<drill start>' group by 1 order by 1;
+select instance, updated_at_utc, stream_state, db_pending, ticks_total, dropped_ticks from capture_status;
+```
+
+Results, this run:
+1. **Events:** one `sink_failure` row at 16:34:26.59Z — detail `attempts` 7, `outageMs` 152678,
+   `ticksShed` 0, `queuedAtRecovery` 303, `cause` = the batch's `BatchUpdateException … FATAL: terminating
+   connection due to administrator command` (SQLSTATE 57P01 — class 57, retryable per D28 (2)); **no
+   `db_error` row.**
+2. **Bars:** `bars_1m` 16:31 → 16:40 present with every `start_utc - lag(start_utc)` step = `00:01:00`,
+   including 16:34 / 16:35 / 16:36 — the outage minutes.
+3. **Gaps:** `bar_gaps` — 0 rows.
+4. **Ticks per minute** 16:31–16:41: 86, 97, 107, 98, 126, 117, 108, 80, 86, 92, 101 — the outage minutes
+   (16:34 / 16:35 / 16:36 = 98 / 126 / 117) in line with their neighbours; 302 ticks inside
+   16:34:26Z–16:36:59Z, the earliest (16:34:26.337) being the failed batch's own first entry — **the held
+   batch landed.**
+5. **Status:** `capture_status` fresh at 16:41:11Z — `connected_streaming`, `db_pending` 0,
+   `dropped_ticks` 0, `ticks_total` 1020.
+
+**Verdict:** zero bars and zero ticks lost across a 152-second outage — the DoD's central claim, met on the
+real stack. `written=` lagging `ticks=` + `bars=` by one on two later heartbeats is a snapshot artefact (a
+tick sitting in the queue at the instant the line is printed), not a loss.
