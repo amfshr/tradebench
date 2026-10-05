@@ -2,11 +2,20 @@ package dev.amfshr.tradebench.marketdata.store;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.math.BigDecimal;
 import java.sql.Connection;
 import java.sql.ResultSet;
+import java.io.PrintWriter;
 import java.sql.SQLException;
+import java.sql.SQLFeatureNotSupportedException;
+import java.sql.SQLTransientConnectionException;
+import java.util.logging.Logger;
+
+import javax.sql.DataSource;
+
+import com.zaxxer.hikari.HikariDataSource;
 import java.sql.Statement;
 import java.time.Instant;
 
@@ -164,5 +173,179 @@ class PostgresStoreTest extends PostgresTestBase {
         IllegalStateException thrown = assertThrows(IllegalStateException.class,
                 () -> new PostgresStore(database.dataSource(), "default-user", "not-a-source"));
         assertEquals(true, thrown.getMessage().contains("not-a-source"));
+    }
+
+    // --- E1-T9: hold-and-retry — the store side ---------------------------------------------
+
+    /** Kill every backend but ours — the store's connection and the pool's idle ones — then make
+     * the pool forget them. In production Hikari re-validates a connection idle for more than
+     * 500ms before handing it out, and the pump's backoff guarantees that idleness; back-to-back
+     * test borrows would land inside the bypass window and receive a dead connection. */
+    private void killOtherBackends() throws SQLException {
+        try (Connection c = database.dataSource().getConnection();
+                Statement s = c.createStatement()) {
+            s.execute("SELECT pg_terminate_backend(pid) FROM pg_stat_activity"
+                    + " WHERE pid <> pg_backend_pid() AND datname = current_database()");
+        }
+        ((HikariDataSource) database.dataSource()).getHikariPoolMXBean().softEvictConnections();
+    }
+
+    @Test
+    void aKilledConnectionIsRetryableAndRecoverLandsEveryHeldTick() throws SQLException {
+        sink.write(tick(DAX, "2026-09-28T07:00:01Z", "1.1", "1.2"));
+        sink.write(tick(DAX, "2026-09-28T07:00:02Z", "1.3", "1.4"));
+        sink.write(tick(DAX, "2026-09-28T07:00:03Z", "1.5", "1.6"));
+        killOtherBackends();
+
+        PersistenceException thrown = assertThrows(PersistenceException.class, sink::flush);
+        assertTrue(thrown.retryable(), "a terminated backend is weather: " + thrown.getCause());
+
+        sink.recover();
+        sink.flush();
+
+        assertEquals(3, count("ticks"), "the batch held across the outage lands whole");
+    }
+
+    @Test
+    void aBarWriteOnAKilledConnectionIsRetryableAndTheBarLandsAfterRecover() throws SQLException {
+        sink.write(bar("2026-09-28T07:00:00Z", "24512.0", 10L)); // warms the instrument cache
+        killOtherBackends();
+
+        PersistenceException thrown = assertThrows(PersistenceException.class,
+                () -> sink.write(bar("2026-09-28T07:01:00Z", "24513.0", 11L)));
+        assertTrue(thrown.retryable());
+
+        sink.recover();
+        sink.write(bar("2026-09-28T07:01:00Z", "24513.0", 11L)); // the pump re-drains the same bar
+
+        assertEquals(2, count("bars_1m"));
+    }
+
+    @Test
+    void aTickHeldBeforeItsBindFailsIsStillRecovered() throws SQLException {
+        killOtherBackends(); // nothing cached: the first write must look DAX up on a dead connection
+
+        PersistenceException thrown = assertThrows(PersistenceException.class,
+                () -> sink.write(tick(DAX, "2026-09-28T07:00:01Z", "1.1", "1.2")));
+        assertTrue(thrown.retryable());
+
+        sink.recover();
+        sink.flush();
+
+        assertEquals(1, count("ticks"), "held before anything could fail — never lost to the bind");
+    }
+
+    @Test
+    void recoverOnAHealthyStoreIsHarmlessAndCarriesTheBatch() throws SQLException {
+        sink.write(tick(DAX, "2026-09-28T07:00:01Z", "1.1", "1.2"));
+
+        sink.recover();
+        sink.flush();
+        sink.write(bar("2026-09-28T07:00:00Z", "24512.0", 10L));
+
+        assertEquals(1, count("ticks"));
+        assertEquals(1, count("bars_1m"));
+    }
+
+    @Test
+    void recoverWhileTheDatabaseIsStillDownThrowsRetryableAndKeepsTheBatch() throws SQLException {
+        FlakyDataSource flaky = new FlakyDataSource(database.dataSource());
+        PostgresStore store = new PostgresStore(flaky, "default-user", "ig-stream-demo");
+        store.write(tick(DAX, "2026-09-28T07:00:01Z", "1.1", "1.2"));
+        store.write(tick(DAX, "2026-09-28T07:00:02Z", "1.3", "1.4"));
+        killOtherBackends();
+        flaky.down = true; // the pool cannot hand out a connection — Hikari's timeout
+
+        assertThrows(PersistenceException.class, store::flush);
+        PersistenceException stillDown = assertThrows(PersistenceException.class, store::recover);
+        assertTrue(stillDown.retryable(), "still weather — the pump keeps backing off");
+
+        flaky.down = false;
+        store.recover();
+        store.flush();
+        assertEquals(2, count("ticks"), "two recovery attempts, nothing dropped between them");
+        store.close();
+        sink.recover(); // the setUp store's connection was killed too — leave it closable
+    }
+
+    @Test
+    void aBrokenStoreRefusesWritesAndFlushesUntilRecovered() throws SQLException {
+        sink.write(tick(DAX, "2026-09-28T07:00:01Z", "1.1", "1.2"));
+        sink.write(tick(DAX, "2026-09-28T07:00:02Z", "1.3", "1.4"));
+        sink.write(tick(DAX, "2026-09-28T07:00:03Z", "1.5", "1.6"));
+        killOtherBackends();
+        assertThrows(PersistenceException.class, sink::flush);
+
+        // pgjdbc drops its batch before executing: a second flush on the same statement would send
+        // nothing and acknowledge everything — the store must refuse rather than lie.
+        PersistenceException refused = assertThrows(PersistenceException.class, sink::flush);
+        assertTrue(refused.retryable(), "the refusal carries the original failure's classification");
+        assertThrows(PersistenceException.class,
+                () -> sink.write(bar("2026-09-28T07:00:00Z", "24512.0", 10L)));
+        assertEquals(0, count("ticks"), "nothing acknowledged, nothing landed");
+
+        sink.recover();
+        sink.flush();
+        assertEquals(3, count("ticks"), "acknowledged only once it landed");
+    }
+
+    /** A pool whose {@code getConnection} can be made to time out, as Hikari's does while Postgres
+     * is down (the real pool is behind it, so everything else is real). */
+    private static final class FlakyDataSource implements DataSource {
+        private final DataSource real;
+        volatile boolean down;
+
+        FlakyDataSource(DataSource real) {
+            this.real = real;
+        }
+
+        @Override
+        public Connection getConnection() throws SQLException {
+            if (down) {
+                throw new SQLTransientConnectionException(
+                        "pool - Connection is not available, request timed out", "08001");
+            }
+            return real.getConnection();
+        }
+
+        @Override
+        public Connection getConnection(String username, String password) throws SQLException {
+            return getConnection();
+        }
+
+        @Override
+        public PrintWriter getLogWriter() throws SQLException {
+            return real.getLogWriter();
+        }
+
+        @Override
+        public void setLogWriter(PrintWriter out) throws SQLException {
+            real.setLogWriter(out);
+        }
+
+        @Override
+        public void setLoginTimeout(int seconds) throws SQLException {
+            real.setLoginTimeout(seconds);
+        }
+
+        @Override
+        public int getLoginTimeout() throws SQLException {
+            return real.getLoginTimeout();
+        }
+
+        @Override
+        public Logger getParentLogger() throws SQLFeatureNotSupportedException {
+            return real.getParentLogger();
+        }
+
+        @Override
+        public <T> T unwrap(Class<T> iface) throws SQLException {
+            return real.unwrap(iface);
+        }
+
+        @Override
+        public boolean isWrapperFor(Class<?> iface) throws SQLException {
+            return real.isWrapperFor(iface);
+        }
     }
 }

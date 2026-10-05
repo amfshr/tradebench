@@ -63,11 +63,17 @@ The write methods split by criticality, mirroring the queues:
   V1), so healed rows sit beside streamed rows with provenance intact rather than
   overwriting it (P8).
 - **Ticks batch** — `addBatch()`, flushed by `flush()` (the pump's idle moments) or when
-  `++pendingTicks >= TICK_BATCH_LIMIT` (500). That second trigger matters more than it
+  `pending.size() >= TICK_BATCH_LIMIT` (500). That second trigger matters more than it
   looks: under a busy stream the pump never idles, so **the batch-full path is the only
   flush there is** — which is why `PostgresStoreTest` drives exactly 499 writes, then the
   500th, and asserts the rows landed with no explicit flush. Boundary equalities get
-  exact tests (testing doctrine G5).
+  exact tests (testing doctrine G5). Since E1-T9 the batch is also **held by the store
+  itself** — a `List<Tick> pending`, added before anything about the write can fail and
+  cleared only once `executeBatch` returns — so a connection that dies mid-batch loses
+  nothing: `recover()` re-acquires a pooled connection, re-prepares, re-binds every held
+  tick, and only then discards the dead objects
+  (`PostgresStoreTest.aKilledConnectionIsRetryableAndRecoverLandsEveryHeldTick`). The dedupe
+  constraint makes a re-sent batch idempotent.
 
 Tick dedupe is the schema's, not the store's — `V1__baseline.sql`:
 
@@ -100,9 +106,11 @@ byte-compare against the committed snapshot in
 copying the new render over the snapshot — a visible, reviewable act.
 
 Two infrastructure choices in a paragraph each. **HikariCP** (`Database.java`): a pool of
-4, tiny on purpose — the store checks out one connection for its whole life
-(single-threaded by contract, prepared statements prepared once), and the pool mostly
-exists so future components share the plumbing. The advisory lock pointedly does *not*
+4, tiny on purpose, with a 5-second `connectionTimeout` rather than Hikari's thirty (E1-T9:
+a write that cannot get a connection should fail fast into its caller's backoff) — the store
+checks out one connection and keeps it until a blip, when `recover()` swaps it for a fresh
+one (single-threaded by contract, prepared statements prepared once per connection), and the
+pool otherwise exists so the observability writers and future components share the plumbing. The advisory lock pointedly does *not*
 use the pool — that story is chapter 6. **Testcontainers, manual lifecycle**
 (`PostgresTestBase`): plain `@BeforeAll`/`@AfterAll`, one container per test class, no
 JUnit-extension dependency — fewer moving parts between a red test and its cause.

@@ -3,6 +3,7 @@ package dev.amfshr.tradebench.marketdata.store;
 import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.SQLException;
+import java.time.Duration;
 
 import javax.sql.DataSource;
 
@@ -11,8 +12,15 @@ import org.flywaydb.core.Flyway;
 import com.zaxxer.hikari.HikariConfig;
 import com.zaxxer.hikari.HikariDataSource;
 
-/** Pooled Postgres access; Flyway migrates at connect — no persistence ⇒ do not run. */
+/**
+ * Pooled Postgres access; Flyway migrates at connect — no persistence ⇒ do not run. The pool waits
+ * {@link #CONNECTION_TIMEOUT} for a connection, not Hikari's 30s: while Postgres is down a Tier-2
+ * write or the sink's recovery fails fast into its caller's backoff, and the heartbeat is held at
+ * most that long per market (ruled 2026-10-04, E1-T9).
+ */
 public final class Database implements AutoCloseable {
+
+    static final Duration CONNECTION_TIMEOUT = Duration.ofSeconds(5);
 
     private final HikariDataSource dataSource;
     private final String jdbcUrl;
@@ -33,6 +41,7 @@ public final class Database implements AutoCloseable {
         config.setUsername(user);
         config.setPassword(password);
         config.setMaximumPoolSize(4);
+        config.setConnectionTimeout(CONNECTION_TIMEOUT.toMillis());
         HikariDataSource dataSource = new HikariDataSource(config);
         Flyway.configure().dataSource(dataSource).load().migrate();
         return new Database(dataSource, jdbcUrl, user, password);

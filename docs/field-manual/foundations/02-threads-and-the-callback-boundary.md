@@ -76,12 +76,13 @@ sequenceDiagram
 
 Two lifecycle behaviours in `app/Main.java` complete the picture:
 
-- **Pump death is fatal, loudly** (`Main.java:152-160`): the heartbeat checks
-  `pumpThread.isAlive()`; if the consumer died (store failure — the pump captures the cause,
-  chapter 4), capture is void from that moment, so the process logs the cause and
-  `System.exit(1)`. A capture that is silently not persisting is worse than a dead one —
-  P9, fail closed and loud.
-- **Shutdown order is load-bearing** (`Main.java:127-150`): `stream.close()` *first* (stop
+- **Pump death is fatal, loudly** (`Main`'s `onDeath` callback, since E1-T9): if the consumer
+  died of a terminal store failure (the pump captures the cause, chapter 4), capture is void from
+  that moment, so the pump reports it at once and the process logs the cause and
+  `System.exit(1)`s from its own thread; the heartbeat's `pumpThread.isAlive()` check is the
+  backstop. A capture that is silently not persisting is worse than a dead one — P9, fail
+  closed and loud. A *blip* is different: the pump holds and retries (chapter 10).
+- **Shutdown order is load-bearing** (`Main`'s shutdown hook): `stream.close()` *first* (stop
   the faucet), `pump.stop()` and `join(5s)` (drain what's queued — the pump's `run` does a
   final `drainOnce()` + `flush` after `running` flips), only then `sink.close()`, lock, DB.
   Reverse any pair and you lose the tail: close the sink first and the drain writes into a
