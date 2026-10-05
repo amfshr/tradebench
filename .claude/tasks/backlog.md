@@ -85,10 +85,9 @@ multi-user era / E8 — not re-litigated here; E9 is Alex's stated trigger.)
 | 2 — Alex, demo, 3 markets | `default-user` | `ig-stream-demo` | Alex `IG_DEMO_*` | `alex-demo` |
 | 3 — brother, his choice, several | new `users` row | `ig-stream-live` or `-demo` | his own `IG_*` set | `brother-…` |
 
-**Added 2026-10-05 (the T9 outage drill):** with many markets per instance, make `HealthProbe.publish()`
-fail fast after the first pool-timeout failure in a heartbeat, so a database outage costs one 5s stall
-per heartbeat rather than one per market (observed with one market: each heartbeat during the outage
-slipped by exactly the pool's 5s `CONNECTION_TIMEOUT`; harmless at N=1, a whole minute at N=12).
+**Heartbeat fail-fast during a database outage** (captured here 2026-10-05 from the T9 outage drill) → graduated to
+**E1-T10 #22** (the PR #14 review's finding 22: `HealthProbe.publish()` one connection/batch per heartbeat, or
+short-circuit after the first pool-timeout failure); no longer a B1 item.
 
 ## B2 — ig-client REST resilience (platform-wide), and revisit "resilience lives in the consumer"
 

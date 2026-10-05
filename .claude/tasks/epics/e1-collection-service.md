@@ -191,14 +191,16 @@ mutation-verified. 89 mutations killed across steps 2a–6 + the whole-slice rev
 the survivor exposed redundant code, removed); doctrine reviews per-step (3–6) + whole-slice
 pass-with-findings F1–F10, fixed on-branch except F9 (a declared residual). Tests at merge: ig-client 92
 · market-data-service 143 · docs site 63 · 0 failures. The 2026-10-03 rulings above are logged as **D27**.
-**Residuals (recorded 2026-10-04 — not tickets; Alex decides whether to ticket):**
+**Residuals (recorded 2026-10-04 — not tickets; Alex decides whether to ticket). Update 2026-10-05: residuals
+2 and 3 are now E1-T11's DoD** — the scenario harness; the PR #14 review confirmed the missing composed-loop test
+as the root of its findings 1, 2, 4, 5, 8 and 11. Residual 1 stays unticketed.
 1. The gated demo smoke (`IG_SMOKE=1 ./gradlew :ig-client:demoSmoke`) has not run, so the
    `application-allowance.json` wire fixture is *authored*, not captured — run it and re-golden before
    T6's heal budget leans on pacer discovery. A skew fails safe today: refused at the boundary, 10/min kept.
 2. No composed-loop test — `Supervisor` ↔ `IgStreamControl` ↔ `FakeStreamTransport` through the single
-   `bind()`. Each layer is tested; the composition is not.
+   `bind()`. Each layer is tested; the composition is not. **→ E1-T11 (DoD).**
 3. No shell-level suspend → wake → `WILL-RETRY` → rebuild scenario — the rebaseline path is pinned only
-   in slice A's `StalenessWatchdogTest`.
+   in slice A's `StalenessWatchdogTest`. **→ E1-T11 (DoD) — the harness's seventh scenario.**
 
 ## T6 — Daily completeness + archive + digest (D6)
 
@@ -339,6 +341,15 @@ Tier-1 row — now the landed policy — and the former "the pending decision", 
 step-3 pump ruling (observability best-effort-but-loud, sink fail-closed — ch. 10, "The rulings
 behind it").
 
+**Refined by E1-T10 (the PR #14 review, 2026-10-05):** findings **6** (`recover()` makes a round trip — the held
+batch executes inside recovery, so "recovered" means a write landed — and carries attempt/since across consecutive
+episodes; today a database that accepts connections but rejects writes "recovers" every 5s and the ladder never
+climbs), **7** (JDBC `socketTimeout` 30s + `tcpKeepAlive` on the pool and `dedicatedConnection()` — D29 (2); a
+half-open connection otherwise parks `executeBatch` forever with no `PersistenceException` for the hold to see)
+and **20** (the shutdown tail drains everything, makes one `recover()` attempt if the sink is broken at stop, logs
+`pendingWrites()` unconditionally) refine this ticket's hold. They land on T10 slice B, as scenarios on the E1-T11
+harness (its eighth and ninth scenarios, plus its container-pause scenario for the socket timeout).
+
 **DoD anchor (amended 2026-10-04 to D28) — met 2026-10-05 (the tests at merge + the outage drill below):** any outage while the tick queue is not shedding loses zero
 bars and zero ticks; the heartbeat shows the failure count; a `SINK_FAILURE` event records the episode
 on recovery (a `DB_ERROR` the terminal exit); a terminal failure stops the pump and the process exits
@@ -439,3 +450,143 @@ Results, this run:
 **Verdict:** zero bars and zero ticks lost across a 152-second outage — the DoD's central claim, met on the
 real stack. `written=` lagging `ticks=` + `bars=` by one on two later heartbeats is a snapshot artefact (a
 tick sitting in the queue at the instant the line is printed), not a loss.
+
+## T10 — Resilience belt hardening: the PR #14 review ⬜ (ticketed 2026-10-05; slice A1 first)
+
+**Type** build · **Branch** `e1-t10-belt-hardening` (planned) · **Started** — · **Blocked by** —
+
+**Goal:** the belt's 32 review findings fixed or answered, each fix carrying the test that would have caught
+it — so chapter 10's promises hold on the code, not only in prose.
+
+**Source of truth per finding:** `.claude/reviews/2026-10-05-pr14-resilience-belt.md` — the 2026-10-05
+`/code-review ultra` run over the whole belt (E1-T5 slices A–C + E1-T9) as **PR #14**, a review-only PR (base
+pinned at `ee35f9b`, head = main; 103 files, +7492/−599; closed unmerged, branches deleted). 32 verified, ranked
+findings: two high (#1, #2), eight medium (#3–#10), 22 low (#11–#32); every verdict CONFIRMED except #15
+(PLAUSIBLE — it rests on the Lightstreamer SDK's documented throw-on-inactive contract). This plan cites finding
+numbers and does not restate the file.
+
+**Policy the fixes stand on — D29 (Alex, 2026-10-05), nothing beyond it:** (1) the watchdog's CLOSED/SUSPEND
+stand-down is bounded — the remembered flag is cleared on every rebuild/resubscribe, and a market stood down
+for more than 12 hours gets one teaching resubscribe per 12 hours (finding 3); (2) JDBC `socketTimeout` 30s +
+`tcpKeepAlive` on the pool and the lock's dedicated connection (finding 7); (3) Tier-2 event writes leave the
+sweep thread via a bounded queue drained by one writer thread, drops counted in `eventWriteFailures`
+(finding 12); (4) the `closing()`/`GRACEFUL_CLOSE` hush is deleted — the generation gate is the §3.6 hush
+(finding 29).
+
+**Slices (Alex's sequencing: A1 first with targeted tests → E1-T11 the harness → A2/B/C as scenarios on it →
+then E1-T6):**
+
+- **A1 — the two highs, targeted tests, first.** **#1** a quarantined market's twin-leg rejection re-admits it:
+  gate `SubscriptionError`s for epics in `quarantinedMarkets` in `Supervisor.sweep()`;
+  `IgStreamControl.resubscribe` refuses quarantined epics; exposing test `failToTheStrikeCeiling` with four
+  errors instead of exactly three. **#2** a bare `DISCONNECTED` or `onServerError` on the live generation
+  triggers no rebuild when the markets' last flag reads CLOSED: treat both as a rebuild trigger; test — a bare
+  `DISCONNECTED` with CLOSED flags → a rebuild. May ship on its own PR if Alex wants the highs on main quickly.
+- **A2 — detectors and verdicts, as E1-T11 scenarios.** **#5** the watchdog stands down while the escalator
+  holds a substate / the connection is not streaming (no rebuild before the 300s patience); **#18** clear the
+  escalator's substate on rebuild so an IG outage ends by the ten-minute budget, not the ceiling; **#4** a `Wait`
+  verdict is re-judged when the witness confirms or its window lapses; **#8** strikes once per (epic, attempt) —
+  carry the leg `Kind` on `onSubscriptionError`; **#14** `witness.onSubscribeStarted` before a watchdog
+  resubscribe; **#13** `giveUp()` short-circuits the rest of the sweep and is idempotent; **#11** observations
+  stamped with the connection generation (or the queue drained-and-discarded after `stream.rebuild()`); **#19**
+  a `RuntimeException` escaping `sweep()` records `FEED_DEAD{reason: fatal, cause}` and calls `onExhausted`;
+  **#21** `rebuilding()` takes the `SubscriptionError`'s own clock stamps; **#3** the bounded CLOSED stand-down
+  (D29 (1)); **#29** delete the hush (D29 (4)).
+- **B — the sink and the database edge.** **#6** `recover()` makes a round trip — executes the held batch inside
+  recovery, so "recovered" means a write landed — and carries attempt/since across consecutive episodes; **#7**
+  `socketTimeout` 30s + `tcpKeepAlive` (D29 (2)) on the pool and `dedicatedConnection()`, with a Testcontainers
+  pause test; **#20** the shutdown tail drains everything (`while (drainOnce() > 0)`), makes one `recover()`
+  attempt if the sink is broken at stop, and logs `pendingWrites()` unconditionally; **#15/#16** per-leg handle
+  tracking — forget each leg as its own unsubscribe succeeds, subscribe a new pair into locals and roll back the
+  first leg if the second throws, give `FakeStreamTransport` per-handle state (#15 is PLAUSIBLE — it rests on
+  the SDK's throw-on-inactive contract); **#17** `connect()` publishes `stream` only after subscribing and
+  `start()` catches `RuntimeException` like `rebuild()`; **#30** `@Nullable` on `PostgresStore.brokenBy`;
+  **#24** the shutdown hook registered before `control.start()` and chapter 10's join-fence sentence corrected;
+  **#12** Tier-2 writes via the bounded queue + writer (D29 (3)).
+- **C — loudness, reuse, docs.** **#9** a log consumer for the Supervisor (lines on Retry,
+  `SUBSCRIPTION_REJECTED`, `MARKET_QUARANTINED`, `IG_API_ERROR`); **#10** shared JDBC helpers (`InstrumentIds`
+  + a `Jdbc` holder) instead of the copies in `PostgresObservabilityStore`; **#22** `HealthProbe.publish()` one
+  connection/batch per heartbeat, or short-circuit after the first pool-timeout failure — supersedes the
+  heartbeat fail-fast note backlog B1 captured 2026-10-05 from the T9 drill (folded here; B1 keeps a pointer);
+  **#26** a `CountingEventLog` decorator replacing the six copied best-effort blocks (PacerDiscovery's copy has
+  no counter today); **#27** one `FakeClock` and one `RecordingEventLog` test util — a prerequisite shared with
+  E1-T11, done in whichever lands first; **#28** `FlakySink` holds a failed tick as the real store does,
+  asserting `tick@10, tick@11`; **#31** `StreamEvents.onMalformed(epic, item)` so `Buffers.epicOf` and its tests
+  go (closes the slice C step-4 review's `epicOf` follow-up — `41969a7`); **#32** `.gitignore` un-ignores
+  `**/src/**/build|out|tmp/`; **#25** the three field-manual links broken by D26 (`components/ig-client.md:26`,
+  `core.md:15`, `:28`).
+- **#23** (no combined-detector test) *is* the harness — **E1-T11**.
+
+**Tests to doctrine (G5):** each fix carries the exposing test the review names, mutation-verified (apply the
+exact break → red); A2 and B land as scenarios on the E1-T11 harness with chapter 10's numbers as the expected
+offsets; the pure-core unit tests stay.
+
+**Not in scope:** new policy beyond D29; the belt's detectors' numbers (chapter 10's table stays as ruled).
+
+**Workflow:** the standard one — design nod → increments → mutation evidence → doctrine review → PR; Alex
+merges. Alex may have the cloud review session re-verify afterwards. Chapter 10 carries a "Known deviations"
+note (added 2026-10-05) naming what the findings make untrue today; it comes out as the deviations go.
+
+**DoD:** every finding fixed or recorded why not, each fix carrying the exposing test the review names
+(mutation-verified per G5); the A2/B findings' scenarios green on the E1-T11 harness; chapter 10's "known
+deviations" note removed when the deviations are gone; doctrine review before the PR; Alex may have the cloud
+review session re-verify.
+
+## T11 — The belt's scenario harness ⬜ (ticketed 2026-10-05; after T10 slice A1)
+
+**Type** build · **Branch** `e1-t11-belt-scenario-harness` (planned) · **Started** — · **Blocked by** E1-T10 A1 (sequencing only)
+
+**Goal:** chapter 10 as executable expectations — the composed loop (`Supervisor` ↔ `IgStreamControl` ↔ `Pump`
+↔ the stores) driven through scripted outages with no real waiting, so the belt's fixes can land together
+safely and policy drift fails a test.
+
+**Plan — the review's side-task proposal, adopted as written**
+(`.claude/reviews/2026-10-05-pr14-testing-framework.md`; summarised here, the file rules):
+- **Synchronous driving.** A scenario runner calls `Supervisor.sweep()` and `Pump.cycle()` on a deterministic
+  schedule: advance the injected `Clock` by the sweep interval, deliver the fixture events due at that time on
+  the runner thread (modelling enqueue-on-the-LS-thread / apply-on-the-next-sweep), one sweep, one pump cycle,
+  repeat. The `Sleeper` is a clock-advancer with a runaway guard (as `PumpTest` already does). No real threads
+  — until a dedicated concurrency scenario needs them, and then only with a latch-driven fake.
+- **Where it lives.** `market-data-service/src/test/.../scenario` (it needs `Supervisor`, `Pump`, `Buffers`,
+  `HealthProbe` and the stores). `FakeStreamTransport` (ig-client `testFixtures`) gains scripted
+  per-subscription outcomes (confirm after N ms / reject with code / stay silent / confirm then die), delivery
+  of ticks and sealed bars to a connection's listeners by item name, and per-handle state so unsubscribing an
+  inactive handle throws as the SDK does. One consolidated `FakeClock` and one `RecordingEventLog` first (the
+  four and three hand-rolled copies — T10 #27; whichever ticket lands first does it).
+- **Fixtures.** A timeline per scenario, one row per event — `{at, kind ∈ {status, tick, bar, confirm, reject,
+  silence, db-down, db-up, host-sleep, stop}, payload}`, `at` an offset from scenario start — with the expected
+  outcomes beside it: the ordered remedies (resubscribe / rebuild / quarantine, with offsets), the ordered
+  events (type, reason, epic), what the sink received and in what order, the heartbeat row at chosen offsets,
+  how the run ended. A captured real outage becomes a fixture from its `service_events` rows + the
+  Lightstreamer status lines in the log (why T10 #9's status log line matters beyond operability).
+- **Assertions — five observables, nothing else:** remedies issued · events recorded · sink writes landed ·
+  heartbeat state · exit path. Never the cores' internal fields. Chapter 10's numbers table supplies the
+  expected offsets, so policy drift is a failing test.
+- **Postgres.** Real (Testcontainers) only for the store/hold scenarios that already exist, plus one
+  container-pause scenario for the socket timeout (T10 #7); everywhere else a scripted `CaptureStore` /
+  `EventLog` that can be told "fail retryably from T1 to T2", so a db-down can coincide with stream events by
+  the clock.
+- **The nine scenarios, in the proposal's order:** ① both-legs rejection with a healthy witness (findings 1, 8)
+  → ② bare `DISCONNECTED` after `onServerError` with CLOSED flags (2) → ③ `TRYING-RECOVERY` for 200s with ticks
+  silent — no rebuild before 300s (5) → ④ `Wait`, then the witness confirms at 31s (4) → ⑤ the weekend zombie:
+  CLOSED flag, a dead leg, the Monday open (3) → ⑥ dead socket: `WILL-RETRY` to the 120s rebuild with the
+  watchdog standing down → ⑦ host suspend → wake → `WILL-RETRY` → rebuild (T5 residual 3) → ⑧ Postgres restart
+  mid-capture: the held batch lands, the ladder climbs when it should (6) → ⑨ shutdown mid-hold: what is lost
+  and what is logged (20).
+- **What stays, what goes.** Every pure-core unit test stays (the fast, exact, mutation-verified layer). The
+  `SupervisorTest` scenarios that exercise one detector against the fake retire as their harness scenario
+  lands. `IgStreamControlTest` stays, run against the extended fake.
+
+**Estimate:** ≈ two days — the fixture extensions, a ~200-line runner, the first five scenarios.
+
+**Decision: (TBD) — fixture format.** A typed Java DSL first (refactor-safe; YAML later for captured outages
+— Claude's recommendation), or YAML from the start. Alex rules at the design nod; the proposal allows either.
+
+**Sequencing:** after E1-T10 slice A1 (the two highs on main first — Alex's ruling); T10's A2/B/C then land as
+scenarios here, and E1-T6 follows. Sequencing only, not a hard dependency: the harness does not need the A1
+fixes to be built, but the order is ruled.
+
+**DoD:** the nine scenarios run deterministically with no real waiting; each scenario's expectations are
+chapter 10's numbers; the harness's own behaviour mutation-verified (a wrong expected offset fails); T5's
+residuals 2 and 3 (the composed-loop test; the suspend → wake → `WILL-RETRY` → rebuild shell path) are closed
+by it; the subsumed `SupervisorTest` scenarios removed.

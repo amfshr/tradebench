@@ -14,6 +14,19 @@ the V2 backfill, the IG application-allowance array shape, invalid-details as fa
 shutdown-hook race with a live-but-unclosed connection (the interrupt breaks the login gate), and
 the main-thread re-login after threads start.
 
+**Triaged 2026-10-05 (Alex):** the fixes are **E1-T10** (slice A1 the two highs first, with targeted
+tests; A2/B/C as scenarios once the harness exists), the scenario harness is **E1-T11**
+(`2026-10-05-pr14-testing-framework.md`, the side task's answer), and the four policy rulings the
+findings needed are **D29** (`docs/decisions.md`). Fixes are applied in the local session under the
+standard workflow; the review session may re-verify afterwards.
+
+**The review's assessment of the brief's five known gaps (verbatim):** The missing composed-loop test
+is confirmed and is the root of findings 1, 2, 4, 5, 8 and 11: each is an interaction between two
+correct cores that the per-component fakes hold constant. Host-suspend is pinned only in the
+watchdog test as stated. Main is untested as stated, and the late hook registration and the
+uncaught-sweep-exception path are what that costs. The pump against the real pool is exercised only
+by the drill, and the missing JDBC socket timeout is the gap the drill could not show.
+
 ---
 
 ## High

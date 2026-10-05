@@ -78,6 +78,8 @@ may be months away.
   tasks/epics/         ← per-epic plan files (ticket-level approach/test plan)
   agents/              ← project agents (§5)
   skills/              ← project skills (§5)
+  reviews/             ← AI review records — ultra reviews, written-out doctrine reviews — dated
+                          YYYY-MM-DD-<scope>.md; transient evidence, never rendered on the docs site (D29)
   settings.json        ← permissions/hooks (E0-T4 — not yet born)
 docs/
   decisions.md         ← decision log (D1…)

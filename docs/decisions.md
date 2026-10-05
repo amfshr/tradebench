@@ -406,3 +406,29 @@ the shutdown hook would deadlock. **(6) The shared pool's `connectionTimeout` is
 (`Database.CONNECTION_TIMEOUT`): the heartbeat is held at most 5s per market during an outage and
 `recover()` fails fast into the backoff; no dedicated Tier-2 pool. Field Manual ch. 10 "When the
 database fails" carries the full argument.
+
+## D29 — Belt hardening rulings from the PR #14 review: a bounded CLOSED stand-down, a JDBC socket timeout, Tier-2 writes off the sweep thread, the hush retired — **Accepted** (2026-10-05, Alex)
+
+Four rulings on the 2026-10-05 independent review of the whole resilience belt
+(`.claude/reviews/2026-10-05-pr14-resilience-belt.md`, 32 findings; the fixes are **E1-T10**, the
+scenario harness **E1-T11**). **(1) The CLOSED/SUSPEND stand-down is bounded.** The watchdog stands
+down on a market's last `DLG_FLAG` (chapter 08); that remembered flag is cleared on every rebuild and
+resubscribe (the new subscription's snapshot re-teaches it), and a market that has read
+CLOSED/SUSPEND for more than 12 hours gets one teaching resubscribe per 12 hours — documented-harmless
+on a closed market — so a server-side zombie cannot hide behind a weekend (finding 3). **(2) A JDBC
+socket timeout.** `socketTimeout` 30s and `tcpKeepAlive` on, on the pool and the lock's dedicated
+connection: a half-open connection must surface as a `PersistenceException` the hold can see, never a
+silent hang; our longest statement is a 500-row batch (finding 7). **(3) Tier-2 writes leave the
+sweep thread.** Service events are handed to a bounded queue drained by one writer thread, drops
+counted in `eventWriteFailures`, so the sweep never blocks on Postgres — a blocked sweep trips the
+process-freeze detector and rebaselines every staleness clock (finding 12). **(4) The `closing()`
+hush is retired.** The generation gate is the §3.6 hush — a torn-down connection's farewell never
+reaches the Supervisor — so `closing()`/`GRACEFUL_CLOSE` are dead code with a data race; deleted,
+chapter 10 naming the gate as the mechanism (finding 29). **Why:** each closes a confirmed gap
+between chapter 10's promises and the code; (1) and (3) add policy (a stand-down bound, an async
+writer) rather than restate it, hence the log entry. The review's two highs — a quarantined market
+re-admitted by its twin-leg rejection, and a bare `DISCONNECTED`/`onServerError` with CLOSED flags
+triggering no rebuild — implement no new policy and are fixed first (E1-T10 slice A1). Sequencing
+(Alex): the two highs → the harness → the remaining findings as scenarios → E1-T6. **Also ruled:**
+AI review records live in `.claude/reviews/` (dated `YYYY-MM-DD-<scope>.md`), never in `docs/` — a
+review is transient evidence, the docs are the product (framework §4).

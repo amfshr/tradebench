@@ -324,6 +324,12 @@ in-ticket record.
   `BackoffPolicy` reused for the sink; one `SINK_FAILURE` on recovery; `onDeath` → immediate
   `exit(1)` (never on a stop); the pool's `connectionTimeout` 5s. Logged as **D28**.
 - **Pending:** the T7 restart-policy contract; B1 multi-job.
+- **Known deviations (the 2026-10-05 independent review of the whole belt — fixed by E1-T10; the
+  policy above is unchanged):** a quarantined market's second-leg rejection re-admits it (#1); a bare
+  `DISCONNECTED` or `onServerError` with CLOSED flags triggers no rebuild (#2); the watchdog's 90s
+  verdict can pre-empt the 300s replay patience (#5); after a failed reconnect the rebuild ceiling can
+  beat the ten-minute budget (#18); the CLOSED stand-down is unbounded (#3 — bounded by **D29**).
+  The record: `.claude/reviews/2026-10-05-pr14-resilience-belt.md`.
 
 ## The scars this chapter answers
 

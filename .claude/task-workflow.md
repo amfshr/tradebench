@@ -13,6 +13,9 @@
   per-ticket approach, build order, test plan, and the decisions to settle in-ticket. The
   board row stays the index + DoD; plans are living sketches, refined (not re-approved) at
   `/start-ticket` time.
+- **AI review records live in `.claude/reviews/`** — dated `YYYY-MM-DD-<scope>.md` (e.g. the 2026-10-05
+  PR #14 belt review and its testing-framework proposal), never in `docs/` (Alex, 2026-10-05). The board
+  cites them as evidence; the tickets they spawn cite finding numbers rather than restating them.
 - **Build increments small and self-contained** — Alex's time is bursty; every merged PR leaves
   the repo shippable and self-explaining (PRD §9, AI-workable NFR).
 - **PR-only to `main`, CI green; docs-only changes may go direct.** Never commit secrets or
