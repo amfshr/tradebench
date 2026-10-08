@@ -131,7 +131,9 @@ public final class Pump implements Runnable {
         }
     }
 
-    void cycle() throws InterruptedException {
+    /** One pass — drain, or flush and idle; a retryable sink failure holds here. The unit
+     * {@link #run()} repeats and the scenario harness drives directly. */
+    public void cycle() throws InterruptedException {
         try {
             if (drainOnce() == 0) {
                 sink.flush();
@@ -220,16 +222,37 @@ public final class Pump implements Runnable {
             while (running) {
                 cycle();
             }
-            drainOnce(); // the tail is written once, into whatever sink there is — a failure here
-            sink.flush(); // is recorded, not held: the process is already leaving
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
+            return;
+        } catch (RuntimeException e) {
+            die(e);
+            return;
+        }
+        drainTail();
+    }
+
+    /** A death in service: the cause is kept, recorded best-effort so the console learns why
+     * capture died (D28), and announced at once — unless {@link #stop()} already ran, in which case
+     * the shutdown path owns it. {@link #run()} does this on the pump thread; the scenario harness
+     * calls it in run()'s place when {@link #cycle()} throws. */
+    public void die(RuntimeException cause) {
+        failure = cause;
+        if (running) {
+            recordDeath(cause);
+            onDeath.accept(cause);
+        }
+    }
+
+    /** The tail after {@link #stop()}: one last drain and flush into whatever sink there is. A
+     * failure here is recorded, not held — the process is already leaving. {@link #run()} does this
+     * on the pump thread; the scenario harness calls it in run()'s place. */
+    public void drainTail() {
+        try {
+            drainOnce();
+            sink.flush();
         } catch (RuntimeException e) {
             failure = e;
-            if (running) {
-                recordDeath(e); // best-effort, so the console learns why capture died (D28)
-                onDeath.accept(e); // died in service, not stopped — the runner acts at once
-            }
         }
     }
 

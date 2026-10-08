@@ -167,8 +167,9 @@ public final class Supervisor implements StreamObserver, BeltView, Runnable {
     }
 
     /** One pass: apply every pending observation, then the time-based checks — the recovery
-     * budget first (it must not depend on how often a detector re-fires), then escalation. */
-    void sweep() {
+     * budget first (it must not depend on how often a detector re-fires), then escalation. The
+     * unit {@link #run()} repeats and the scenario harness drives directly. */
+    public void sweep() {
         if (gaveUp) {
             return; // recovery has ended — the runner is taking over
         }
