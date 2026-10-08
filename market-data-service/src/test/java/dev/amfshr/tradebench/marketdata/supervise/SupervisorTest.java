@@ -599,6 +599,47 @@ class SupervisorTest {
         assertEquals(1, count(EventType.MARKET_QUARANTINED));
     }
 
+    @Test
+    void theTerminalRuleIsExactlyTheBareDisconnected() {
+        assertTrue(ReconnectClassifier.isTerminal("DISCONNECTED"), "the client gave up for good");
+        assertFalse(ReconnectClassifier.isTerminal(WILL_RETRY), "the escalator's, not ours");
+        assertFalse(ReconnectClassifier.isTerminal(TRYING_RECOVERY));
+        assertFalse(ReconnectClassifier.isTerminal("CONNECTED:WS-STREAMING"));
+        assertFalse(ReconnectClassifier.isTerminal("STALLED"));
+    }
+
+    @Test
+    void aBareDisconnectRebuildsEvenWhenEveryMarketReadsClosed() {
+        supervisor.watch(DAX);
+        supervisor.watch(NASDAQ);
+        freshness.flag.put(DAX, "CLOSED");    // overnight: the watchdog stands down on both markets,
+        freshness.flag.put(NASDAQ, "CLOSED"); // and no tick will arrive to change that
+        supervisor.sweep();
+        supervisor.onStatusChange("DISCONNECTED"); // the client gave up — no substate will ever escalate
+
+        supervisor.sweep();
+
+        assertEquals(1, stream.rebuilds, "nothing else can start this recovery");
+        assertEquals("DISCONNECTED", single(EventType.CONNECTION_DEAD).detail().get("status").asText());
+        assertTrue(stream.resubscribed.isEmpty(), "not the watchdog's doing");
+        supervisor.onStatusChange("CONNECTED:WS-STREAMING"); // IG is back
+        supervisor.sweep();
+        assertEquals(1, count(EventType.RECONNECT), "the outage the rebuild opened closes on the resume");
+    }
+
+    @Test
+    void aServerErrorIsRecordedAndTheDisconnectThatPrecedesItRebuildsOnce() {
+        stream.duringRebuild = () -> clock.advance(Duration.ofSeconds(61)); // a paced re-login blocks
+        supervisor.onStatusChange("DISCONNECTED"); // the SDK's order: the status first…
+        supervisor.onServerError(2, "Requested Adapter Set not available"); // …then its explanation
+
+        supervisor.sweep();
+
+        assertEquals(1, stream.rebuilds, "one death, one rebuild — however long the re-login blocked");
+        assertEquals(1, count(EventType.CONNECTION_DEAD));
+        assertEquals(1, count(EventType.IG_API_ERROR), "the explanation is still recorded");
+    }
+
     // --- helpers + fakes --------------------------------------------------------------------
 
     /** jitter = 1.0 → deterministic backoff; Sleeper/interval unused (tests drive sweep() directly). */

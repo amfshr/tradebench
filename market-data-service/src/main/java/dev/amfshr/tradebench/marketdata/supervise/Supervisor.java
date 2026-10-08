@@ -173,6 +173,8 @@ public final class Supervisor implements StreamObserver, BeltView, Runnable {
             if (observation instanceof Observation.Status status) {
                 applyStatus(status);
             } else if (observation instanceof Observation.ServerError(int code, String message, Instant at)) {
+                // Recorded, not acted on: the SDK sends the bare DISCONNECTED first and this is its
+                // explanation; a second trigger here would rebuild twice after a blocking re-login.
                 record(ServiceEvent.of(EventType.IG_API_ERROR, at)
                         .withDetail(MAPPER.createObjectNode()
                                 .put("code", code)
@@ -296,6 +298,12 @@ public final class Supervisor implements StreamObserver, BeltView, Runnable {
         streaming = ReconnectClassifier.isStreaming(status.status());
         if (streaming) {
             rebuilding = false;
+        }
+        if (ReconnectClassifier.isTerminal(status.status())) {
+            // The client gave up (playbook §3.1): no retry substate will ever escalate this, and the
+            // watchdog stands down on closed markets — so this rebuild is ours to start, paced as ever.
+            rebuild(EventType.CONNECTION_DEAD, Instant.ofEpochMilli(status.wallMillis()), null,
+                    MAPPER.createObjectNode().put("status", status.status()));
         }
     }
 

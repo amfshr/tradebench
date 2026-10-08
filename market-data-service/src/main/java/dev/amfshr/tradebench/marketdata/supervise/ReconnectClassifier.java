@@ -69,6 +69,13 @@ public final class ReconnectClassifier {
         return status.startsWith("CONNECTED:") && !status.endsWith("STREAM-SENSING");
     }
 
+    /** The client has given up for good: a bare {@code DISCONNECTED} — never the two retry
+     * substates, which the escalator paces (playbook §3.1: "a bare DISCONNECTED is also dead"). The
+     * Supervisor rebuilds on it at once, backoff-paced, because nothing else can (E1-T10 #2). */
+    public static boolean isTerminal(String status) {
+        return "DISCONNECTED".equals(status);
+    }
+
     /** Returns the outage summary when this status change ends one; else null. */
     public @Nullable Reconnect onStatus(String status, long monotonicNanos, long wallMillis) {
         if (status.startsWith("DISCONNECTED") && !closing) {

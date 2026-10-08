@@ -139,7 +139,13 @@ once logged as "0.4s offline"). Two more notes from `noteFor`: `CONNECTED:HTTP-P
 is flagged — a silent WebSocket→polling downgrade degrades latency and often precedes a
 drop — and an intentional `close()` sets `closing` so the farewell `DISCONNECTED` is
 hushed. That last one guards a principle, not a log line: **quiet must stay meaningful**
-(P9's inverse — if routine shutdowns print scare-lines, real ones stop being read).
+(P9's inverse — if routine shutdowns print scare-lines, real ones stop being read). And one
+static rule beside `isStreaming`: `isTerminal` — a bare `DISCONNECTED`, the client having given up
+for good (playbook §3.1), never the two retry substates the escalator paces. The Supervisor rebuilds
+on it at once, backoff-paced, because nothing else can: no substate will escalate it, and the
+watchdog stands down on closed markets (E1-T10 #2). The `onServerError` that the SDK sends after it
+is recorded as the explanation, not acted on — a second trigger would rebuild twice after a
+blocking re-login.
 
 **`WitnessQuarantine`** — §3.5's blast-radius rule for the multi-market future, built now
 so N=1 is the degenerate case rather than a rewrite. The inference: a subscription

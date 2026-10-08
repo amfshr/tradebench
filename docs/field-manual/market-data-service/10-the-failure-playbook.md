@@ -39,6 +39,7 @@ re-serves them).
 |---|---|---|---|---|---|
 | The server stops talking but the socket stays up (*silent while connected*, the 2h56m scar) | `StalenessWatchdog`: no tick for **90s** while the market's `DLG_FLAG` says open; or ticks flowing but no sealed bar for **210s** (a dead CHART leg) | per-market **resubscribe** ×2 (T+90s, then T+210s — the grace doubles before each wait: 120s, 240s), then a session **rebuild** (T+450s); ≥2 markets stale together → rebuild at once | ticks from the stop to the resume; a bar gap | `WATCHDOG_STALE` events; `RECONNECT{replayed=false}` on resume; `BAR_GAP` | heal backfills the bars |
 | The SDK hangs in `DISCONNECTED:WILL-RETRY` (it gave up without saying so) | `StuckSubstateEscalator`: **120s** in WILL-RETRY, **300s** in TRYING-RECOVERY (the server may still replay there) | **rebuild**, paced by backoff | as above | `STUCK_SUBSTATE_ESCALATED` | heal |
+| The client gives up for good — a bare `DISCONNECTED` (the server's refusal follows it as `onServerError`) | `ReconnectClassifier.isTerminal`: exactly `DISCONNECTED`, never the two retry substates | **rebuild now**, paced by backoff, the budget starts — no substate will ever escalate this, and the watchdog stands down on closed markets | the outage | `CONNECTION_DEAD{status}` + `IG_API_ERROR{code, message}` (recorded, not a second trigger) | heal |
 | A normal drop and reconnect | `ReconnectClassifier` on any streaming substate | nothing — report | none if the server replayed (no WILL-RETRY seen); otherwise the outage's data | `RECONNECT{replayed, wallOutage, awakeOutage, hostSlept}` | heal when `replayed=false` |
 | One market's subscription is rejected three times while another market's pair is confirmed | `WitnessQuarantine` (§3.5) | **quarantine** that market — unsubscribe its pair, leave it off, and ignore its later rejections (the pair's other leg, a late one — never re-admitted, never re-subscribed); exit is restart-only | that market until the next restart | `MARKET_QUARANTINED` | restart |
 | The same, but no healthy witness | `WitnessQuarantine` | treat as session-shaped: **rebuild** | the outage | `SUBSCRIPTION_REJECTED` | heal |
@@ -325,8 +326,7 @@ in-ticket record.
   `exit(1)` (never on a stop); the pool's `connectionTimeout` 5s. Logged as **D28**.
 - **Pending:** the T7 restart-policy contract; B1 multi-job.
 - **Known deviations (the 2026-10-05 independent review of the whole belt — fixed by E1-T10; the
-  policy above is unchanged):** a bare
-  `DISCONNECTED` or `onServerError` with CLOSED flags triggers no rebuild (#2); the watchdog's 90s
+  policy above is unchanged):** the watchdog's 90s
   verdict can pre-empt the 300s replay patience (#5); after a failed reconnect the rebuild ceiling can
   beat the ten-minute budget (#18); the CLOSED stand-down is unbounded (#3 — bounded by **D29**).
   The record: `.claude/reviews/2026-10-05-pr14-resilience-belt.md`.
