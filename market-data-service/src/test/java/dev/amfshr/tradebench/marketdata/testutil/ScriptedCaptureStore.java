@@ -13,8 +13,9 @@ import dev.amfshr.tradebench.marketdata.store.PersistenceException;
  * A {@link CaptureStore} with {@code PostgresStore}'s failure semantics and none of its SQL: bars
  * land on write, ticks batch and land on flush, a tick is held before anything can fail, every
  * write and flush is refused after a failure until {@link #recover()}, {@link #down} makes every
- * write fail retryably — Postgres is away — for as long as a scenario says, and {@link #terminal}
- * makes the next one fail for a reason no retry will fix.
+ * write fail retryably — Postgres is away — for as long as a scenario says, {@link #rejectWrites}
+ * refuses writes while {@link #recover()} still succeeds (as the real one does without a round
+ * trip), and {@link #terminal} makes the next write fail for a reason no retry will fix.
  */
 public final class ScriptedCaptureStore implements CaptureStore {
 
@@ -22,11 +23,14 @@ public final class ScriptedCaptureStore implements CaptureStore {
     private static final String BLIP = "08006";
     /** Undefined table — nothing a retry can fix. */
     private static final String SCHEMA = "42P01";
+    /** Disk full — retryable by the taxonomy, invisible to a recovery that only reconnects. */
+    private static final String DISK_FULL = "53100";
 
     /** What landed, in order: {@code bar@<startUtc seconds>} / {@code tick@<timestamp millis>}. */
     public final List<String> landed = new ArrayList<>();
     public boolean down;
     public boolean terminal;
+    public boolean rejectWrites;
     public int recoveries;
     public int failures;
 
@@ -92,6 +96,9 @@ public final class ScriptedCaptureStore implements CaptureStore {
         }
         if (down) {
             fail(what, BLIP);
+        }
+        if (rejectWrites) {
+            fail(what, DISK_FULL);
         }
     }
 

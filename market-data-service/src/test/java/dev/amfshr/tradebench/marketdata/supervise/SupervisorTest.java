@@ -88,22 +88,6 @@ class SupervisorTest {
         assertEquals(1, count(EventType.STUCK_SUBSTATE_ESCALATED));
     }
 
-    @Test
-    void rebuildsHoldOffWithinTheBackoffWindow() {
-        supervisor.onStatusChange(WILL_RETRY);
-        supervisor.sweep();
-        clock.advance(Duration.ofSeconds(120));
-        supervisor.sweep(); // first rebuild; next is spaced by delayFor(1) = 5s (floor)
-        assertEquals(1, stream.rebuilds);
-
-        clock.advance(Duration.ofSeconds(3)); // still inside the 5s window
-        supervisor.sweep();
-        assertEquals(1, stream.rebuilds); // paced — no second rebuild
-
-        clock.advance(Duration.ofSeconds(2)); // exactly the 5s floor — "at least", so this proceeds
-        supervisor.sweep();
-        assertEquals(2, stream.rebuilds);
-    }
 
     @Test
     void rebuildsAreBackoffPacedThenGiveUpLoud() {
@@ -362,66 +346,10 @@ class SupervisorTest {
         assertEquals(0, stream.rebuilds);
     }
 
-    @Test
-    void hostSleepIsAnnotatedNotCountedAsAWildOutage() {
-        supervisor.onStatusChange(TRYING_RECOVERY);
-        clock.advanceWallOnly(Duration.ofMinutes(16)); // lid closed — wall jumps, monotonic frozen
-        clock.advance(Duration.ofMillis(400));         // a sliver of real elapsed time on wake
-        supervisor.onStatusChange(STREAMING);
-        supervisor.sweep();
 
-        ServiceEvent reconnect = single(EventType.RECONNECT);
-        assertTrue(reconnect.detail().get("hostSlept").asBoolean());
-        assertTrue(reconnect.detail().get("replayed").asBoolean());
-    }
 
-    @Test
-    void openMarketGoneTickSilentIsResubscribed() {
-        supervisor.watch(DAX);
-        freshness.flag.put(DAX, "DEAL");
-        supervisor.sweep(); // baseline the watchdog's per-round clock
-        advanceAndSweep(Duration.ofSeconds(95)); // past the 90s tick-silent window, market still open
 
-        assertEquals(List.of(DAX), stream.resubscribed);
-        assertEquals(0, stream.rebuilds);
-        assertEquals(1, count(EventType.WATCHDOG_STALE));
-    }
 
-    @Test
-    void closedMarketSilenceStandsDown() {
-        supervisor.watch(DAX);
-        freshness.flag.put(DAX, "CLOSED");
-        supervisor.sweep();
-        advanceAndSweep(Duration.ofSeconds(95));
-
-        assertTrue(stream.resubscribed.isEmpty()); // quiet because shut, not a dead feed
-        assertEquals(0, stream.rebuilds);
-        assertTrue(ofType(EventType.WATCHDOG_STALE).isEmpty());
-    }
-
-    @Test
-    void hostSleepRebaselinesRatherThanAlarming() {
-        supervisor.watch(DAX);
-        freshness.flag.put(DAX, "DEAL");
-        supervisor.sweep();
-        clock.advanceWallOnly(Duration.ofMinutes(16)); // lid closed — wall jumps, monotonic frozen
-        clock.advance(Duration.ofMillis(400));
-        supervisor.sweep();
-
-        assertTrue(stream.resubscribed.isEmpty());
-        assertEquals(0, stream.rebuilds);
-    }
-
-    @Test
-    void persistentSilenceEscalatesResubscribeThenRebuild() {
-        supervisor.watch(DAX);
-        freshness.flag.put(DAX, "DEAL");
-        supervisor.sweep();
-        advanceAndSweep(Duration.ofSeconds(460)); // crosses both resubscribe graces, then the rebuild
-
-        assertEquals(2, stream.resubscribed.size()); // maxResubscribes, then it escalates
-        assertEquals(1, stream.rebuilds);
-    }
 
     @Test
     void twoMarketsStaleTogetherRebuildTheSession() {
@@ -450,19 +378,6 @@ class SupervisorTest {
         assertEquals(List.of(DAX), stream.resubscribed);
     }
 
-    @Test
-    void subscriptionFailingThriceWithAHealthyWitnessIsQuarantinedNotRebuilt() {
-        supervisor.watch(DAX);
-        supervisor.watch(NASDAQ);
-        supervisor.onSubscribed(NASDAQ, WitnessQuarantine.Kind.PRICE);
-        supervisor.onSubscribed(NASDAQ, WitnessQuarantine.Kind.CHART); // a fully-confirmed witness
-        failToTheStrikeCeiling(DAX);
-        supervisor.sweep();
-
-        assertEquals(List.of(DAX), stream.quarantined); // isolated — a confirmed peer proves the session fine
-        assertEquals(0, stream.rebuilds);
-        assertEquals(1, count(EventType.MARKET_QUARANTINED));
-    }
 
     @Test
     void subscriptionFailingThriceWithNoWitnessRebuildsTheSession() {
@@ -500,16 +415,6 @@ class SupervisorTest {
         assertEquals(1, stream.rebuilds); // but refused → double-delivery risk → rebuild
     }
 
-    @Test
-    void aSubCeilingRejectionIsRetriedInPlaceNotLeftToTheWatchdog() {
-        supervisor.watch(DAX);
-        supervisor.onSubscriptionError(DAX, 40, "rejected"); // strike 1 of 3
-        supervisor.sweep();
-
-        assertEquals(List.of(DAX), stream.resubscribed, "surgical re-attempt of the failing pair");
-        assertEquals(0, stream.rebuilds);
-        assertTrue(stream.quarantined.isEmpty());
-    }
 
     @Test
     void aRebuildResetsTheStrikesSoTheNewSessionIsJudgedAfresh() {
@@ -610,35 +515,6 @@ class SupervisorTest {
         assertFalse(ReconnectClassifier.isTerminal("STALLED"));
     }
 
-    @Test
-    void aBareDisconnectRebuildsEvenWhenEveryMarketReadsClosed() {
-        supervisor.watch(DAX);
-        supervisor.watch(NASDAQ);
-        freshness.flag.put(DAX, "CLOSED");    // overnight: the watchdog stands down on both markets,
-        freshness.flag.put(NASDAQ, "CLOSED"); // and no tick will arrive to change that
-        supervisor.sweep();
-        supervisor.onStatusChange("DISCONNECTED"); // the client gave up — no substate will ever escalate
-
-        supervisor.sweep();
-
-        assertEquals(1, stream.rebuilds, "nothing else can start this recovery");
-        assertEquals("DISCONNECTED", single(EventType.CONNECTION_DEAD).detail().get("status").asText());
-        assertTrue(stream.resubscribed.isEmpty(), "not the watchdog's doing");
-
-        clock.advance(Duration.ofSeconds(1));
-        supervisor.onStatusChange("DISCONNECTED"); // the rebuilt connection is refused too
-        supervisor.sweep();
-        assertEquals(1, stream.rebuilds, "inside the 5s floor: paced, but not forgotten");
-        clock.advance(Duration.ofSeconds(4));
-        supervisor.sweep(); // no new status arrives — the latch asks again
-        assertEquals(2, stream.rebuilds, "exactly the floor: the ladder climbs on its own");
-
-        supervisor.onStatusChange("CONNECTED:WS-STREAMING"); // IG is back
-        supervisor.sweep();
-        ServiceEvent resume = single(EventType.RECONNECT);
-        assertFalse(resume.detail().get("replayed").asBoolean(),
-                "a rebuild tears the buffer down — a heal is owed (the ladder, not a bare reconnect)");
-    }
 
     @Test
     void aServerErrorAloneIsADeathToo() {
@@ -651,18 +527,6 @@ class SupervisorTest {
         assertEquals(1, count(EventType.IG_API_ERROR), "and it is still recorded as itself");
     }
 
-    @Test
-    void aServerErrorIsRecordedAndTheDisconnectThatPrecedesItRebuildsOnce() {
-        stream.duringRebuild = () -> clock.advance(Duration.ofSeconds(61)); // a paced re-login blocks
-        supervisor.onStatusChange("DISCONNECTED"); // the SDK's order: the status first…
-        supervisor.onServerError(2, "Requested Adapter Set not available"); // …then its explanation — one death
-
-        supervisor.sweep();
-
-        assertEquals(1, stream.rebuilds, "one death, one rebuild — however long the re-login blocked");
-        assertEquals(1, count(EventType.CONNECTION_DEAD));
-        assertEquals(1, count(EventType.IG_API_ERROR), "the explanation is still recorded");
-    }
 
     // --- helpers + fakes --------------------------------------------------------------------
 

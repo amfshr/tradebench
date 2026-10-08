@@ -328,8 +328,36 @@ in-ticket record.
 - **Known deviations (the 2026-10-05 independent review of the whole belt — fixed by E1-T10; the
   policy above is unchanged):** the watchdog's 90s
   verdict can pre-empt the 300s replay patience (#5); after a failed reconnect the rebuild ceiling can
-  beat the ten-minute budget (#18); the CLOSED stand-down is unbounded (#3 — bounded by **D29**).
-  The record: `.claude/reviews/2026-10-05-pr14-resilience-belt.md`.
+  beat the ten-minute budget (#18); the CLOSED stand-down is unbounded (#3 — bounded by **D29**); two
+  markets dying within one sweep of each other get two per-market ladders instead of the session
+  verdict (#33 — found by the scar replay, 2026-10-08). The scenarios awaiting a fix (#3, #4, #5,
+  #6, #8, #20, #33) are `@Disabled` in `BeltScenariosTest`, each enabled by its fix as the exposing
+  test. The record: `.claude/reviews/2026-10-05-pr14-resilience-belt.md`.
+
+## Where this chapter is tested
+
+The table above is executable. The belt's scenario harness (E1-T11) lives in
+`market-data-service/src/test/java/dev/amfshr/tradebench/marketdata/scenario/`: `ScenarioRunner`
+drives the production composition — `CaptureAssembly`, the same wiring `Main` boots — through a
+scripted timeline with no threads and no real waiting. Time is a fake clock's and passes only when
+the pump sleeps; each time it moves, the events now due go onto a fake wire, then every sweep that
+fell due runs, then every heartbeat — chapter 2's callback-thread / sweep-thread hand-off, in one
+deterministic order. A scenario asserts on **five observables** and nothing else: the remedies
+issued on the wire (connect, disconnect, subscribe, unsubscribe — with their offsets), the events
+recorded, the sink writes landed, the heartbeat's rows, and how the run ended. The expected numbers
+are this chapter's, each derived in a comment beside its assertion, so policy drift is a failing
+test.
+
+`BeltScenariosTest` holds two kinds of scenario. Policy scenarios are written in a small Java DSL
+(`Scenario.named(…).markets(…).at(offset, events…)`) with every answer IG gives scripted. Replays
+are captured outages loaded from JSONL (`Replays.load`; the format and the two exporters — the
+prototype's `igtrader` tables and our own `ticks`/`bars_1m` — in
+`market-data-service/src/test/resources/replays/`). The 2026-08-04 scar is the first replay, and
+the heartbeat reading `CONNECTED_STREAMING` through the first minute of its silence is the scar,
+asserted. A scenario for a promise the code does not yet keep is written to this chapter and
+marked `@Disabled("E1-T10 <slice> — finding #n")`; its fix enables it as the exposing test. The
+full captured-outage library, and the same replays through the real `Pump` and `PostgresStore`,
+are E1-T12.
 
 ## The scars this chapter answers
 

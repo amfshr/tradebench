@@ -313,6 +313,13 @@ the policy and the rulings.
 >
 > **Lesson.** A connected socket is not a live feed. The watchdog trusts data freshness over
 > connection status; the stuck-substate escalator forces a rebuild when a substate hangs.
+>
+> **Replayed.** The scar is now a fixture —
+> `market-data-service/src/test/resources/replays/2026-08-04-silent-while-connected.jsonl`, six
+> minutes of the real feed and the first hundred seconds of the silence, run by the scenario
+> harness (chapter 10, *Where this chapter is tested*). Replaying it taught one more thing: the
+> two markets died 584ms apart, straddling a sweep, so the session verdict the playbook promises
+> for markets stale *together* needs together to mean more than one sweep (E1-T10 finding #33).
 
 Silent-while-connected (2h56m) → the escalator and the watchdog's worldview. The remedy
 storm risk → episodes, doubling grace, the session guard. IG's login cache → the backoff

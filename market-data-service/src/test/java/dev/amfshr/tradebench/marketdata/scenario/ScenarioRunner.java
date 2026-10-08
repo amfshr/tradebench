@@ -160,10 +160,11 @@ public final class ScenarioRunner {
                         FakeStreamTransport.Wire.tick(clock.wallInstant().toEpochMilli(), bid, ask, flag));
                 observed.ticksDelivered++;
             }
-            case Event.Bar(String epic, String o, String h, String l, String c) -> {
-                Ohlc ohlc = new Ohlc(new BigDecimal(o), new BigDecimal(h), new BigDecimal(l), new BigDecimal(c));
-                long minute = clock.wallInstant().truncatedTo(ChronoUnit.MINUTES).toEpochMilli();
-                wire.deliver(item(epic, Event.Leg.CHART), FakeStreamTransport.Wire.sealedBar(minute, ohlc, ohlc, null));
+            case Event.Bar(String epic, Event.Quote bid, Event.Quote ask, Instant startUtc) -> {
+                Instant start = startUtc != null ? startUtc
+                        : clock.wallInstant().truncatedTo(ChronoUnit.MINUTES).minus(Duration.ofMinutes(1));
+                wire.deliver(item(epic, Event.Leg.CHART),
+                        FakeStreamTransport.Wire.sealedBar(start.toEpochMilli(), ohlc(bid), ohlc(ask), null));
                 observed.barsDelivered++;
             }
             case Event.DbDown() -> {
@@ -174,11 +175,13 @@ public final class ScenarioRunner {
             }
             case Event.DbUp() -> {
                 sink.down = false;
+                sink.rejectWrites = false;
                 events.failWrites = false;
                 gaps.down = false;
                 status.down = false;
             }
             case Event.DbBroken() -> sink.terminal = true;
+            case Event.DbWritesRefused() -> sink.rejectWrites = true;
             case Event.HostSleep(Duration by) -> clock.advanceWallOnly(by);
             case Event.IgDown() -> {
                 transport.refuseConnects = true;
@@ -213,11 +216,15 @@ public final class ScenarioRunner {
         stopped = true;
     }
 
-    /** What the wire saw since last time: a new connection, new subscriptions, dropped ones. */
+    /** What the wire saw since last time: a new connection, new subscriptions, dropped ones —
+     * and, when the scenario says the server answers, the healthy answer to each new thing. */
     private void observeWire() {
         List<FakeStreamTransport.FakeConnection> connections = transport.connections;
         for (int i = connectionsSeen; i < connections.size(); i++) {
             observed.remedies.add(new Observed.Remedy(now(), "connect", null));
+            if (scenario.serverAnswers) {
+                connections.get(i).listener.onStatusChange(Events.STREAMING);
+            }
         }
         connectionsSeen = connections.size();
         for (FakeStreamTransport.FakeConnection connection : connections) {
@@ -227,6 +234,9 @@ public final class ScenarioRunner {
             for (FakeStreamTransport.Subscribed s : connection.subscriptions) {
                 if (handlesSeen.add(s.handle())) {
                     observed.remedies.add(new Observed.Remedy(now(), "subscribe", s.spec().items().get(0)));
+                    if (scenario.serverAnswers) {
+                        connection.confirm(s.spec().items().get(0));
+                    }
                 }
                 if (!s.handle().active() && inactiveRecorded.add(s.handle())) {
                     observed.remedies.add(new Observed.Remedy(now(), "unsubscribe", s.spec().items().get(0)));
@@ -247,6 +257,10 @@ public final class ScenarioRunner {
         observed.ticksHeldAtEnd = sink.held();
         observed.summary = capture.summary();
         return observed;
+    }
+
+    private static Ohlc ohlc(Event.Quote q) {
+        return new Ohlc(new BigDecimal(q.open()), new BigDecimal(q.high()), new BigDecimal(q.low()), new BigDecimal(q.close()));
     }
 
     private Duration now() {

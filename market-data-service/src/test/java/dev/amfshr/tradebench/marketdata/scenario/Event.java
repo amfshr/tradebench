@@ -1,6 +1,9 @@
 package dev.amfshr.tradebench.marketdata.scenario;
 
 import java.time.Duration;
+import java.time.Instant;
+
+import org.jspecify.annotations.Nullable;
 
 /** One thing the world does to the pipeline at an offset of a scenario — the fixture vocabulary
  * (E1-T11): the stream's statuses and subscription outcomes, data, the database, the host, the
@@ -29,8 +32,13 @@ public sealed interface Event {
     record Tick(String epic, String bid, String ask, String dealFlag) implements Event {
     }
 
-    /** A sealed 1-minute candle on the CHART leg, for the current wall minute. */
-    record Bar(String epic, String open, String high, String low, String close) implements Event {
+    /** One side of a candle, as the wire carries it. */
+    record Quote(String open, String high, String low, String close) {
+    }
+
+    /** A sealed 1-minute candle on the CHART leg — for the minute that just closed, unless the
+     * fixture names the candle's own start (a replay does). */
+    record Bar(String epic, Quote bid, Quote ask, @Nullable Instant startUtc) implements Event {
     }
 
     /** Postgres goes away: the sink, the event log and the status store all fail retryably. */
@@ -38,6 +46,11 @@ public sealed interface Event {
     }
 
     record DbUp() implements Event {
+    }
+
+    /** Postgres accepts connections but refuses every write (disk full, SQLSTATE 53100): a blip
+     * by the taxonomy, yet one a reconnect alone cannot cure. */
+    record DbWritesRefused() implements Event {
     }
 
     /** Postgres answers, but wrongly: the next write fails for a reason no retry will fix (a

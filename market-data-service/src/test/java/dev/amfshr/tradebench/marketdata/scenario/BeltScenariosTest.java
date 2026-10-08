@@ -1,10 +1,12 @@
 package dev.amfshr.tradebench.marketdata.scenario;
 
 import static dev.amfshr.tradebench.marketdata.scenario.Events.DISCONNECTED;
+import static dev.amfshr.tradebench.marketdata.scenario.Events.TRYING_RECOVERY;
 import static dev.amfshr.tradebench.marketdata.scenario.Events.WILL_RETRY;
 import static dev.amfshr.tradebench.marketdata.scenario.Events.bar;
 import static dev.amfshr.tradebench.marketdata.scenario.Events.dbBroken;
 import static dev.amfshr.tradebench.marketdata.scenario.Events.dbDown;
+import static dev.amfshr.tradebench.marketdata.scenario.Events.dbWritesRefused;
 import static dev.amfshr.tradebench.marketdata.scenario.Events.dbUp;
 import static dev.amfshr.tradebench.marketdata.scenario.Events.hostSleep;
 import static dev.amfshr.tradebench.marketdata.scenario.Events.reject;
@@ -14,6 +16,7 @@ import static dev.amfshr.tradebench.marketdata.scenario.Events.stop;
 import static dev.amfshr.tradebench.marketdata.scenario.Events.streaming;
 import static dev.amfshr.tradebench.marketdata.scenario.Events.subscribed;
 import static dev.amfshr.tradebench.marketdata.scenario.Events.tick;
+import static dev.amfshr.tradebench.marketdata.scenario.Events.ticks;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -21,15 +24,16 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import java.time.Duration;
 import java.util.List;
 
+import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 
 import dev.amfshr.tradebench.marketdata.events.EventType;
 import dev.amfshr.tradebench.marketdata.events.StreamState;
 
 /**
- * The belt as one system, under scripted outages, asserting chapter 10's promises on the five
- * observables (E1-T11 increment 2 — the scenarios the code honours today; the ones it does not
- * yet are increment 3, each {@code @Disabled} naming its E1-T10 finding).
+ * The belt as one system, under scripted outages and one captured one, asserting chapter 10's
+ * promises on the five observables (E1-T11). A scenario for a promise the code does not yet keep
+ * is {@code @Disabled} naming its E1-T10 finding; its fix enables it as the exposing test.
  */
 class BeltScenariosTest {
 
@@ -102,14 +106,16 @@ class BeltScenariosTest {
                 .at(s(0), streaming()).at(s(0), subscribed(DAX)).at(s(0), subscribed(NASDAQ))
                 .at(s(1), tick(DAX, "CLOSED"), tick(NASDAQ, "CLOSED"))
                 .at(s(30), status(DISCONNECTED))
-                .at(s(45), streaming()) // IG is back: the rebuilt connection streams
+                .at(s(31), status(DISCONNECTED)) // the rebuilt connection is refused too
+                .at(s(45), streaming()) // IG is back: the third connection streams
                 .until(s(120)).build();
 
         Observed o = ScenarioRunner.run(overnight);
 
-        assertEquals(List.of(0L, 30L), o.secondsOf("connect"), "the rebuild, at once, paced as ever");
-        assertEquals(List.of(30L), o.secondsOf("disconnect"), "the dead session dropped first");
-        assertEquals(1, o.events(EventType.CONNECTION_DEAD).size());
+        assertEquals(List.of(0L, 30L, 35L), o.secondsOf("connect"),
+                "the rebuild at once; the refusal at 31 is paced to exactly the 5s floor, and not forgotten");
+        assertEquals(List.of(30L, 35L), o.secondsOf("disconnect"), "each dead session dropped first");
+        assertEquals(2, o.events(EventType.CONNECTION_DEAD).size(), "one per death");
         assertTrue(o.events(EventType.IG_API_ERROR).isEmpty(), "nothing explained it");
         assertTrue(o.events(EventType.WATCHDOG_STALE).isEmpty(), "not the watchdog's doing — it was stood down");
         Observed.Seen resume = o.events(EventType.RECONNECT).get(0);
@@ -121,13 +127,14 @@ class BeltScenariosTest {
 
     @Test
     void aServerRefusalIsADeathTooAndTheFirstSignalWins() throws Exception {
-        // T10 A1: onServerError is a death as much as the bare DISCONNECTED the SDK sends after it.
-        // The explanation is recorded, the death is latched once — from the first signal — and the
-        // next sweep rebuilds; the rebuilt pair is confirmed and capture resumes.
+        // T10 A1: the SDK's order is the bare DISCONNECTED first, then onServerError explaining it.
+        // Both are deaths; the first signal dates and describes the one death, the explanation is
+        // its own record, the next sweep rebuilds once, the rebuilt pair is confirmed and capture
+        // resumes. (The server error alone is a death too — SupervisorTest keeps that rule.)
         Scenario refused = Scenario.named("the server refuses the session").markets(DAX)
                 .at(s(0), streaming()).at(s(0), subscribed(DAX))
                 .every(s(1), s(1), s(30), t -> tick(DAX))
-                .at(s(30), serverError(2, "Requested Adapter Set not available"), status(DISCONNECTED))
+                .at(s(30), status(DISCONNECTED), serverError(2, "Requested Adapter Set not available"))
                 .at(s(45), streaming()).at(s(45), subscribed(DAX))
                 .every(s(1), s(46), s(90), t -> tick(DAX))
                 .until(s(90)).build();
@@ -137,8 +144,9 @@ class BeltScenariosTest {
         assertEquals(List.of(0L, 30L), o.secondsOf("connect"));
         assertEquals(1, o.events(EventType.IG_API_ERROR).size(), "the explanation is recorded");
         assertEquals(1, o.events(EventType.CONNECTION_DEAD).size(), "one death, two signals");
-        assertEquals(2, o.events(EventType.CONNECTION_DEAD).get(0).detail().path("code").asInt(-1),
-                "latched from the server error, not from the status that followed");
+        Observed.Seen death = o.events(EventType.CONNECTION_DEAD).get(0);
+        assertEquals("DISCONNECTED", death.detail().path("status").asText(), "dated and described by the first signal");
+        assertTrue(death.detail().path("code").isMissingNode(), "the explanation that followed did not overwrite it");
         assertEquals(45L, o.events(EventType.RECONNECT).get(0).at().toSeconds());
         assertEquals(o.ticksDelivered, o.landed.size(), "capture resumed on the rebuilt pair");
         assertTrue(o.exits.isEmpty());
@@ -253,6 +261,244 @@ class BeltScenariosTest {
         assertEquals(29, o.landed.size(), "every tick but the one that met the broken schema");
         assertTrue(o.log.stream().anyMatch(line -> line.contains("pump failure at shutdown")));
         assertTrue(o.events(EventType.SINK_FAILURE).isEmpty(), "not a blip — no hold, no recovery");
+    }
+
+    @Test
+    void oneMarketGoneSilentClimbsItsOwnLadderWhileItsNeighbourStreams() throws Exception {
+        // Chapter 10, row one, the per-market half: DAX stops ticking at 60 while NASDAQ streams on.
+        // Resubscribe at +90 (150), the grace doubles to 120 → resubscribe at +210 (270), the grace
+        // doubles to 240 → the session is rebuilt at +450 (510). NASDAQ is never touched until then.
+        Scenario silent = Scenario.named("one market silent, one streaming").markets(DAX, NASDAQ)
+                .at(s(0), streaming()).at(s(0), subscribed(DAX)).at(s(0), subscribed(NASDAQ))
+                .every(s(1), s(1), s(61), t -> tick(DAX))
+                .every(s(1), s(1), s(520), t -> tick(NASDAQ))
+                .every(s(60), s(60), s(520), t -> bar(NASDAQ))
+                .at(s(151), subscribed(DAX)).at(s(271), subscribed(DAX)) // IG confirms each fresh pair
+                .until(s(520)).build();
+
+        Observed o = ScenarioRunner.run(silent);
+
+        assertEquals(List.of(150L, 150L, 270L, 270L), o.secondsOf("unsubscribe"), "two surgical retries, DAX only");
+        assertTrue(o.remedies("unsubscribe").stream().allMatch(r -> r.item().contains(DAX)));
+        assertEquals(List.of(0L, 510L), o.secondsOf("connect"), "then the session");
+        assertEquals(List.of("resubscribe", "resubscribe"),
+                o.events(EventType.WATCHDOG_STALE).stream().filter(e -> e.detail() != null && e.detail().has("action"))
+                        .map(e -> e.detail().get("action").asText()).toList());
+        assertEquals(3, o.events(EventType.WATCHDOG_STALE).size(), "the rebuild is the third verdict");
+        assertEquals(o.ticksDelivered + o.barsDelivered, o.landed.size(), "NASDAQ's capture never blinked");
+        assertTrue(o.exits.isEmpty());
+    }
+
+    @Test
+    void theScarReplaysAsCapturedAndTheHeartbeatSaysStreamingThroughTheSilence() throws Exception {
+        // The 2026-08-04 scar through the JSONL loader: six minutes of the real feed, then both
+        // markets fall silent within 584ms of each other while the session reads streaming. The
+        // data invariants hold, nothing is remedied before the watchdog's 90s, and the heartbeat
+        // says CONNECTED_STREAMING through the first minute of the silence — which is the scar.
+        Scenario scar = Replays.load("/replays/2026-08-04-silent-while-connected.jsonl").build();
+
+        Observed o = ScenarioRunner.run(scar);
+
+        assertEquals(3177, o.ticksDelivered, "every tick in the fixture");
+        assertEquals(10, o.barsDelivered, "five candles per market, sealed where the feed was alive");
+        assertEquals(o.ticksDelivered + o.barsDelivered, o.landed.size(), "landed exactly once");
+        assertEquals(0, o.ticksHeldAtEnd);
+        assertTrue(o.events(EventType.BAR_GAP).isEmpty(), "consecutive candles — no gap");
+        assertTrue(o.remedies.stream().filter(r -> r.at().toSeconds() > 0 && r.at().toSeconds() < 450).toList().isEmpty(),
+                "quiet through the healthy stretch and the first 89s of the silence");
+        assertTrue(o.heartbeats.stream().filter(h -> h.at().toSeconds() <= 420)
+                .allMatch(h -> h.state() == StreamState.CONNECTED_STREAMING), "the socket was up; the feed was dead");
+        assertTrue(o.exits.isEmpty());
+    }
+
+    @Test
+    @Disabled("E1-T10 A2 — finding #33: the session verdict needs both markets stale in the same sweep (found by this replay)")
+    void theScarsTwoDeadMarketsEarnOneSessionVerdictAtNinetySeconds() throws Exception {
+        // Chapter 10: ≥2 markets stale together → rebuild at once. NASDAQ's last tick is 584ms after
+        // DAX's (360.584 vs 360.000), so at the sweep at 450 only DAX is 90s silent and gets market
+        // surgery; at 451 NASDAQ is stale but DAX has just been remedied. The session verdict should
+        // come at 451 — the second market's 90s mark — not two per-market ladders.
+        Scenario scar = Replays.load("/replays/2026-08-04-silent-while-connected.jsonl").build();
+
+        Observed o = ScenarioRunner.run(scar);
+
+        assertEquals(List.of(0L, 451L), o.secondsOf("connect"), "one session rebuild when the second market is 90s silent");
+        assertTrue(o.events(EventType.WATCHDOG_STALE).stream().noneMatch(e -> "resubscribe".equals(e.detail().path("action").asText())),
+                "no market surgery — the two died together");
+    }
+
+    @Test
+    @Disabled("E1-T10 A2 — finding #5: the watchdog's 90s verdict pre-empts the 300s replay patience")
+    void tryingRecoveryIsGivenItsThreeHundredSecondsBeforeAnyRebuild() throws Exception {
+        // Chapter 10 / 08: in TRYING-RECOVERY the server may still complete a lossless replay, so
+        // the escalator waits 300s. Two open markets go silent with it; the watchdog must stand
+        // down while the connection is not streaming, or its 90s session verdict throws the
+        // replay away at 150.
+        Scenario patience = Scenario.named("trying recovery for 300s").markets(DAX, NASDAQ)
+                .at(s(0), streaming()).at(s(0), subscribed(DAX)).at(s(0), subscribed(NASDAQ))
+                .every(s(1), s(1), s(60), t -> tick(DAX)).every(s(1), s(1), s(60), t -> tick(NASDAQ))
+                .at(s(60), status(TRYING_RECOVERY))
+                .at(s(361), streaming()).at(s(361), subscribed(DAX)).at(s(361), subscribed(NASDAQ))
+                .every(s(1), s(362), s(400), t -> tick(DAX))
+                .until(s(400)).build();
+
+        Observed o = ScenarioRunner.run(patience);
+
+        assertEquals(List.of(0L, 360L), o.secondsOf("connect"), "the escalator's 300s, not the watchdog's 90s");
+        assertTrue(o.events(EventType.WATCHDOG_STALE).isEmpty(), "stood down while not streaming");
+        assertEquals(1, o.events(EventType.STUCK_SUBSTATE_ESCALATED).size());
+    }
+
+    @Test
+    @Disabled("E1-T10 A2 — finding #5: the watchdog fires on a connection that is not streaming")
+    void aDeadSocketIsTheEscalatorsToRebuildAtOneHundredAndTwentySeconds() throws Exception {
+        // ⑥ The socket dies; the SDK says WILL-RETRY and hangs. The escalator rebuilds at +120
+        // (180). The watchdog must not resubscribe at +90 (150) on a connection with no session —
+        // the market is not quiet, the wire is gone.
+        Scenario deadSocket = Scenario.named("dead socket").markets(DAX)
+                .at(s(0), streaming()).at(s(0), subscribed(DAX))
+                .every(s(1), s(1), s(60), t -> tick(DAX))
+                .at(s(60), status(WILL_RETRY))
+                .at(s(181), streaming()).at(s(181), subscribed(DAX))
+                .every(s(1), s(182), s(240), t -> tick(DAX))
+                .until(s(240)).build();
+
+        Observed o = ScenarioRunner.run(deadSocket);
+
+        assertEquals(List.of(0L, 180L), o.secondsOf("connect"), "the escalator's 120s");
+        assertTrue(o.events(EventType.WATCHDOG_STALE).isEmpty(), "no resubscribe on a dead wire");
+        assertEquals(1, o.events(EventType.STUCK_SUBSTATE_ESCALATED).size());
+        assertFalse(o.events(EventType.RECONNECT).get(0).detail().get("replayed").asBoolean());
+        assertEquals(o.ticksDelivered, o.landed.size());
+    }
+
+    @Test
+    @Disabled("E1-T10 A2 — finding #4: Judgment.Wait is never re-armed")
+    void aRejectionHeldForAnUnconfirmedWitnessIsJudgedWhenTheWitnessConfirms() throws Exception {
+        // §3.5: DAX strikes out at 3 while NASDAQ is still inside its confirm window — wait, never
+        // race a fast rejection into a session verdict. When NASDAQ confirms at 20 the held verdict
+        // is rendered at once: a confirmed witness means quarantine at 20, not silence until the
+        // watchdog's 90s.
+        Scenario held = Scenario.named("a verdict held for its witness").markets(DAX, NASDAQ)
+                .at(s(0), streaming())
+                .at(s(1), reject(DAX, Event.Leg.PRICE, 40))
+                .at(s(2), reject(DAX, Event.Leg.PRICE, 40))
+                .at(s(3), reject(DAX, Event.Leg.PRICE, 40))
+                .at(s(20), subscribed(NASDAQ))
+                .every(s(1), s(21), s(120), t -> tick(NASDAQ))
+                .until(s(120)).build();
+
+        Observed o = ScenarioRunner.run(held);
+
+        assertEquals(List.of(1L, 1L, 2L, 2L, 20L, 20L), o.secondsOf("unsubscribe"),
+                "two surgical retries, then the pair dropped the moment the witness confirmed");
+        assertEquals(20L, o.events(EventType.MARKET_QUARANTINED).get(0).at().toSeconds());
+        assertTrue(o.events(EventType.WATCHDOG_STALE).isEmpty(), "not left to the watchdog");
+        assertEquals(List.of(0L), o.secondsOf("connect"));
+    }
+
+    @Test
+    @Disabled("E1-T10 A2 — finding #8: strikes are counted per leg rejection, not per attempt")
+    void aMarketWhoseBothLegsAreRejectedGetsItsTwoSurgicalRetries() throws Exception {
+        // §3.5: initial subscribe + two surgical retries, a fresh pair each time. A bad epic has
+        // both legs rejected per attempt; that is one strike, not two — so the quarantine comes at
+        // the third attempt (3), not after one retry (2), and never two resubscribes in one sweep.
+        Scenario badEpic = Scenario.named("both legs rejected").markets(DAX, NASDAQ)
+                .at(s(0), streaming()).at(s(0), subscribed(NASDAQ))
+                .at(s(1), reject(DAX, Event.Leg.PRICE, 40), reject(DAX, Event.Leg.CHART, 40))
+                .at(s(2), reject(DAX, Event.Leg.PRICE, 40), reject(DAX, Event.Leg.CHART, 40))
+                .at(s(3), reject(DAX, Event.Leg.PRICE, 40), reject(DAX, Event.Leg.CHART, 40))
+                .every(s(1), s(1), s(60), t -> tick(NASDAQ))
+                .until(s(60)).build();
+
+        Observed o = ScenarioRunner.run(badEpic);
+
+        assertEquals(List.of(1L, 1L, 2L, 2L, 3L, 3L), o.secondsOf("unsubscribe"));
+        assertEquals(List.of(0L, 0L, 0L, 0L, 1L, 1L, 2L, 2L), o.secondsOf("subscribe"));
+        assertEquals(1, o.events(EventType.MARKET_QUARANTINED).size());
+        assertEquals(3L, o.events(EventType.MARKET_QUARANTINED).get(0).at().toSeconds());
+    }
+
+    @Test
+    @Disabled("E1-T10 A2 — finding #3: the CLOSED stand-down is unbounded (bounded by D29)")
+    void aWeekendZombieBehindAClosedFlagIsFoundByTheTwelveHourTeachingResubscribe() throws Exception {
+        // D29 (1): the watchdog stands down on a market's last DLG_FLAG; a market that has read
+        // CLOSED for twelve hours gets one teaching resubscribe, whose snapshot re-teaches the flag.
+        // Here the item is dead server-side: nothing arrives, the flag is cleared, the ordinary
+        // ladder runs, and the session is rebuilt — within 12h + 450s of the last CLOSED update.
+        Scenario zombie = Scenario.named("weekend zombie").markets(DAX)
+                .at(s(0), streaming()).at(s(0), subscribed(DAX))
+                .at(s(1), tick(DAX, "CLOSED"))
+                .until(Duration.ofHours(12).plusSeconds(700)).build();
+
+        Observed o = ScenarioRunner.run(zombie);
+
+        long twelveHours = Duration.ofHours(12).toSeconds();
+        assertTrue(o.remedies.stream().filter(r -> r.at().toSeconds() > 0).allMatch(r -> r.at().toSeconds() >= twelveHours),
+                "stood down through the night — no remedy before the twelve hours");
+        assertTrue(o.secondsOf("unsubscribe").stream().anyMatch(t -> t >= twelveHours && t <= twelveHours + 2),
+                "the teaching resubscribe");
+        assertTrue(o.secondsOf("connect").stream().anyMatch(t -> t > twelveHours && t <= twelveHours + 450 + 2),
+                "the zombie is found and the session rebuilt");
+    }
+
+    @Test
+    @Disabled("E1-T10 B — finding #6: recover() needs no round trip, so the ladder resets every 5s")
+    void aDatabaseThatRefusesWritesIsOneEpisodeClimbingTheLadder() throws Exception {
+        // D28: a retryable failure is held for, backing off 5s → 60s, as one episode. A database
+        // that accepts connections but refuses writes (disk full) must look like the blip at 100
+        // → 190: one SINK_FAILURE, seven attempts, 131s — not a new episode every five seconds.
+        Scenario diskFull = Scenario.named("writes refused").markets(DAX)
+                .at(s(0), streaming()).at(s(0), subscribed(DAX))
+                .every(s(1), s(1), s(300), t -> tick(DAX))
+                .at(s(100), dbWritesRefused())
+                .at(s(190), dbUp())
+                .until(s(300)).build();
+
+        Observed o = ScenarioRunner.run(diskFull);
+
+        assertEquals(1, o.events(EventType.SINK_FAILURE).size(), "one episode, however many retries");
+        assertEquals(7, o.events(EventType.SINK_FAILURE).get(0).detail().get("attempts").asInt());
+        assertEquals(131_000L, o.events(EventType.SINK_FAILURE).get(0).detail().get("outageMs").asLong());
+        assertEquals(o.ticksDelivered, o.landed.size());
+    }
+
+    @Test
+    @Disabled("E1-T10 B — finding #20: the shutdown tail drains one batch of 5 000 ticks")
+    void aStopWithABacklogDrainsAllOfItIntoAHealthySink() throws Exception {
+        // A stop lands with six thousand ticks queued and Postgres healthy: the tail must drain
+        // all of them, not one TICK_BATCH, and a tick lost at shutdown must never be lost silently.
+        Scenario backlog = Scenario.named("stop with a backlog").markets(DAX)
+                .at(s(0), streaming()).at(s(0), subscribed(DAX))
+                .at(s(10), ticks(DAX, 6_000))
+                .at(s(10), stop())
+                .until(s(20)).build();
+
+        Observed o = ScenarioRunner.run(backlog);
+
+        assertEquals(6_000, o.landed.size(), "every queued tick landed");
+        assertTrue(o.log.stream().noneMatch(line -> line.contains("pump failure at shutdown")));
+    }
+
+    @Test
+    @Disabled("E1-T10 B — finding #20: a stop during a hold makes no recovery attempt")
+    void aStopDuringAHoldAfterPostgresReturnedRecoversOnceAndLandsEverything() throws Exception {
+        // Postgres blinks at 30 and is back by 37; the operator stops at 38, before the next retry
+        // at 40. One recovery attempt in the tail lands the held batch and the queued ticks — the
+        // alternative is to forfeit data the database would have taken.
+        Scenario ctrlC = Scenario.named("stop just after a blip").markets(DAX)
+                .at(s(0), streaming()).at(s(0), subscribed(DAX))
+                .every(s(1), s(1), s(60), t -> tick(DAX))
+                .at(s(30), dbDown())
+                .at(s(37), dbUp())
+                .at(s(38), stop())
+                .until(s(60)).build();
+
+        Observed o = ScenarioRunner.run(ctrlC);
+
+        assertEquals(o.ticksDelivered, o.landed.size(), "nothing forfeited that the database would have taken");
+        assertEquals(0, o.ticksHeldAtEnd);
+        assertTrue(o.log.stream().noneMatch(line -> line.contains("pump failure at shutdown")));
     }
 
     @Test

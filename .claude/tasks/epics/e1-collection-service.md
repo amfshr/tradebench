@@ -193,14 +193,18 @@ pass-with-findings F1–F10, fixed on-branch except F9 (a declared residual). Te
 · market-data-service 143 · docs site 63 · 0 failures. The 2026-10-03 rulings above are logged as **D27**.
 **Residuals (recorded 2026-10-04 — not tickets; Alex decides whether to ticket). Update 2026-10-05: residuals
 2 and 3 are now E1-T11's DoD** — the scenario harness; the PR #14 review confirmed the missing composed-loop test
-as the root of its findings 1, 2, 4, 5, 8 and 11. Residual 1 stays unticketed.
+as the root of its findings 1, 2, 4, 5, 8 and 11. Residual 1 stays unticketed. **Update 2026-10-08: residuals 2 and 3
+are closed on T11's branch** (`e1-t11-belt-scenario-harness`, increments 2–3 — `BeltScenariosTest` drives the composed
+loop over `CaptureAssembly`; the lid-close scenario covers the suspend → wake → `WILL-RETRY` shell path); final when
+T11's PR merges.
 1. The gated demo smoke (`IG_SMOKE=1 ./gradlew :ig-client:demoSmoke`) has not run, so the
    `application-allowance.json` wire fixture is *authored*, not captured — run it and re-golden before
    T6's heal budget leans on pacer discovery. A skew fails safe today: refused at the boundary, 10/min kept.
 2. No composed-loop test — `Supervisor` ↔ `IgStreamControl` ↔ `FakeStreamTransport` through the single
-   `bind()`. Each layer is tested; the composition is not. **→ E1-T11 (DoD).**
+   `bind()`. Each layer is tested; the composition is not. **→ E1-T11 (DoD) — closed on the T11 branch 2026-10-08.**
 3. No shell-level suspend → wake → `WILL-RETRY` → rebuild scenario — the rebaseline path is pinned only
-   in slice A's `StalenessWatchdogTest`. **→ E1-T11 (DoD) — the harness's seventh scenario.**
+   in slice A's `StalenessWatchdogTest`. **→ E1-T11 (DoD) — the harness's seventh scenario; closed on the T11 branch
+   2026-10-08.**
 
 ## T6 — Daily completeness + archive + digest (D6)
 
@@ -463,7 +467,10 @@ it — so chapter 10's promises hold on the code, not only in prose.
 pinned at `ee35f9b`, head = main; 103 files, +7492/−599; closed unmerged, branches deleted). 32 verified, ranked
 findings: two high (#1, #2), eight medium (#3–#10), 22 low (#11–#32); every verdict CONFIRMED except #15
 (PLAUSIBLE — it rests on the Lightstreamer SDK's documented throw-on-inactive contract). This plan cites finding
-numbers and does not restate the file.
+numbers and does not restate the file. **Addendum (2026-10-08):** finding **#33** — the watchdog's session verdict
+needs the markets stale in the same sweep — found by E1-T11's replay of the 2026-08-04 scar and recorded in the review
+file's addendum; medium; triaged to slice A2 (below). It is the one finding with an unmade policy call:
+`Decision: (TBD)` — Alex rules the fix shape.
 
 **Policy the fixes stand on — D29 (Alex, 2026-10-05), nothing beyond it:** (1) the watchdog's CLOSED/SUSPEND
 stand-down is bounded — the remembered flag is cleared on every rebuild/resubscribe, and a market stood down
@@ -496,7 +503,11 @@ sweep thread via a bounded queue drained by one writer thread, drops counted in 
   stamped with the connection generation (or the queue drained-and-discarded after `stream.rebuild()`); **#19**
   a `RuntimeException` escaping `sweep()` records `FEED_DEAD{reason: fatal, cause}` and calls `onExhausted`;
   **#21** `rebuilding()` takes the `SubscriptionError`'s own clock stamps; **#3** the bounded CLOSED stand-down
-  (D29 (1)); **#29** delete the hush (D29 (4)).
+  (D29 (1)); **#29** delete the hush (D29 (4)); **#33** the session verdict ("≥2 markets stale together → rebuild at
+  once") counts only markets stale in the same 1s sweep — the scar's feeds died 584ms apart, so two per-market ladders
+  ran (session rebuild at T+450) instead of one session rebuild at T+90. `Decision: (TBD)` (Alex): how wide "together"
+  is — a market remedied within its grace window still counts for the session verdict, or a per-market remedy is held
+  one sweep when another market is within a sweep of its threshold.
 - **B — the sink and the database edge.** **#6** `recover()` makes a round trip — executes the held batch inside
   recovery, so "recovered" means a write landed — and carries attempt/since across consecutive episodes; **#7**
   `socketTimeout` 30s + `tcpKeepAlive` (D29 (2)) on the pool and `dedicatedConnection()`, with a Testcontainers
@@ -522,6 +533,15 @@ sweep thread via a bounded queue drained by one writer thread, drops counted in 
   `core.md:15`, `:28`).
 - **#23** (no combined-detector test) *is* the harness — **E1-T11**.
 
+**The A2/B backlog on the harness (E1-T11, written 2026-10-08, each verified red for its finding's reason):** the
+`@Disabled` scenarios in `BeltScenariosTest` — A2: #3 `aWeekendZombieBehindAClosedFlagIsFoundByTheTwelveHourTeachingResubscribe`,
+#4 `aRejectionHeldForAnUnconfirmedWitnessIsJudgedWhenTheWitnessConfirms`, #5 `tryingRecoveryIsGivenItsThreeHundredSecondsBeforeAnyRebuild`
++ `aDeadSocketIsTheEscalatorsToRebuildAtOneHundredAndTwentySeconds`, #8 `aMarketWhoseBothLegsAreRejectedGetsItsTwoSurgicalRetries`,
+#33 `theScarsTwoDeadMarketsEarnOneSessionVerdictAtNinetySeconds`; B: #6 `aDatabaseThatRefusesWritesIsOneEpisodeClimbingTheLadder`,
+#20 `aStopWithABacklogDrainsAllOfItIntoAHealthySink` + `aStopDuringAHoldAfterPostgresReturnedRecoversOnceAndLandsEverything`.
+Each fix enables its scenario as the exposing test; the remaining A2/B findings get their exposing tests as each slice
+lands (per the DoD).
+
 **Tests to doctrine (G5):** each fix carries the exposing test the review names, mutation-verified (apply the
 exact break → red); A2 and B land as scenarios on the E1-T11 harness with chapter 10's numbers as the expected
 offsets; the pure-core unit tests stay.
@@ -542,7 +562,7 @@ green** (sequenced 2026-10-08: T12 lands before the re-review, so the re-review 
 captured outages), a review-only branch (base `ee35f9b`, head `main`, as PR #14 was) carries all the belt work —
 T10, T11 and T12 — for the cloud review session's re-review; a pass gates E1-T6.
 
-## T11 — The belt's scenario harness 🔶 (ticketed 2026-10-05; started 2026-10-08; design nod ruled 2026-10-08 — increment 1 of 3 in progress)
+## T11 — The belt's scenario harness 🔶 (ticketed 2026-10-05; started 2026-10-08; design nod ruled 2026-10-08; increments 1–3 built 2026-10-08 — next: doctrine review → PR)
 
 **Type** build · **Branch** `e1-t11-belt-scenario-harness` · **Started** 2026-10-08 · **Blocked by** —
 
@@ -609,16 +629,75 @@ The full captured-outage library and the acceptance-mode rig are **E1-T12**, not
 **Increments:**
 1. The consolidated `FakeClock`/`FakeSleeper`/`RecordingEventLog` (T10 #27) + the `FakeStreamTransport`
    extensions — scripted per-subscription outcomes; update delivery by item name; per-handle state throwing on
-   an inactive unsubscribe — each tested. *(In progress, 2026-10-08.)*
+   an inactive unsubscribe — each tested. *(Landed `32e2e3d`, 2026-10-08.)*
 2. The DSL, the runner, the rig over `CaptureAssembly`, and the six scenarios green today: ② bare
    `DISCONNECTED`, ⑥ dead socket, ⑦ host suspend → wake → `WILL-RETRY` → rebuild, the hold-and-recover core of
-   ⑧ and ⑨, the quarantine half of ①.
+   ⑧ and ⑨, the quarantine half of ①. *(Landed `6d7c3d8`, 2026-10-08 — nine scenarios green at that point.)*
 3. The `@Disabled` scenarios for #3/#4/#5/#6/#8/#20; retiring the `SupervisorTest` one-detector tests the harness
-   subsumes; the loader + the exporter + the scar replay; chapter 08/10 touches.
+   subsumes; the loader + the exporter + the scar replay; chapter 08/10 touches. *(Built 2026-10-08 — staged on the
+   branch, awaiting Alex's commit; then the doctrine review → PR.)*
+
+**Built — what the branch holds (2026-10-08, increments 1–3; 1 and 2 committed `32e2e3d` / `6d7c3d8`, 3 staged):**
+- **The harness** — `market-data-service/src/test/java/dev/amfshr/tradebench/marketdata/scenario/`: `Event` (the
+  sealed vocabulary: `Status`, `ServerError`, `Confirm`/`Reject` per leg, `Tick`, `Bar` with bid + ask quotes,
+  `DbDown`/`DbUp`/`DbBroken`/`DbWritesRefused`, `HostSleep`, `IgDown`/`IgUp`, `Stop`), `Events`, `Scenario` (the DSL
+  builder: `markets`, `at`, `every`, `until` exclusive, `serverAnswers`), `Observed` (the five observables only —
+  remedies connect/disconnect/subscribe/unsubscribe with offsets, events, sink writes landed, heartbeat rows, exit
+  path), `ScenarioRunner` (synchronous; time passes only when the pump sleeps — the sleeper hook delivers due events,
+  then due sweeps, then due heartbeats; an exit runs the shutdown order as the JVM hook would), `Replays` (the JSONL
+  loader, fails loud) + `ReplaysTest` (4 tests). Fakes in `testutil/`: `FakeClock`, `FakeSleeper`, `RecordingEventLog`
+  (T10 #27, done here), `FakeSessions`, `ScriptedCaptureStore` (held ticks; broken-until-recover; the retryable blip
+  `08006`, the write refusal `53100`, the terminal `42P01`), `RecordingStatusStore`, `RecordingGapStore`. Production
+  seams: `CaptureAssembly` (the composition root shared by `Main` and the rig), `Supervisor.sweep()` public,
+  `Pump.cycle()` / `drainTail()` / `die()` public.
+- **`BeltScenariosTest` — 20 scenarios, 11 green:** a quiet healthy stretch (no remedy, every write landed) · a bad
+  market quarantined beside a healthy witness · a bare `DISCONNECTED` overnight with CLOSED flags (rebuild at 30; the
+  refused rebuild paced to exactly the 5s floor at 35) · the server's refusal in the SDK's order (`DISCONNECTED` then
+  `onServerError`: one death, the first signal wins) · a lid close annotated `hostSlept`, no rebuild (T5 residual 3) ·
+  a Postgres blip held with zero loss (episode dated 100; outage 131s; 7 attempts; 2 heartbeat write failures;
+  backlog 82 at the 180s heartbeat) · a stream blink inside a database hold (the supervisor keeps sweeping; the
+  `RECONNECT` breadcrumb refused and counted — flips when D29 (3)'s Tier-2 queue lands) · a schema error is terminal
+  (the pump dies, `DB_ERROR`, the exit hook runs the shutdown order) · a stop mid-hold drains the tail and logs the
+  loss · one market silent beside a streaming neighbour climbs its own ladder (resubscribe 150, 270; rebuild 510) ·
+  the 2026-08-04 scar replayed from JSONL (3,177 ticks and 10 candles landed exactly once; no remedy before the
+  watchdog's 90s; the heartbeat says `CONNECTED_STREAMING` through the first minute of the silence). **9 `@Disabled`**,
+  each written to chapter 10's expectations and verified red today for its finding's reason — the A2/B backlog listed
+  by test name in T10 § (#3 · #4 · #5 ×2 · #6 · #8 · #20 ×2 · **#33**, the new finding below). **Mutation evidence
+  (the build session, 2026-10-08; the per-mutation table goes in the PR body):** 20 production/harness mutations
+  applied, each red, each restored byte-identical — among them the fake store's hold-before-fail fidelity, the runner's
+  event/sweep/heartbeat ordering, and a wrong expected offset (the DoD's own check).
+- **`SupervisorTest`:** 10 one-detector scenarios retired as subsumed by green harness scenarios
+  (`rebuildsHoldOffWithinTheBackoffWindow`, `hostSleepIsAnnotatedNotCountedAsAWildOutage`,
+  `hostSleepRebaselinesRatherThanAlarming`, `openMarketGoneTickSilentIsResubscribed`, `closedMarketSilenceStandsDown`,
+  `persistentSilenceEscalatesResubscribeThenRebuild`, `subscriptionFailingThriceWithAHealthyWitnessIsQuarantinedNotRebuilt`,
+  `aSubCeilingRejectionIsRetriedInPlaceNotLeftToTheWatchdog`, `aBareDisconnectRebuildsEvenWhenEveryMarketReadsClosed`,
+  `aServerErrorIsRecordedAndTheDisconnectThatPrecedesItRebuildsOnce`); 29 remain, including
+  `aServerErrorAloneIsADeathToo`, which still catches the "`onServerError` is not a death" mutation. **Tests at this
+  point:** ig-client 99 · market-data-service 185 (9 skipped — the disabled scenarios) · docs site 63 · 0 failures.
+- **Replays** — `market-data-service/src/test/resources/replays/`: `README.md` (the format, the library table);
+  `export-prototype.sql` (the prototype's `igtrader_demo`: `igtrader.dax_ticks` / `nasdaq_ticks`, bars synthesised per
+  minute; **G1** market data only); `export-tradebench.sql` (our `ticks` / `bars_1m` by user and source; validated
+  against the local `market_data` database); the fixture `2026-08-04-silent-while-connected.jsonl` (3,188 lines,
+  ~378 KB; origin 12:32:08.916Z, anchor = the last DAX tick at offset 360s; both markets' feeds died within 584ms).
+  Replays set `serverAnswers` — the harness answers as a healthy server — because the prototype stored no
+  Lightstreamer statuses.
+- **Docs touched:** chapter 10 gained "Where this chapter is tested", and its known-deviations note now lists #33 and
+  names the disabled scenarios; chapter 08's scar callout gained a "Replayed" paragraph.
+- **Found by the scar replay — finding #33** (recorded 2026-10-08 as an addendum in
+  `.claude/reviews/2026-10-05-pr14-resilience-belt.md`): the watchdog's session verdict needs the markets stale in the
+  same 1s sweep; the scar's two feeds died 584ms apart, so the belt ran two per-market ladders (session rebuild at
+  T+450) instead of one session rebuild at T+90. Medium; triaged to **T10 slice A2**; its fix shape is a
+  `Decision: (TBD)` for Alex (T10 §).
+- **T5 residuals 2 and 3** (the composed-loop test; the suspend → wake → `WILL-RETRY` shell path) are closed by this
+  work — final at the merge.
+
+**Next (2026-10-08):** Alex's commit of increment 3 → the doctrine review → the PR → Alex merges → close-out (the Done
+history entry; T12 unblocked; T5 residuals 2–3 marked final).
 
 **Sequencing (Alex, 2026-10-08):** E1-T10 slice A1 is on main (PR #15, merged 2026-10-08). T10's A2/B/C land as
-scenarios here, one PR per slice → **E1-T12** replay acceptance (hard-blocked by this ticket) → the review-only
-branch of all the belt work for the cloud session's re-review (a pass gates E1-T6) → E1-T6.
+scenarios here, one PR per slice — the nine `@Disabled` scenarios are that backlog (A2 = #3 · #4 · #5 ×2 · #8 · #33;
+B = #6 · #20 ×2; the list by test name is in T10 §) → **E1-T12** replay acceptance (hard-blocked by this ticket) →
+the review-only branch of all the belt work for the cloud session's re-review (a pass gates E1-T6) → E1-T6.
 
 **DoD:** the nine policy scenarios run deterministically with no real waiting, the scar replay as scenario ten
 through the JSONL loader; each scenario's expectations are chapter 10's numbers; the `@Disabled` scenarios for
@@ -636,7 +715,8 @@ the extended fake.
 parsers, buffers, pump, store and database under a replayed stream. The re-review that closes T10 should judge a
 belt proven this way, and T6's heal consumes exactly these bar-gap windows.
 
-**Hard dependency:** E1-T11 — the harness, its JSONL loader and its exporter are what this ticket extends.
+**Hard dependency:** E1-T11 — the harness, its JSONL loader and its exporter are what this ticket extends (as of
+2026-10-08 all three exist on T11's branch, increments 1–3 built; T11's PR is pending).
 
 **The source — the prototype's capture** (facts read from the prototype database `igtrader_demo`, schema
 `igtrader`, 2026-10-08):
@@ -648,13 +728,19 @@ belt proven this way, and T6's heal consumes exactly these bar-gap windows.
 - `dax_bars_1m` (38k rows): mid-price OHLC with derived indicators — so replay bars are timing-only /
   synthesised from ticks (ours are bid/offer OHLC from the CHART feed).
 - The prototype did not store the Lightstreamer status sequence: a replay reconstructs status transitions from
-  each reconnect's `offline_seconds` and says so.
+  each reconnect's `offline_seconds` and says so. *(T11's loader: a replay header's `serverAnswers` flag makes the
+  harness answer as a healthy server — `CONNECTED:WS-STREAMING`, every subscription confirmed — when the source stored
+  no statuses; that is the scar fixture's case. Reconstructing a reconnect's status transitions from `offline_seconds`
+  is this ticket's (b).)*
 - Tick rate ≈ 10–15k/hour on a busy day — a day is ~140k ticks (~12 MB) — so fixtures are windows of minutes
   around an event.
 
 **Plan:**
-- **(a) The exporter** from T11 made two-schema and scripted (SQL → JSONL). **G1: market data only** — never
-  `strategy_events` or the OMS tables.
+- **(a) The exporter** — T11 delivered both schemas (2026-10-08: `export-prototype.sql` for the prototype's
+  `igtrader` tables, `export-tradebench.sql` for our `ticks`/`bars_1m`; SQL → JSONL, parameters and commands
+  documented in `market-data-service/src/test/resources/replays/README.md`), so (a) reduces to the wrapper script (one
+  command: database → fixture) and the curated library. **G1: market data only** — never `strategy_events` or the OMS
+  tables.
 - **(b) A curated fixture set**, each with expectations written from `service_events`/`bar_gaps` independently
   of the code: the 2026-08-04 scar; three or four `host_slept` lid-close outages; two days with bar gaps; a
   weekend CLOSED → open transition; one busy hour with no events, expecting "no remedy, no event, every tick and

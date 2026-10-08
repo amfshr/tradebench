@@ -48,7 +48,17 @@ public final class Events {
     }
 
     public static Event bar(String epic) {
-        return new Event.Bar(epic, "24510", "24520", "24500", "24515");
+        Event.Quote quote = new Event.Quote("24510", "24520", "24500", "24515");
+        return new Event.Bar(epic, quote, quote, null);
+    }
+
+    /** {@code n} ticks at one instant — a burst. */
+    public static Event[] ticks(String epic, int n) {
+        Event[] burst = new Event[n];
+        for (int i = 0; i < n; i++) {
+            burst[i] = tick(epic);
+        }
+        return burst;
     }
 
     public static Event dbDown() {
@@ -61,6 +71,10 @@ public final class Events {
 
     public static Event dbBroken() {
         return new Event.DbBroken();
+    }
+
+    public static Event dbWritesRefused() {
+        return new Event.DbWritesRefused();
     }
 
     public static Event hostSleep(Duration by) {

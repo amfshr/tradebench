@@ -16,12 +16,18 @@ public final class Scenario {
     public final List<String> epics;
     public final List<Step> steps;
     public final Duration until;
+    /** The server answers as a healthy one would — every connection greeted with
+     * {@code CONNECTED:WS-STREAMING}, every subscription confirmed — for a source that recorded
+     * no statuses (a replay). The policy scenarios script every answer themselves. */
+    public final boolean serverAnswers;
 
-    private Scenario(String name, List<String> epics, List<Step> steps, Duration until) {
+    private Scenario(String name, List<String> epics, List<Step> steps, Duration until,
+            boolean serverAnswers) {
         this.name = name;
         this.epics = List.copyOf(epics);
         this.steps = List.copyOf(steps);
         this.until = until;
+        this.serverAnswers = serverAnswers;
     }
 
     public static Builder named(String name) {
@@ -33,6 +39,7 @@ public final class Scenario {
         private final List<String> epics = new ArrayList<>();
         private final List<Step> steps = new ArrayList<>();
         private Duration until = Duration.ofMinutes(5);
+        private boolean serverAnswers;
 
         private Builder(String name) {
             this.name = name;
@@ -66,10 +73,15 @@ public final class Scenario {
             return this;
         }
 
+        public Builder serverAnswers() {
+            this.serverAnswers = true;
+            return this;
+        }
+
         public Scenario build() {
             List<Step> ordered = new ArrayList<>(steps);
             ordered.sort(Comparator.comparing(Step::at)); // stable: same-offset events keep their order
-            return new Scenario(name, epics, ordered, until);
+            return new Scenario(name, epics, ordered, until, serverAnswers);
         }
     }
 }

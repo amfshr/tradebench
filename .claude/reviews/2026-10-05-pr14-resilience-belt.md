@@ -290,3 +290,21 @@ Fix: onMalformed(String epic, String itemName); implementors are Buffers plus th
 git check-ignore confirms .gitignore:18 `build/` ignores market-data-service/src/main/java/dev/amfshr/tradebench/build/X.java, and `out/` (:20) and `tmp/` (:40) behave the same, while the PR's own comment at :26 names exactly this hazard and scoped only dist/ and coverage/.
 
 Fix: append `!**/src/**/build/`, `!**/src/**/out/`, `!**/src/**/tmp/` (a `/build/` anchor would not work for a multi-module Gradle tree); or a CI step running git check-ignore over */src/** and failing on any hit.
+
+## Addendum — findings added after the review
+
+### 33. The session verdict needs the markets stale in the same sweep
+`market-data-service/src/main/java/dev/amfshr/tradebench/marketdata/supervise/StalenessWatchdog.java:110`
+*(found 2026-10-08 by E1-T11's replay of the 2026-08-04 scar)*
+
+`evaluate()` counts the markets stale *now*, and a market remedied in the previous sweep is no
+longer stale. The scar's two feeds died 584ms apart (DAX 12:38:08.916Z, NASDAQ 12:38:09.500Z). At
+the sweep 90s later only DAX has crossed `tickSilent` → a per-market resubscribe; one sweep on
+NASDAQ crosses it, but DAX was just remedied → per-market again. Chapter 10's "≥2 markets stale
+together → rebuild at once" never fires, and the session rebuild arrives at T+450 by the per-market
+ladder instead of T+90 — on the exact shape of the scar the rule exists for. Whether two markets
+land in the same sweep is sub-second luck. **Severity:** medium. **Fix shape (policy — Alex rules):**
+count a market remedied within the last grace window as still stale for the session verdict, or
+hold a per-market remedy for one sweep when another market is within a sweep of its threshold.
+**Scenario:** `BeltScenariosTest.theScarsTwoDeadMarketsEarnOneSessionVerdictAtNinetySeconds`
+(`@Disabled`, expects one rebuild at 451 and no market surgery). **Triage:** E1-T10 slice A2.
