@@ -451,7 +451,7 @@ Results, this run:
 real stack. `written=` lagging `ticks=` + `bars=` by one on two later heartbeats is a snapshot artefact (a
 tick sitting in the queue at the instant the line is printed), not a loss.
 
-## T10 — Resilience belt hardening: the PR #14 review 🔶 (ticketed 2026-10-05; started 2026-10-08 — slice A1 first)
+## T10 — Resilience belt hardening: the PR #14 review 🔶 (ticketed 2026-10-05; started 2026-10-08 — A1 ✅ PR #15; A2/B/C as E1-T11 scenarios)
 
 **Type** build · **Branch** `e1-t10-belt-hardening` · **Started** 2026-10-08 · **Blocked by** —
 
@@ -473,8 +473,8 @@ sweep thread via a bounded queue drained by one writer thread, drops counted in 
 (finding 12); (4) the `closing()`/`GRACEFUL_CLOSE` hush is deleted — the generation gate is the §3.6 hush
 (finding 29).
 
-**Slices (Alex's sequencing: A1 first with targeted tests → E1-T11 the harness → A2/B/C as scenarios on it →
-then E1-T6):**
+**Slices (Alex's sequencing, refreshed 2026-10-08: A1 first with targeted tests — ✅ PR #15 → E1-T11 the harness
+→ A2/B/C as scenarios on it → E1-T12 replay acceptance → the review-only branch for the re-review → E1-T6):**
 
 - **A1 — the two highs, targeted tests, first.** **#1** a quarantined market's twin-leg rejection re-admits it:
   gate `SubscriptionError`s for epics in `quarantinedMarkets` in `Supervisor.sweep()`;
@@ -537,11 +537,12 @@ note (added 2026-10-05) naming what the findings make untrue today; it comes out
 deviations" note removed when the deviations are gone; doctrine review before the PR; Alex may have the cloud
 review session re-verify.
 
-**Close-out ruling (Alex, 2026-10-08):** once every finding is resolved, a review-only branch (base `ee35f9b`,
-head `main`, as PR #14 was) carries all the belt work for the cloud review session's re-review; a pass gates
-E1-T6.
+**Close-out ruling (Alex, 2026-10-08):** once every finding is resolved **and E1-T12's replay acceptance is
+green** (sequenced 2026-10-08: T12 lands before the re-review, so the re-review judges a belt proven against real
+captured outages), a review-only branch (base `ee35f9b`, head `main`, as PR #14 was) carries all the belt work —
+T10, T11 and T12 — for the cloud review session's re-review; a pass gates E1-T6.
 
-## T11 — The belt's scenario harness 🔶 (ticketed 2026-10-05; started 2026-10-08 — design nod posted)
+## T11 — The belt's scenario harness 🔶 (ticketed 2026-10-05; started 2026-10-08; design nod ruled 2026-10-08 — increment 1 of 3 in progress)
 
 **Type** build · **Branch** `e1-t11-belt-scenario-harness` · **Started** 2026-10-08 · **Blocked by** —
 
@@ -586,16 +587,97 @@ safely and policy drift fails a test.
   `SupervisorTest` scenarios that exercise one detector against the fake retire as their harness scenario
   lands. `IgStreamControlTest` stays, run against the extended fake.
 
-**Estimate:** ≈ two days — the fixture extensions, a ~200-line runner, the first five scenarios.
+**Estimate:** ≈ two days — the fixture extensions, a ~200-line runner, the first five scenarios (estimated
+2026-10-05, before the nod confirmed the loader, the exporter and the replay in scope; not re-estimated).
 
-**Decision: (TBD) — fixture format.** A typed Java DSL first (refactor-safe; YAML later for captured outages
-— Claude's recommendation), or YAML from the start. Alex rules at the design nod; the proposal allows either.
+**Design nod — ruled (Alex, 2026-10-08).** Four rulings; the first settles the fixture format, open since ticketing:
+1. **Fixture format: a typed Java DSL** for the nine policy scenarios (refactor-safe). **Captured replays are
+   JSONL** — one event per line `{at, kind, payload}`, read with the Jackson already in the build — not YAML;
+   produced by an exporter.
+2. **Scenarios for findings not yet fixed are written now**, with chapter 10's expectations, and marked
+   `@Disabled("E1-T10 <slice> — finding #n")`; each fix enables its scenario as the exposing test.
+3. **`Main`'s wiring is extracted into a `CaptureAssembly`** shared by `Main` and the harness rig, so the harness
+   exercises the real composition and shutdown order — closes the reviews' "Main is untested".
+4. **No real-thread scenario in T11** — the runner is synchronous. A latch-driven concurrency reproduction is its
+   own ticket only if a real race ever surfaces in the drills/soaks.
 
-**Sequencing:** after E1-T10 slice A1 (the two highs on main first — Alex's ruling); T10's A2/B/C then land as
-scenarios here, and E1-T6 follows. Sequencing only, not a hard dependency: the harness does not need the A1
-fixes to be built, but the order is ruled.
+**Scope confirmed at the nod:** the nine policy scenarios **plus** the JSONL loader, the exporter (two schemas:
+the prototype's `igtrader` tables and Tradebench's own `ticks`/`bars_1m`/`service_events` v2), and **one replay
+as scenario ten** — the 2026-08-04 silent-while-connected scar (a window of minutes around it, a few hundred KB).
+The full captured-outage library and the acceptance-mode rig are **E1-T12**, not this ticket.
 
-**DoD:** the nine scenarios run deterministically with no real waiting; each scenario's expectations are
-chapter 10's numbers; the harness's own behaviour mutation-verified (a wrong expected offset fails); T5's
+**Increments:**
+1. The consolidated `FakeClock`/`FakeSleeper`/`RecordingEventLog` (T10 #27) + the `FakeStreamTransport`
+   extensions — scripted per-subscription outcomes; update delivery by item name; per-handle state throwing on
+   an inactive unsubscribe — each tested. *(In progress, 2026-10-08.)*
+2. The DSL, the runner, the rig over `CaptureAssembly`, and the six scenarios green today: ② bare
+   `DISCONNECTED`, ⑥ dead socket, ⑦ host suspend → wake → `WILL-RETRY` → rebuild, the hold-and-recover core of
+   ⑧ and ⑨, the quarantine half of ①.
+3. The `@Disabled` scenarios for #3/#4/#5/#6/#8/#20; retiring the `SupervisorTest` one-detector tests the harness
+   subsumes; the loader + the exporter + the scar replay; chapter 08/10 touches.
+
+**Sequencing (Alex, 2026-10-08):** E1-T10 slice A1 is on main (PR #15, merged 2026-10-08). T10's A2/B/C land as
+scenarios here, one PR per slice → **E1-T12** replay acceptance (hard-blocked by this ticket) → the review-only
+branch of all the belt work for the cloud session's re-review (a pass gates E1-T6) → E1-T6.
+
+**DoD:** the nine policy scenarios run deterministically with no real waiting, the scar replay as scenario ten
+through the JSONL loader; each scenario's expectations are chapter 10's numbers; the `@Disabled` scenarios for
+#3/#4/#5/#6/#8/#20 written to chapter 10's expectations, each awaiting its fix; `Main` and the rig share
+`CaptureAssembly`; the harness's own behaviour mutation-verified (a wrong expected offset fails); T5's
 residuals 2 and 3 (the composed-loop test; the suspend → wake → `WILL-RETRY` → rebuild shell path) are closed
-by it; the subsumed `SupervisorTest` scenarios removed.
+by it; the subsumed `SupervisorTest` scenarios removed, the pure-core unit tests kept, `IgStreamControlTest` on
+the extended fake.
+
+## T12 — Replay acceptance: the captured-outage library and the rig in acceptance mode ⬜ (ticketed 2026-10-08; blocked by T11)
+
+**Type** build · **Branch** `e1-t12-replay-acceptance` (planned) · **Started** — · **Blocked by** E1-T11
+
+**Goal:** the belt proven against real captured outages — the gold standard short of the real IG socket: real
+parsers, buffers, pump, store and database under a replayed stream. The re-review that closes T10 should judge a
+belt proven this way, and T6's heal consumes exactly these bar-gap windows.
+
+**Hard dependency:** E1-T11 — the harness, its JSONL loader and its exporter are what this ticket extends.
+
+**The source — the prototype's capture** (facts read from the prototype database `igtrader_demo`, schema
+`igtrader`, 2026-10-08):
+- `dax_ticks`: 3.5M rows, 2026-07-29 → 2026-10-08 and still capturing, with a `dealflag` column — so real
+  `DLG_FLAG` transitions.
+- `service_events`: `offline_seconds` and `detail {replayed, host_slept}` — 728 reconnects, 103 session
+  rebuilds, 58 bar gaps, 3 watchdog resubscribes, 1 forced rebuild. The 2h56m silent-while-connected scar is a
+  10,569-second reconnect on 2026-08-04; a dozen lid-close outages of 18–32 minutes carry `host_slept: true`.
+- `dax_bars_1m` (38k rows): mid-price OHLC with derived indicators — so replay bars are timing-only /
+  synthesised from ticks (ours are bid/offer OHLC from the CHART feed).
+- The prototype did not store the Lightstreamer status sequence: a replay reconstructs status transitions from
+  each reconnect's `offline_seconds` and says so.
+- Tick rate ≈ 10–15k/hour on a busy day — a day is ~140k ticks (~12 MB) — so fixtures are windows of minutes
+  around an event.
+
+**Plan:**
+- **(a) The exporter** from T11 made two-schema and scripted (SQL → JSONL). **G1: market data only** — never
+  `strategy_events` or the OMS tables.
+- **(b) A curated fixture set**, each with expectations written from `service_events`/`bar_gaps` independently
+  of the code: the 2026-08-04 scar; three or four `host_slept` lid-close outages; two days with bar gaps; a
+  weekend CLOSED → open transition; one busy hour with no events, expecting "no remedy, no event, every tick and
+  bar landed exactly once".
+- **(c) The rig in acceptance mode** — the same replay through the real `Pump` and `PostgresStore` into a
+  Testcontainers Postgres instead of the scripted stores, asserting the data invariants as rows: every replayed
+  tick/bar landed exactly once; `bar_gaps` matches the known gaps; no spurious remedies in healthy windows.
+- **(d) Packaging** as a tagged suite excluded from the default unit run, with its own Gradle task and a CI lane
+  (nightly or on demand) — the way ig-client's `ig-demo` smoke is gated (`@Tag("ig-demo")`, `excludeTags` on
+  `test`, `includeTags` on the registered `demoSmoke` task — `ig-client/build.gradle.kts`).
+
+**Not in scope:** real threads (ruled at T11's nod); the live tier — the live outage drill (T9 §), T8's
+shadow-diff week, T7's staging soak.
+
+**DoD:** the curated set green in both modes (scripted stores and acceptance); expectations anchored on the
+prototype's recorded events; the exporter documented; the suite runnable on demand and in its CI lane; a
+field-manual note on the replay library (where it lives, how a new outage becomes a fixture).
+
+**Estimate:** ≈ two sessions.
+
+**Sequencing (Alex, 2026-10-08):** T11 → T10 A2/B/C as scenarios → **T12** → the review-only branch of all the
+belt work for the cloud session's re-review (a pass gates T6) → T6.
+
+**Cross-references:** G1 (market data only — never strategy content) · P8 · E1-T6 (the heal consumes these
+bar-gap windows) · E1-T8 (the live-tier acceptance this does not replace) · Field Manual ch. 10 ·
+`ig-client/build.gradle.kts` (the `demoSmoke` gating pattern).
