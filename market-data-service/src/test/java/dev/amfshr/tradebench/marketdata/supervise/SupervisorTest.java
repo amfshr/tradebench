@@ -14,9 +14,11 @@ import java.util.concurrent.atomic.AtomicBoolean;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+
+import dev.amfshr.tradebench.marketdata.testutil.FakeClock;
+import dev.amfshr.tradebench.marketdata.testutil.RecordingEventLog;
 import org.jspecify.annotations.Nullable;
 
-import dev.amfshr.tradebench.core.time.Clock;
 import dev.amfshr.tradebench.ig.time.Sleeper;
 import dev.amfshr.tradebench.marketdata.events.EventType;
 import dev.amfshr.tradebench.marketdata.events.ServiceEvent;
@@ -33,7 +35,7 @@ class SupervisorTest {
     private static final String NASDAQ = "IX.D.NASDAQ.CASH.IP";
 
     private FakeClock clock;
-    private RecordingEvents events;
+    private RecordingEventLog events;
     private FakeStream stream;
     private FakeFreshness freshness;
     private AtomicBoolean exhausted;
@@ -42,7 +44,7 @@ class SupervisorTest {
     @BeforeEach
     void setUp() {
         clock = new FakeClock(Instant.parse("2026-09-28T09:00:00Z"));
-        events = new RecordingEvents();
+        events = new RecordingEventLog();
         stream = new FakeStream();
         freshness = new FakeFreshness();
         exhausted = new AtomicBoolean();
@@ -707,46 +709,7 @@ class SupervisorTest {
         return matches.get(0);
     }
 
-    private static final class FakeClock implements Clock {
-        private long monotonicNanos;
-        private Instant wall;
 
-        FakeClock(Instant start) {
-            this.wall = start;
-        }
-
-        @Override
-        public Instant wallInstant() {
-            return wall;
-        }
-
-        @Override
-        public long monotonicNanos() {
-            return monotonicNanos;
-        }
-
-        void advance(Duration by) {
-            monotonicNanos += by.toNanos();
-            wall = wall.plus(by);
-        }
-
-        void advanceWallOnly(Duration by) {
-            wall = wall.plus(by); // monotonic is frozen while the host sleeps
-        }
-    }
-
-    private static final class RecordingEvents implements EventLog {
-        final List<ServiceEvent> written = new ArrayList<>();
-        boolean failWrites; // when true, every write throws — Postgres is down
-
-        @Override
-        public void write(ServiceEvent event) {
-            if (failWrites) {
-                throw new IllegalStateException("service_events unavailable");
-            }
-            written.add(event);
-        }
-    }
 
     private static final class FakeStream implements StreamControl {
         int rebuilds;

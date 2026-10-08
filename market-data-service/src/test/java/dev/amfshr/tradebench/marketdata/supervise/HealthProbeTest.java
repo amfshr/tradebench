@@ -12,6 +12,8 @@ import java.util.Map;
 import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.Test;
 
+import dev.amfshr.tradebench.marketdata.testutil.FakeClock;
+
 import dev.amfshr.tradebench.core.time.Clock;
 import dev.amfshr.tradebench.marketdata.events.CaptureStatus;
 import dev.amfshr.tradebench.marketdata.events.StreamState;
@@ -82,17 +84,7 @@ class HealthProbeTest {
         }
     }
 
-    private static final Clock FROZEN = new Clock() {
-        @Override
-        public Instant wallInstant() {
-            return NOW;
-        }
-
-        @Override
-        public long monotonicNanos() {
-            return 0;
-        }
-    };
+    private static final Clock FROZEN = new FakeClock(NOW);
 
     private final FakeTelemetry telemetry = new FakeTelemetry();
     private final FakeBelt belt = new FakeBelt();

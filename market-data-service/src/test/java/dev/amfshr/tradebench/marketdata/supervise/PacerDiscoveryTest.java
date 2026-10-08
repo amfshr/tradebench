@@ -10,6 +10,9 @@ import java.util.List;
 
 import org.junit.jupiter.api.Test;
 
+import dev.amfshr.tradebench.marketdata.testutil.FakeClock;
+import dev.amfshr.tradebench.marketdata.testutil.RecordingEventLog;
+
 import dev.amfshr.tradebench.core.time.Clock;
 import dev.amfshr.tradebench.ig.error.IgRetryableException;
 import dev.amfshr.tradebench.ig.rest.ApplicationAllowance;
@@ -24,33 +27,11 @@ class PacerDiscoveryTest {
     private static final IgSession SESSION = new IgSession(new IgTokens("cst", "xst"), "Z6CS3E",
             "https://demo-apd.marketdatasystems.com", List.of());
     private static final Instant NOW = Instant.parse("2026-09-28T07:00:05Z");
-    private static final Clock FROZEN = new Clock() {
-        @Override
-        public Instant wallInstant() {
-            return NOW;
-        }
+    private static final Clock FROZEN = new FakeClock(NOW);
 
-        @Override
-        public long monotonicNanos() {
-            return 0;
-        }
-    };
-
-    private static final class RecordingEvents implements EventLog {
-        final List<ServiceEvent> written = new ArrayList<>();
-        boolean failWrites;
-
-        @Override
-        public void write(ServiceEvent event) {
-            if (failWrites) {
-                throw new IllegalStateException("service_events unavailable");
-            }
-            written.add(event);
-        }
-    }
 
     private final List<Integer> applied = new ArrayList<>();
-    private final RecordingEvents events = new RecordingEvents();
+    private final RecordingEventLog events = new RecordingEventLog();
     private final List<String> log = new ArrayList<>();
 
     private PacerDiscovery discovery(PacerDiscovery.AllowanceSource source) {
