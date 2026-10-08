@@ -482,6 +482,11 @@ then E1-T6):**
   errors instead of exactly three. **#2** a bare `DISCONNECTED` or `onServerError` on the live generation
   triggers no rebuild when the markets' last flag reads CLOSED: treat both as a rebuild trigger; test — a bare
   `DISCONNECTED` with CLOSED flags → a rebuild. May ship on its own PR if Alex wants the highs on main quickly.
+  **Landed: PR #15, merged 2026-10-08 (`92c0181`)** — 7 scenarios, 9 mutations; the slice review's F1 made the
+  terminal trigger a latch asked every sweep (an edge-triggered rebuild paced out inside the 5s floor would have
+  stalled the ladder until the budget) and `onServerError` a death too (the nod's "both" restored); F5 (a stray
+  `onSubscribeStarted` on a quarantined epic) recorded, not fixed — the witness loop already excludes
+  quarantined epics, no observable effect; revisit at A2 #14.
 - **A2 — detectors and verdicts, as E1-T11 scenarios.** **#5** the watchdog stands down while the escalator
   holds a substate / the connection is not streaming (no rebuild before the 300s patience); **#18** clear the
   escalator's substate on rebuild so an IG outage ends by the ten-minute budget, not the ceiling; **#4** a `Wait`
@@ -532,9 +537,13 @@ note (added 2026-10-05) naming what the findings make untrue today; it comes out
 deviations" note removed when the deviations are gone; doctrine review before the PR; Alex may have the cloud
 review session re-verify.
 
-## T11 — The belt's scenario harness ⬜ (ticketed 2026-10-05; after T10 slice A1)
+**Close-out ruling (Alex, 2026-10-08):** once every finding is resolved, a review-only branch (base `ee35f9b`,
+head `main`, as PR #14 was) carries all the belt work for the cloud review session's re-review; a pass gates
+E1-T6.
 
-**Type** build · **Branch** `e1-t11-belt-scenario-harness` (planned) · **Started** — · **Blocked by** E1-T10 A1 (sequencing only)
+## T11 — The belt's scenario harness 🔶 (ticketed 2026-10-05; started 2026-10-08 — design nod posted)
+
+**Type** build · **Branch** `e1-t11-belt-scenario-harness` · **Started** 2026-10-08 · **Blocked by** —
 
 **Goal:** chapter 10 as executable expectations — the composed loop (`Supervisor` ↔ `IgStreamControl` ↔ `Pump`
 ↔ the stores) driven through scripted outages with no real waiting, so the belt's fixes can land together
