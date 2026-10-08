@@ -194,23 +194,26 @@ pass-with-findings F1–F10, fixed on-branch except F9 (a declared residual). Te
 **Residuals (recorded 2026-10-04 — not tickets; Alex decides whether to ticket). Update 2026-10-05: residuals
 2 and 3 are now E1-T11's DoD** — the scenario harness; the PR #14 review confirmed the missing composed-loop test
 as the root of its findings 1, 2, 4, 5, 8 and 11. Residual 1 stays unticketed. **Update 2026-10-08: residual 2 is closed,
-final at T11's merge (PR #16); residual 3 is closed in its rebaseline half, final at the same merge** (`BeltScenariosTest`
-drives the composed loop over `CaptureAssembly`; the lid-close scenario pins the rebaseline — a 16-minute wall jump
-raises no `WATCHDOG_STALE` and is annotated `hostSlept`, no rebuild, the client reconnects itself; the
-rebuild-after-a-sleep arm is pinned only by the `@Disabled` dead-socket scenario, without the sleep — T11's doctrine
-review, finding 6). **Open for Alex:** whether the half satisfies T11's DoD's "residual 3 closed" — accept the half,
-amend the DoD wording, or ticket the rebuild arm into T10 A2.
+final at T11's merge (PR #16); residual 3 is closed in its rebaseline half at the same merge, and its rebuild half
+closes with T10 A2 — ruled 2026-10-08 (Alex)** (`BeltScenariosTest` drives the composed loop over `CaptureAssembly`;
+the host-suspend scenario pins the rebaseline — a 16-minute wall jump raises no `WATCHDOG_STALE` and is annotated
+`hostSlept`, no rebuild, the client reconnects itself; the rebuild half — the host wakes with the Lightstreamer client
+stuck in `DISCONNECTED:WILL-RETRY` and the escalator rebuilds 120s after the wake, measured in awake time — was pinned
+at T11 only by the `@Disabled` dead-socket scenario, without the suspend (T11's doctrine review, finding 6), and is
+now an A2 scenario: that scenario with a 16-minute host suspend in front of the hang; T11's DoD wording stays as
+written).
 1. The gated demo smoke (`IG_SMOKE=1 ./gradlew :ig-client:demoSmoke`) has not run, so the
    `application-allowance.json` wire fixture is *authored*, not captured — run it and re-golden before
    T6's heal budget leans on pacer discovery. A skew fails safe today: refused at the boundary, 10/min kept.
 2. No composed-loop test — `Supervisor` ↔ `IgStreamControl` ↔ `FakeStreamTransport` through the single
    `bind()`. Each layer is tested; the composition is not. **→ E1-T11 (DoD) — closed, final at T11's merge (PR #16, 2026-10-08).**
 3. No shell-level suspend → wake → `WILL-RETRY` → rebuild scenario — the rebaseline path is pinned only
-   in slice A's `StalenessWatchdogTest`. **→ E1-T11 (DoD) — closed in its rebaseline half, final at T11's merge
-   (PR #16, 2026-10-08)** (`aLidCloseIsAnnotatedNotTreatedAsAnOutage`: a 16-minute wall jump, no `WATCHDOG_STALE`, annotated
-   `hostSlept`, no rebuild); **the rebuild-after-a-sleep arm is pinned only by the `@Disabled` dead-socket scenario**
-   (`aDeadSocketIsTheEscalatorsToRebuildAtOneHundredAndTwentySeconds`, #5), without the sleep — whether the half
-   satisfies T11's DoD is Alex's open ruling (above).
+   in slice A's `StalenessWatchdogTest`. **→ E1-T11 (DoD) — closed in its rebaseline half at T11's merge
+   (PR #16, 2026-10-08)** (`aLidCloseIsAnnotatedNotTreatedAsAnOutage` — renamed to a host-suspend name at A2, ruling 3:
+   a 16-minute wall jump, no `WATCHDOG_STALE`, annotated `hostSlept`, no rebuild); **the rebuild half → T10 A2 (ruled
+   2026-10-08, Alex):** a variant of the dead-socket scenario (`aDeadSocketIsTheEscalatorsToRebuildAtOneHundredAndTwentySeconds`,
+   #5) with a 16-minute host suspend in front of the hang — the host wakes with the Lightstreamer client stuck in
+   `DISCONNECTED:WILL-RETRY`, the escalator rebuilds 120s after the wake, measured in awake time.
 
 ## T6 — Daily completeness + archive + digest (D6)
 
@@ -477,8 +480,9 @@ numbers and does not restate the file. **Addendum (2026-10-08):** finding **#33*
 the sweep before the session verdict — found by E1-T11's replay of the 2026-08-04 scar and recorded in the review
 file's addendum (§33, rewritten the same day to the observed behaviour with a correction note per G8, after T11's
 doctrine review proved the first account — "the session verdict never fired; rebuild at T+450" — wrong); **low**
-(first recorded as medium); triaged to slice A2 (below). It is the one finding with an unmade policy call:
-`Decision: (TBD)` — Alex rules whether it earns a rule.
+(first recorded as medium); triaged to slice A2 (below). Its one policy call is made: **ruled 2026-10-08 (Alex) — fix in
+A2, mechanically, the one-sweep hold; no separate decision entry** (the fix shape and the chapter-10 clause are in the
+A2 bullet).
 
 **Policy the fixes stand on — D29 (Alex, 2026-10-05), nothing beyond it:** (1) the watchdog's CLOSED/SUSPEND
 stand-down is bounded — the remembered flag is cleared on every rebuild/resubscribe, and a market stood down
@@ -517,9 +521,26 @@ the re-review → E1-T6):**
   mark, but staleness is purely time-based and the scar's two feeds died 584ms apart, so at the sweep 90s after DAX's
   last tick only DAX is stale and gets market surgery (the pair dropped and re-asked, a misleading
   `WATCHDOG_STALE{resubscribe}` row); one sweep later both are stale and the session is rebuilt as promised. Low.
-  `Decision: (TBD)` (Alex): whether this earns a rule — the small fix shape is to withhold a per-market remedy for one
-  sweep when another market is within a sweep of its own threshold, so two markets dying within a second earn one
-  verdict.
+  **Ruled 2026-10-08 (Alex): fix in A2, mechanically — the one-sweep hold; no separate decision entry.** The fix: when a
+  market crosses its tick-silent threshold and another market is within one sweep of crossing too, the per-market
+  remedy waits that one sweep so both are judged together and the session verdict is rendered without the stray
+  resubscribe. Chapter 10's row ("≥2 markets stale together → rebuild at once") gains a clause defining "together" as
+  within one sweep of each other. `theScarsTwoDeadMarketsEarnOneSessionVerdictAtNinetySeconds` is the exposing test.
+  **Also in A2, ruled 2026-10-08 (Alex) after T11's close-out:** **T5 residual 3's rebuild half** — the host wakes with the
+  Lightstreamer client stuck in `DISCONNECTED:WILL-RETRY` and the escalator rebuilds 120s after the wake, measured in
+  awake time — as a new scenario: the dead-socket scenario (`aDeadSocketIsTheEscalatorsToRebuildAtOneHundredAndTwentySeconds`,
+  #5) with a 16-minute host suspend in front of the hang (the rebaseline half closed at T11; T11's DoD wording stays).
+  **Housekeeping — server-first language:** the service is designed for and deployed on a server; the laptop problems
+  of the past were problems of running a server on a laptop and are not baked into the program or its language. The
+  mechanism stays wherever it adds coverage and resilience — the wall/monotonic clock-divergence discriminator, the
+  `hostSlept` annotation, `Tuning.hostSleepSkew`, the `HostSleep` fixture event — but scenarios, test names, code
+  comments and docs frame it as a **suspended host** (a paused or live-migrated VM, a hibernated instance, a frozen
+  process), never a laptop lid. In A2 (code, rides the slice's PR): rename `aLidCloseIsAnnotatedNotTreatedAsAnOutage` to a
+  host-suspend name and purge the lid/laptop framing from `BeltScenariosTest`, `Event.HostSleep`'s javadoc,
+  `ReconnectClassifier`'s javadoc, `ReconnectClassifierTest` and `StalenessWatchdogTest`. Field Manual chapters 07, 08
+  and 10 reworded 2026-10-08 direct to main (docs-only, the build session). On this plan and the board, "lid close"
+  describing our scenario reads "host suspend"; the prototype's captured `host_slept` outages keep the fact with "the
+  prototype ran on a laptop" (T12 §).
 - **B — the sink and the database edge.** **#6** `recover()` makes a round trip — executes the held batch inside
   recovery, so "recovered" means a write landed — and carries attempt/since across consecutive episodes; **#7**
   `socketTimeout` 30s + `tcpKeepAlive` (D29 (2)) on the pool and `dedicatedConnection()`, with a Testcontainers
@@ -553,11 +574,16 @@ A2: #3 `aWeekendZombieBehindAClosedFlagIsFoundByTheTwelveHourTeachingResubscribe
 a session-shaped rebuild at 30), #5 `tryingRecoveryIsGivenItsThreeHundredSecondsBeforeAnyRebuild`
 + `aDeadSocketIsTheEscalatorsToRebuildAtOneHundredAndTwentySeconds`, #8 `aMarketWhoseBothLegsAreRejectedGetsItsTwoSurgicalRetries`
 (on a standing `serverRejects(epic, code)` rule — the server refuses the epic, the belt decides each attempt's timing),
-#33 `theScarsTwoDeadMarketsEarnOneSessionVerdictAtNinetySeconds` (its session-rebuild-at-451 assertion already holds; the
-"no market surgery" assertion is the exposing one); B: #6 `aDatabaseThatRefusesWritesIsOneEpisodeClimbingTheLadder`,
+#33 `theScarsTwoDeadMarketsEarnOneSessionVerdictAtNinetySeconds` (ruled 2026-10-08: the one-sweep hold; its
+session-rebuild-at-451 assertion already holds; the "no market surgery" assertion is the exposing one); B: #6
+`aDatabaseThatRefusesWritesIsOneEpisodeClimbingTheLadder`,
 #20 `aStopWithABacklogDrainsAllOfItIntoAHealthySink` + `aStopDuringAHoldAfterPostgresReturnedRecoversOnceAndLandsEverything`.
 Each fix enables its scenario as the exposing test; the remaining A2/B findings get their exposing tests as each slice
-lands (per the DoD). **Noted for the slices (T11's doctrine review, 2026-10-08):** the fake store's `recover()`
+lands (per the DoD). **A2 also carries two items that are not `@Disabled` scenarios (ruled 2026-10-08, Alex):** a new
+scenario — the host-suspend-then-stuck variant of #5's dead-socket scenario (T5 residual 3's rebuild half: a 16-minute host
+suspend in front of the hang, the rebuild 120s after the wake in awake time) — and the server-first rename of
+`aLidCloseIsAnnotatedNotTreatedAsAnOutage` (green today) to a host-suspend name, with the lid/laptop framing purged from
+the test and code comments (the A2 bullet above). **Noted for the slices (T11's doctrine review, 2026-10-08):** the fake store's `recover()`
 deliberately models the unfixed #6 — slice B must give it a round trip with the production fix; the #3 scenario's window
 assertions tighten to exact offsets when A2 enables it; a `Supervisor.sweep()` exception is modelled as a harness error
 (a test error) until #19 lands.
@@ -651,8 +677,8 @@ The full captured-outage library and the acceptance-mode rig are **E1-T12**, not
    extensions — scripted per-subscription outcomes; update delivery by item name; per-handle state throwing on
    an inactive unsubscribe — each tested. *(Landed `ac79cdd`, 2026-10-08.)*
 2. The DSL, the runner, the rig over `CaptureAssembly`, and the six scenarios planned: a quiet healthy stretch;
-   quarantine beside a healthy witness (the quarantine half of ①); the bare `DISCONNECTED` overnight (②); a lid
-   close annotated `hostSlept` with no rebuild — the client reconnects itself (the rebaseline half of ⑦, not its
+   quarantine beside a healthy witness (the quarantine half of ①); the bare `DISCONNECTED` overnight (②); a host
+   suspend annotated `hostSlept` with no rebuild — the client reconnects itself (the rebaseline half of ⑦, not its
    rebuild arm); the Postgres blip (the hold-and-recover core of ⑧); a stop mid-hold (⑨) — plus three added during
    the build: a stream blink inside a hold, the server's refusal, a schema error. *(Landed `2f16773`, 2026-10-08 —
    nine scenarios green at that point. Not ⑥ dead socket — born `@Disabled` in increment 3 for #5 — and not a
@@ -684,7 +710,7 @@ The full captured-outage library and the acceptance-mode rig are **E1-T12**, not
 - **`BeltScenariosTest` — 21 scenarios, 11 green:** a quiet healthy stretch (no remedy, every write landed) · a bad
   market quarantined beside a healthy witness · a bare `DISCONNECTED` overnight with CLOSED flags (rebuild at 30; the
   refused rebuild paced to exactly the 5s floor at 35) · the server's refusal in the SDK's order (`DISCONNECTED` then
-  `onServerError`: one death, the first signal wins) · a lid close annotated `hostSlept`, no rebuild (T5 residual 3's rebaseline half) ·
+  `onServerError`: one death, the first signal wins) · a host suspend annotated `hostSlept`, no rebuild (T5 residual 3's rebaseline half) ·
   a Postgres blip held with zero loss (episode dated 100; outage 131s; 7 attempts; 2 heartbeat write failures;
   backlog 82 at the 180s heartbeat) · a stream blink inside a database hold (the supervisor keeps sweeping; the
   `RECONNECT` breadcrumb refused and counted — flips when D29 (3)'s Tier-2 queue lands) · a schema error is terminal
@@ -726,15 +752,17 @@ The full captured-outage library and the acceptance-mode rig are **E1-T12**, not
   90s mark — the scenario's connect assertion `[0, 451]` passes today — but the scar's two feeds died 584ms apart, so
   at the sweep 90s after DAX's last tick only DAX is stale and gets market surgery (the pair dropped and re-asked, a
   misleading `WATCHDOG_STALE{resubscribe}` row); one sweep later both are stale and the session is rebuilt as promised.
-  **Low**; triaged to **T10 slice A2**; whether it earns a rule is a `Decision: (TBD)` for Alex (T10 §). *The first
+  **Low**; triaged to **T10 slice A2**; ruled 2026-10-08 (Alex): fix in A2, the one-sweep hold — no separate decision
+  entry (T10 §). *The first
   account — "two per-market ladders instead of the session verdict, rebuild at T+450 instead of T+90", medium — was
   inferred, not observed; the doctrine review proved it wrong and the addendum, chapters 08/10 and this plan were
   corrected the same day (G8).*
-- **T5 residual 2** (the composed-loop test) is closed by this work; **residual 3** in its rebaseline half only — a
-  16-minute wall jump raises no `WATCHDOG_STALE` and is annotated `hostSlept` (`aLidCloseIsAnnotatedNotTreatedAsAnOutage`);
-  the rebuild-after-a-sleep arm is pinned only by the `@Disabled` dead-socket scenario, without the sleep (doctrine
-  review, finding 6). Final at the merge (PR #16, 2026-10-08); whether the half satisfies the DoD's "residual 3 closed"
-  is Alex's open ruling (see "Closed", below).
+- **T5 residual 2** (the composed-loop test) is closed by this work; **residual 3** in its rebaseline half — a
+  16-minute wall jump raises no `WATCHDOG_STALE` and is annotated `hostSlept` (`aLidCloseIsAnnotatedNotTreatedAsAnOutage`,
+  renamed to a host-suspend name at A2 — ruling 3); the rebuild half was pinned here only by the `@Disabled`
+  dead-socket scenario, without the suspend (doctrine review, finding 6), and closes with T10 A2 as the
+  host-suspend-then-stuck variant of that scenario (ruled 2026-10-08, Alex; see "Closed", below). Final at the merge
+  (PR #16, 2026-10-08).
 
 **Doctrine review (2026-10-08) — pass-with-findings.** Verdict: the harness sound, the production extraction
 (`CaptureAssembly`, the public `sweep()`/`cycle()` seams) faithful, every chapter-10 derivation re-derived and right,
@@ -764,18 +792,23 @@ docs build green as CI runs them.
 
 **Closed 2026-10-08:** PR #16 (`https://github.com/amfshr/tradebench/pull/16`) merged by Alex into `main`, merge commit
 `65b4912`; CI green on the merged head (`build` 51s, GitGuardian pass). The board's Done history carries the entry (tagged
-E1-T11); T12 is unblocked; T5 residual 2 and residual 3's rebaseline half are final. **Open for Alex (not decided here):**
-the DoD's "residuals 2 and 3 closed" is met in full for 2 and in its rebaseline half for 3 — accept the half, amend the DoD
-wording, or ticket the rebuild-after-a-sleep arm into T10 A2. Also open, carried by T10 A2: #33's `Decision: (TBD)`.
+E1-T11); T12 is unblocked; T5 residual 2 and residual 3's rebaseline half are final. **Ruled 2026-10-08 (Alex, after the
+close-out):** (1) the DoD's "residuals 2 and 3 closed" is met in full for 2 and in its rebaseline half for 3; the rebuild
+half is ticketed into T10 A2 as the host-suspend-then-stuck variant of the dead-socket scenario — the DoD wording below
+stays as written; (2) #33 is fixed in A2, mechanically — the one-sweep hold; no separate decision entry; (3) server-first
+language — the belt's scenarios, test names, comments and docs frame a **suspended host**, never a laptop lid: the
+`aLidCloseIsAnnotatedNotTreatedAsAnOutage` rename and the comment purge ride A2's PR, Field Manual ch. 07/08/10 reworded
+2026-10-08 direct to main (docs-only). Detail: T10 § A2.
 
 **Sequencing (Alex, 2026-10-08):** E1-T10 slice A1 is on main (PR #15, merged 2026-10-08); this harness is on main (PR #16,
 merged 2026-10-08). Next: T10's A2/B/C land as scenarios here, one PR per slice — the ten `@Disabled` scenarios are that
-backlog (A2 = #3 · #4 ×2 · #5 ×2 · #8 · #33; B = #6 · #20 ×2; the list by test name is in T10 §) → **E1-T12** replay
+backlog (A2 = #3 · #4 ×2 · #5 ×2 (+ the host-suspend-then-stuck variant — T5 residual 3's rebuild half) · #8 · #33 (ruled:
+the one-sweep hold) + the ruling-3 rename; B = #6 · #20 ×2; the list by test name is in T10 §) → **E1-T12** replay
 acceptance (unblocked by this merge) → the review-only branch of all the belt work for the cloud session's re-review (a
 pass gates E1-T6) → E1-T6.
 
-**DoD (met at the merge, 2026-10-08 — one clause pending Alex's ruling: residual 3 is closed in its rebaseline half,
-see "Closed" above):** the nine policy scenarios run deterministically with no real waiting, the scar replay as scenario ten
+**DoD (met at the merge, 2026-10-08; residual 3 closed in its rebaseline half here, its rebuild half closes with T10 A2 —
+ruled 2026-10-08, see "Closed" above; wording kept as written):** the nine policy scenarios run deterministically with no real waiting, the scar replay as scenario ten
 through the JSONL loader; each scenario's expectations are chapter 10's numbers; the `@Disabled` scenarios for
 #3/#4/#5/#6/#8/#20 written to chapter 10's expectations, each awaiting its fix; `Main` and the rig share
 `CaptureAssembly`; the harness's own behaviour mutation-verified (a wrong expected offset fails); T5's
@@ -800,7 +833,8 @@ three are on main since T11's merge (PR #16, 2026-10-08), so this ticket is unbl
   `DLG_FLAG` transitions.
 - `service_events`: `offline_seconds` and `detail {replayed, host_slept}` — 728 reconnects, 103 session
   rebuilds, 58 bar gaps, 3 watchdog resubscribes, 1 forced rebuild. The 2h56m silent-while-connected scar is a
-  10,569-second reconnect on 2026-08-04; a dozen lid-close outages of 18–32 minutes carry `host_slept: true`.
+  10,569-second reconnect on 2026-08-04; a dozen host-suspend outages of 18–32 minutes carry `host_slept: true` (the
+  prototype ran on a laptop).
 - `dax_bars_1m` (38k rows): mid-price OHLC with derived indicators — so replay bars are timing-only /
   synthesised from ticks (ours are bid/offer OHLC from the CHART feed).
 - The prototype did not store the Lightstreamer status sequence: a replay reconstructs status transitions from
@@ -818,9 +852,9 @@ three are on main since T11's merge (PR #16, 2026-10-08), so this ticket is unbl
   command: database → fixture) and the curated library. **G1: market data only** — never `strategy_events` or the OMS
   tables.
 - **(b) A curated fixture set**, each with expectations written from `service_events`/`bar_gaps` independently
-  of the code: the 2026-08-04 scar; three or four `host_slept` lid-close outages; two days with bar gaps; a
-  weekend CLOSED → open transition; one busy hour with no events, expecting "no remedy, no event, every tick and
-  bar landed exactly once".
+  of the code: the 2026-08-04 scar; three or four `host_slept` host-suspend outages (the prototype ran on a laptop);
+  two days with bar gaps; a weekend CLOSED → open transition; one busy hour with no events, expecting "no remedy, no
+  event, every tick and bar landed exactly once".
 - **(c) The rig in acceptance mode** — the same replay through the real `Pump` and `PostgresStore` into a
   Testcontainers Postgres instead of the scripted stores, asserting the data invariants as rows: every replayed
   tick/bar landed exactly once; `bar_gaps` matches the known gaps; no spurious remedies in healthy windows.
