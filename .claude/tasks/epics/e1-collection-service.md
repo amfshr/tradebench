@@ -193,22 +193,24 @@ pass-with-findings F1–F10, fixed on-branch except F9 (a declared residual). Te
 · market-data-service 143 · docs site 63 · 0 failures. The 2026-10-03 rulings above are logged as **D27**.
 **Residuals (recorded 2026-10-04 — not tickets; Alex decides whether to ticket). Update 2026-10-05: residuals
 2 and 3 are now E1-T11's DoD** — the scenario harness; the PR #14 review confirmed the missing composed-loop test
-as the root of its findings 1, 2, 4, 5, 8 and 11. Residual 1 stays unticketed. **Update 2026-10-08: residual 2 is closed on
-T11's branch, residual 3 in its rebaseline half only** (`e1-t11-belt-scenario-harness`, increments 2–3 —
-`BeltScenariosTest` drives the composed loop over `CaptureAssembly`; the lid-close scenario pins the rebaseline — a
-16-minute wall jump raises no `WATCHDOG_STALE` and is annotated `hostSlept`, no rebuild, the client reconnects itself;
-the rebuild-after-a-sleep arm is pinned only by the `@Disabled` dead-socket scenario, without the sleep — T11's
-doctrine review, finding 6); final when T11's PR merges.
+as the root of its findings 1, 2, 4, 5, 8 and 11. Residual 1 stays unticketed. **Update 2026-10-08: residual 2 is closed,
+final at T11's merge (PR #16); residual 3 is closed in its rebaseline half, final at the same merge** (`BeltScenariosTest`
+drives the composed loop over `CaptureAssembly`; the lid-close scenario pins the rebaseline — a 16-minute wall jump
+raises no `WATCHDOG_STALE` and is annotated `hostSlept`, no rebuild, the client reconnects itself; the
+rebuild-after-a-sleep arm is pinned only by the `@Disabled` dead-socket scenario, without the sleep — T11's doctrine
+review, finding 6). **Open for Alex:** whether the half satisfies T11's DoD's "residual 3 closed" — accept the half,
+amend the DoD wording, or ticket the rebuild arm into T10 A2.
 1. The gated demo smoke (`IG_SMOKE=1 ./gradlew :ig-client:demoSmoke`) has not run, so the
    `application-allowance.json` wire fixture is *authored*, not captured — run it and re-golden before
    T6's heal budget leans on pacer discovery. A skew fails safe today: refused at the boundary, 10/min kept.
 2. No composed-loop test — `Supervisor` ↔ `IgStreamControl` ↔ `FakeStreamTransport` through the single
-   `bind()`. Each layer is tested; the composition is not. **→ E1-T11 (DoD) — closed on the T11 branch 2026-10-08.**
+   `bind()`. Each layer is tested; the composition is not. **→ E1-T11 (DoD) — closed, final at T11's merge (PR #16, 2026-10-08).**
 3. No shell-level suspend → wake → `WILL-RETRY` → rebuild scenario — the rebaseline path is pinned only
-   in slice A's `StalenessWatchdogTest`. **→ E1-T11 (DoD) — closed in its rebaseline half on the T11 branch
-   2026-10-08** (`aLidCloseIsAnnotatedNotTreatedAsAnOutage`: a 16-minute wall jump, no `WATCHDOG_STALE`, annotated
+   in slice A's `StalenessWatchdogTest`. **→ E1-T11 (DoD) — closed in its rebaseline half, final at T11's merge
+   (PR #16, 2026-10-08)** (`aLidCloseIsAnnotatedNotTreatedAsAnOutage`: a 16-minute wall jump, no `WATCHDOG_STALE`, annotated
    `hostSlept`, no rebuild); **the rebuild-after-a-sleep arm is pinned only by the `@Disabled` dead-socket scenario**
-   (`aDeadSocketIsTheEscalatorsToRebuildAtOneHundredAndTwentySeconds`, #5), without the sleep.
+   (`aDeadSocketIsTheEscalatorsToRebuildAtOneHundredAndTwentySeconds`, #5), without the sleep — whether the half
+   satisfies T11's DoD is Alex's open ruling (above).
 
 ## T6 — Daily completeness + archive + digest (D6)
 
@@ -459,7 +461,7 @@ Results, this run:
 real stack. `written=` lagging `ticks=` + `bars=` by one on two later heartbeats is a snapshot artefact (a
 tick sitting in the queue at the instant the line is printed), not a loss.
 
-## T10 — Resilience belt hardening: the PR #14 review 🔶 (ticketed 2026-10-05; started 2026-10-08 — A1 ✅ PR #15; A2/B/C as E1-T11 scenarios)
+## T10 — Resilience belt hardening: the PR #14 review 🔶 (ticketed 2026-10-05; started 2026-10-08 — A1 ✅ PR #15; A2/B/C next as scenarios on the merged E1-T11 harness, PR #16)
 
 **Type** build · **Branch** `e1-t10-belt-hardening` · **Started** 2026-10-08 · **Blocked by** —
 
@@ -486,8 +488,9 @@ sweep thread via a bounded queue drained by one writer thread, drops counted in 
 (finding 12); (4) the `closing()`/`GRACEFUL_CLOSE` hush is deleted — the generation gate is the §3.6 hush
 (finding 29).
 
-**Slices (Alex's sequencing, refreshed 2026-10-08: A1 first with targeted tests — ✅ PR #15 → E1-T11 the harness
-→ A2/B/C as scenarios on it → E1-T12 replay acceptance → the review-only branch for the re-review → E1-T6):**
+**Slices (Alex's sequencing, refreshed 2026-10-08: A1 first with targeted tests — ✅ PR #15 → E1-T11 the harness — ✅ PR #16,
+merged 2026-10-08 → A2/B/C as scenarios on it, one PR per slice → E1-T12 replay acceptance → the review-only branch for
+the re-review → E1-T6):**
 
 - **A1 — the two highs, targeted tests, first.** **#1** a quarantined market's twin-leg rejection re-admits it:
   gate `SubscriptionError`s for epics in `quarantinedMarkets` in `Supervisor.sweep()`;
@@ -542,7 +545,7 @@ sweep thread via a bounded queue drained by one writer thread, drops counted in 
   `core.md:15`, `:28`).
 - **#23** (no combined-detector test) *is* the harness — **E1-T11**.
 
-**The A2/B backlog on the harness (E1-T11, written 2026-10-08 — the tenth, #4's window-lapse arm, added at T11's
+**The A2/B backlog on the harness (E1-T11 — merged 2026-10-08, PR #16; written 2026-10-08, the tenth, #4's window-lapse arm, added at T11's
 doctrine review; each verified red for its finding's reason):** the ten `@Disabled` scenarios in `BeltScenariosTest` —
 A2: #3 `aWeekendZombieBehindAClosedFlagIsFoundByTheTwelveHourTeachingResubscribe`,
 #4 `aRejectionHeldForAnUnconfirmedWitnessIsJudgedWhenTheWitnessConfirms`
@@ -579,7 +582,7 @@ green** (sequenced 2026-10-08: T12 lands before the re-review, so the re-review 
 captured outages), a review-only branch (base `ee35f9b`, head `main`, as PR #14 was) carries all the belt work —
 T10, T11 and T12 — for the cloud review session's re-review; a pass gates E1-T6.
 
-## T11 — The belt's scenario harness 🔶 (ticketed 2026-10-05; started 2026-10-08; design nod ruled 2026-10-08; increments 1–3 built 2026-10-08; doctrine review pass-with-findings 2026-10-08, fixes staged — next: Alex's commit → PR)
+## T11 — The belt's scenario harness ✅ (PR #16, 2026-10-08 — complete; ticketed 2026-10-05, started 2026-10-08, design nod ruled 2026-10-08)
 
 **Type** build · **Branch** `e1-t11-belt-scenario-harness` · **Started** 2026-10-08 · **Blocked by** —
 
@@ -646,20 +649,20 @@ The full captured-outage library and the acceptance-mode rig are **E1-T12**, not
 **Increments:**
 1. The consolidated `FakeClock`/`FakeSleeper`/`RecordingEventLog` (T10 #27) + the `FakeStreamTransport`
    extensions — scripted per-subscription outcomes; update delivery by item name; per-handle state throwing on
-   an inactive unsubscribe — each tested. *(Landed `32e2e3d`, 2026-10-08.)*
+   an inactive unsubscribe — each tested. *(Landed `ac79cdd`, 2026-10-08.)*
 2. The DSL, the runner, the rig over `CaptureAssembly`, and the six scenarios planned: a quiet healthy stretch;
    quarantine beside a healthy witness (the quarantine half of ①); the bare `DISCONNECTED` overnight (②); a lid
    close annotated `hostSlept` with no rebuild — the client reconnects itself (the rebaseline half of ⑦, not its
    rebuild arm); the Postgres blip (the hold-and-recover core of ⑧); a stop mid-hold (⑨) — plus three added during
-   the build: a stream blink inside a hold, the server's refusal, a schema error. *(Landed `6d7c3d8`, 2026-10-08 —
+   the build: a stream blink inside a hold, the server's refusal, a schema error. *(Landed `2f16773`, 2026-10-08 —
    nine scenarios green at that point. Not ⑥ dead socket — born `@Disabled` in increment 3 for #5 — and not a
    "suspend → wake → `WILL-RETRY` → rebuild" path; the first wording here claimed both and was corrected at the
    doctrine review, finding 6.)*
 3. The `@Disabled` scenarios for #3/#4/#5/#6/#8/#20; retiring the `SupervisorTest` one-detector tests the harness
-   subsumes; the loader + the exporter + the scar replay; chapter 08/10 touches. *(Landed `9174e8f`, 2026-10-08.)*
-4. The doctrine review's fixes (below). *(Staged on the branch 2026-10-08, awaiting Alex's commit; then push → PR.)*
+   subsumes; the loader + the exporter + the scar replay; chapter 08/10 touches. *(Landed `a95022a`, 2026-10-08.)*
+4. The doctrine review's fixes (below). *(Landed `59238f0`, 2026-10-08.)*
 
-**Built — what the branch holds (2026-10-08, increments 1–3 committed `32e2e3d` / `6d7c3d8` / `9174e8f`; the doctrine review's fixes staged, awaiting Alex's commit):**
+**Built — what landed (merged 2026-10-08 in PR #16, merge `65b4912`; the commits as merged — the branch was rebased onto main before the merge — `ac79cdd` / `2f16773` / `a95022a`, the doctrine review's fixes `59238f0`):**
 - **The harness** — `market-data-service/src/test/java/dev/amfshr/tradebench/marketdata/scenario/`: `Event` (the
   sealed vocabulary: `Status`, `ServerError`, `Confirm`/`Reject` per leg, `Tick`, `Bar` with bid + ask quotes,
   `DbDown`/`DbUp`/`DbBroken`/`DbWritesRefused`, `HostSleep`, `IgDown`/`IgUp`, `Stop`), `Events`, `Scenario` (the DSL
@@ -703,7 +706,7 @@ The full captured-outage library and the acceptance-mode rig are **E1-T12**, not
   `aServerErrorIsRecordedAndTheDisconnectThatPrecedesItRebuildsOnce`); 29 remain, including
   `aServerErrorAloneIsADeathToo`, which still catches the "`onServerError` is not a death" mutation. **Tests at
   increment 3:** ig-client 99 · market-data-service 185 (9 skipped — the disabled scenarios) · docs site 63 · 0 failures;
-  **after the review fixes:** ig-client 99 · market-data-service 193 (10 skipped) · docs site 63 · 0 failures;
+  **after the review fixes (the tests at merge):** ig-client 99 · market-data-service 193 (10 skipped) · docs site 63 · 0 failures;
   `./gradlew build` and the docs build green as CI runs them.
 - **Replays** — `market-data-service/src/test/resources/replays/`: `README.md` (the format, the library table);
   `export-prototype.sql` (the prototype's `igtrader_demo`: `igtrader.dax_ticks` / `nasdaq_ticks`, bars synthesised per
@@ -730,13 +733,13 @@ The full captured-outage library and the acceptance-mode rig are **E1-T12**, not
 - **T5 residual 2** (the composed-loop test) is closed by this work; **residual 3** in its rebaseline half only — a
   16-minute wall jump raises no `WATCHDOG_STALE` and is annotated `hostSlept` (`aLidCloseIsAnnotatedNotTreatedAsAnOutage`);
   the rebuild-after-a-sleep arm is pinned only by the `@Disabled` dead-socket scenario, without the sleep (doctrine
-  review, finding 6). Final at the merge; whether the half satisfies the DoD's "residual 3 closed" is Alex's call at
-  close-out.
+  review, finding 6). Final at the merge (PR #16, 2026-10-08); whether the half satisfies the DoD's "residual 3 closed"
+  is Alex's open ruling (see "Closed", below).
 
 **Doctrine review (2026-10-08) — pass-with-findings.** Verdict: the harness sound, the production extraction
 (`CaptureAssembly`, the public `sweep()`/`cycle()` seams) faithful, every chapter-10 derivation re-derived and right,
 G1 clean, all ten `SupervisorTest` retirements confirmed subsumed with no coverage lost, the 20 mutations traced to
-their assertions. Findings fixed on the branch before the PR (staged, awaiting Alex's commit): (1) #33's account
+their assertions. Findings fixed on the branch before the PR (commit `59238f0`): (1) #33's account
 corrected as above; (2) the runner no longer launders a failure of the harness or fixture into a pump death —
 `ScenarioRunner.HarnessError` wraps fixture errors and a throwing `Supervisor.sweep()` (review #19) and ends the run
 as a test error; (3) the fake sleeper's runaway guard is sized by the runner from the scenario's `until`, so the
@@ -759,17 +762,20 @@ error until #19 lands. Counts after the fixes: `BeltScenariosTest` 21 (11 green,
 8; tests ig-client 99 · market-data-service 193 (10 skipped) · docs site 63 · 0 failures; `./gradlew build` and the
 docs build green as CI runs them.
 
-**Next (2026-10-08):** Alex's commit of the review fixes → push → the PR → Alex merges → close-out (the Done history
-entry; T12 unblocked; T5 residual 2 and residual 3's rebaseline half marked final — the DoD's "residuals 2 and 3
-closed" is met in full for 2 and in its rebaseline half for 3; Alex rules whether that satisfies it or the DoD is
-amended).
+**Closed 2026-10-08:** PR #16 (`https://github.com/amfshr/tradebench/pull/16`) merged by Alex into `main`, merge commit
+`65b4912`; CI green on the merged head (`build` 51s, GitGuardian pass). The board's Done history carries the entry (tagged
+E1-T11); T12 is unblocked; T5 residual 2 and residual 3's rebaseline half are final. **Open for Alex (not decided here):**
+the DoD's "residuals 2 and 3 closed" is met in full for 2 and in its rebaseline half for 3 — accept the half, amend the DoD
+wording, or ticket the rebuild-after-a-sleep arm into T10 A2. Also open, carried by T10 A2: #33's `Decision: (TBD)`.
 
-**Sequencing (Alex, 2026-10-08):** E1-T10 slice A1 is on main (PR #15, merged 2026-10-08). T10's A2/B/C land as
-scenarios here, one PR per slice — the ten `@Disabled` scenarios are that backlog (A2 = #3 · #4 ×2 · #5 ×2 · #8 · #33;
-B = #6 · #20 ×2; the list by test name is in T10 §) → **E1-T12** replay acceptance (hard-blocked by this ticket) →
-the review-only branch of all the belt work for the cloud session's re-review (a pass gates E1-T6) → E1-T6.
+**Sequencing (Alex, 2026-10-08):** E1-T10 slice A1 is on main (PR #15, merged 2026-10-08); this harness is on main (PR #16,
+merged 2026-10-08). Next: T10's A2/B/C land as scenarios here, one PR per slice — the ten `@Disabled` scenarios are that
+backlog (A2 = #3 · #4 ×2 · #5 ×2 · #8 · #33; B = #6 · #20 ×2; the list by test name is in T10 §) → **E1-T12** replay
+acceptance (unblocked by this merge) → the review-only branch of all the belt work for the cloud session's re-review (a
+pass gates E1-T6) → E1-T6.
 
-**DoD:** the nine policy scenarios run deterministically with no real waiting, the scar replay as scenario ten
+**DoD (met at the merge, 2026-10-08 — one clause pending Alex's ruling: residual 3 is closed in its rebaseline half,
+see "Closed" above):** the nine policy scenarios run deterministically with no real waiting, the scar replay as scenario ten
 through the JSONL loader; each scenario's expectations are chapter 10's numbers; the `@Disabled` scenarios for
 #3/#4/#5/#6/#8/#20 written to chapter 10's expectations, each awaiting its fix; `Main` and the rig share
 `CaptureAssembly`; the harness's own behaviour mutation-verified (a wrong expected offset fails); T5's
@@ -777,16 +783,16 @@ residuals 2 and 3 (the composed-loop test; the suspend → wake → `WILL-RETRY`
 by it; the subsumed `SupervisorTest` scenarios removed, the pure-core unit tests kept, `IgStreamControlTest` on
 the extended fake.
 
-## T12 — Replay acceptance: the captured-outage library and the rig in acceptance mode ⬜ (ticketed 2026-10-08; blocked by T11)
+## T12 — Replay acceptance: the captured-outage library and the rig in acceptance mode ⬜ (ticketed 2026-10-08; unblocked 2026-10-08 — E1-T11 merged, PR #16)
 
-**Type** build · **Branch** `e1-t12-replay-acceptance` (planned) · **Started** — · **Blocked by** E1-T11
+**Type** build · **Branch** `e1-t12-replay-acceptance` (planned) · **Started** — · **Blocked by** —
 
 **Goal:** the belt proven against real captured outages — the gold standard short of the real IG socket: real
 parsers, buffers, pump, store and database under a replayed stream. The re-review that closes T10 should judge a
 belt proven this way, and T6's heal consumes exactly these bar-gap windows.
 
-**Hard dependency:** E1-T11 — the harness, its JSONL loader and its exporter are what this ticket extends (as of
-2026-10-08 all three exist on T11's branch, increments 1–3 built; T11's PR is pending).
+**Hard dependency — met:** E1-T11 — the harness, its JSONL loader and its exporter are what this ticket extends; all
+three are on main since T11's merge (PR #16, 2026-10-08), so this ticket is unblocked.
 
 **The source — the prototype's capture** (facts read from the prototype database `igtrader_demo`, schema
 `igtrader`, 2026-10-08):
@@ -831,7 +837,7 @@ field-manual note on the replay library (where it lives, how a new outage become
 
 **Estimate:** ≈ two sessions.
 
-**Sequencing (Alex, 2026-10-08):** T11 → T10 A2/B/C as scenarios → **T12** → the review-only branch of all the
+**Sequencing (Alex, 2026-10-08):** T11 (✅ PR #16, merged 2026-10-08) → T10 A2/B/C as scenarios → **T12** → the review-only branch of all the
 belt work for the cloud session's re-review (a pass gates T6) → T6.
 
 **Cross-references:** G1 (market data only — never strategy content) · P8 · E1-T6 (the heal consumes these
