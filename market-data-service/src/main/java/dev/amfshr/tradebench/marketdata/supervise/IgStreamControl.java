@@ -134,6 +134,10 @@ public final class IgStreamControl implements StreamControl, AutoCloseable {
             log.accept("resubscribe " + epic + " skipped — no live stream");
             return;
         }
+        if (quarantined.contains(epic)) {
+            log.accept("resubscribe " + epic + " refused — quarantined (exit is restart-only)");
+            return; // the second lock on the door: whoever asks, a quarantined pair never comes back
+        }
         try {
             dropLegs(live, epic);
             legs.put(epic, subscribePair(live, epic, generation.get()));

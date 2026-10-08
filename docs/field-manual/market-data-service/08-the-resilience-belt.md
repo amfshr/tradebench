@@ -151,7 +151,10 @@ case is the craft: a would-be witness still inside its 30s confirm window return
 Strikes are per-session attempt counts, so a flapping error code can't reset them;
 quarantine exit is **restart-only** (config-shaped failures don't self-heal); a refused
 unsubscribe always rebuilds (it would double-deliver every update). At N=1 the structure
-guarantees the last market dies loud, never quarantined into a silently idle service.
+guarantees the last market dies loud, never quarantined into a silently idle service. Once quarantined, a market's further rejections
+return `Ignored` — every market is two legs, and the pair's second rejection is already on the
+queue when the verdict falls (E1-T10 #1); `IgStreamControl.resubscribe` refuses a quarantined epic
+too, the second lock on the same door.
 
 **`coverage.GapDetector`** — sealed bars land on a minute grid, so coverage is checkable
 *online*: per epic, a watermark of the latest bar start; a bar landing more than one

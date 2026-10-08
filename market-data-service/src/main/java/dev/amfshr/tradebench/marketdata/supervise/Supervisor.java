@@ -234,7 +234,8 @@ public final class Supervisor implements StreamObserver, BeltView, Runnable {
 
     /** Execute a subscription-failure {@link WitnessQuarantine.Judgment} — the §3.5 blast-radius
      * decision. Retry re-attempts the failing pair in place; Wait holds for a confirming witness;
-     * Quarantine isolates one market; Rebuild treats the failure as session-shaped. */
+     * Quarantine isolates one market; Rebuild treats the failure as session-shaped; Ignored is a
+     * quarantined market's later rejection. */
     private void applyJudgment(WitnessQuarantine.Judgment judgment, Observation.SubscriptionError error) {
         switch (judgment) {
             case WitnessQuarantine.Judgment.Retry(String epic) -> {
@@ -244,6 +245,9 @@ public final class Supervisor implements StreamObserver, BeltView, Runnable {
             case WitnessQuarantine.Judgment.Wait() -> {
                 // a would-be witness is still inside its confirm window — hold, never race a fast
                 // rejection into a whole-session rebuild (§3.5)
+            }
+            case WitnessQuarantine.Judgment.Ignored ignored -> {
+                // already quarantined — its pair's other leg was rejected too; nothing to do
             }
             case WitnessQuarantine.Judgment.Quarantine(String epic) -> quarantineMarket(epic, error);
             case WitnessQuarantine.Judgment.Rebuild() -> rebuild(EventType.SUBSCRIPTION_REJECTED,

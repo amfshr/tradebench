@@ -583,6 +583,22 @@ class SupervisorTest {
                 "NASDAQ is inside its fresh 30s confirm window: wait, never a second rebuild");
     }
 
+    @Test
+    void aQuarantinedMarketsTwinLegRejectionDoesNotReadmitIt() {
+        supervisor.watch(DAX);
+        supervisor.watch(NASDAQ);
+        supervisor.onSubscribed(NASDAQ, WitnessQuarantine.Kind.PRICE);
+        supervisor.onSubscribed(NASDAQ, WitnessQuarantine.Kind.CHART);
+        failToTheStrikeCeiling(DAX);
+        supervisor.onSubscriptionError(DAX, 40, "rejected"); // the pair's other leg — queued before the verdict
+        supervisor.sweep();
+
+        assertEquals(List.of(DAX), stream.quarantined, "quarantined exactly once");
+        assertEquals(2, stream.resubscribed.size(), "the two in-place retries before the verdict — none after");
+        assertEquals(0, stream.rebuilds);
+        assertEquals(1, count(EventType.MARKET_QUARANTINED));
+    }
+
     // --- helpers + fakes --------------------------------------------------------------------
 
     /** jitter = 1.0 → deterministic backoff; Sleeper/interval unused (tests drive sweep() directly). */

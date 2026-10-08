@@ -10,7 +10,9 @@ import java.util.Set;
  * rebuild the whole session and wobble the healthy market. The witness rule: a failure
  * while another market's pair is fully SUBSCRIBED means the epic is the only differing
  * variable → market-shaped → quarantine just that market. No witness → session-shaped →
- * rebuild. Quarantine exit is restart-only: config-shaped failures don't self-heal.
+ * rebuild. Quarantine exit is restart-only: config-shaped failures don't self-heal — and a
+ * quarantined market's later rejections (the pair's second leg, a late one) are {@code Ignored}:
+ * never a fresh strike, never re-admitted (E1-T10 #1).
  */
 public final class WitnessQuarantine {
 
@@ -24,6 +26,9 @@ public final class WitnessQuarantine {
         record Quarantine(String epic) implements Judgment { }
 
         record Rebuild() implements Judgment { }
+
+        /** Already quarantined — nothing to judge; the shell does nothing with it. */
+        record Ignored(String epic) implements Judgment { }
     }
 
     private final Tuning tuning;
@@ -58,6 +63,9 @@ public final class WitnessQuarantine {
      * exact-string matches — a flapping rejection code must not launder the count.
      */
     public Judgment onSubscriptionError(String epic, long monotonicNanos) {
+        if (quarantined.contains(epic)) {
+            return new Judgment.Ignored(epic); // the twin leg's rejection arrives after the verdict
+        }
         Market failing = markets.computeIfAbsent(epic, e -> new Market());
         failing.strikes++;
         if (failing.strikes < tuning.subscriptionStrikes()) {

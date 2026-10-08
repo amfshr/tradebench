@@ -386,4 +386,15 @@ class IgStreamControlTest {
         control.rebuild();
         assertEquals(List.of(DAX_PRICE, DAX_CHART), subscribedItems(fake.last()));
     }
+
+    @Test
+    void resubscribeRefusesAQuarantinedMarket() throws Exception {
+        boot();
+        assertTrue(control.quarantine(FTSE));
+
+        control.resubscribe(FTSE); // a Retry that should never have been issued — the second lock
+
+        assertEquals(List.of(DAX_PRICE, DAX_CHART), activeItems(fake.last()), "nothing re-subscribed");
+        assertTrue(log.getLast().contains("refused"));
+    }
 }
