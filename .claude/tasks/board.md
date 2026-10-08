@@ -42,7 +42,13 @@ job → E1-T7), one process per job, trigger = E9 gains save-credentials + save-
 heartbeat fail-fast note is folded into **E1-T10 #22**; B7 AI-framework (legible E0, a "how we build" guide,
 a retrospective practice); **B8** tick-queue overflow during a prolonged sink hold — spill-to-disk (jsonl)
 vs simply raising `Buffers.DEFAULT_TICK_CAPACITY` (captured 2026-10-05 from Alex's T9-review question,
-his own assessment "unlikely"; not scheduled — revisit if a real outage ever approaches the queue bound).
+his own assessment "unlikely"; not scheduled — revisit if a real outage ever approaches the queue bound);
+**B9** REST-fetch collection jobs (non-streaming) and allowance visibility — a second job type that pulls
+bars by REST on a schedule (e.g. one end-of-day fetch of the day's 1m bars per market) instead of streaming,
+with the IG allowances that bound it (the request allowances `GET /operations/application` already parses +
+the 10,000 points/week historical budget the T6 heal shares) shown in the console; cross-cutting E9 + the
+market-data service, its own `ig-rest-<env>` source (P8) (captured 2026-10-08 from Alex; not scheduled —
+trigger: E1 T6/T7 and E9's platform app deployed and off v0, Alex's call when).
 
 ---
 

@@ -236,3 +236,30 @@ line. Two ways to move the bound if it ever matters:
 
 Not scheduled; revisit if a real outage ever approaches the queue bound (the 2026-10-05 drill's 152s outage
 shed 0 ticks and peaked at 303 queued writes — far below it).
+
+## B9 — REST-fetch collection jobs (non-streaming) and allowance visibility
+
+**Captured** 2026-10-08 (Alex) · **Likely home** a cross-cutting epic once both apps are deployed and past v0 — the platform web app (E9) *and* the market-data service, one spine exercise · **Trigger** after E1 (T6, T7) and E9's platform app are deployed and off v0 — Alex's call when; not scheduled · **Relates to** E1-T6 (the heal is the same REST primitive — a REST-only job is a scheduled backfill with no stream to heal; D6: a plain scheduled task) · E9 (jobs and the allowance view belong in the console) · B1 (per-user jobs and credentials — the job model B9 extends) · D27/D28 (the collector's resilience tiers apply) · D16 + IG playbook §7 (a REST job on a key a live stream also uses — the shared-key case B1 flags) · P8 (source-attributed always) · IG playbook §4.3 (historical-data allowance — 10,000 candle points/week; 1m depth ≤ 40 days), §6 (request allowances) · `IgRestClient` → `ApplicationAllowance` (`GET /operations/application`; golden `wire/application-allowance.json`), `RequestPacer`, `PacerDiscovery` · the seeded `sources` (`V1__baseline.sql`: `ig-stream-demo`, `ig-stream-live`, `ig-rest-heal`)
+
+Not every user wants to stream. A **second job type pulls bars by REST** — e.g. one end-of-day fetch of
+the day's 1-minute bars per market (other timeframes later), scheduled — instead of a 24/7 Lightstreamer
+stream, and the platform **shows the IG allowances that bound it**: the per-account / per-application
+request allowances `GET /operations/application` already parses (`IgRestClient` → `ApplicationAllowance`;
+`PacerDiscovery` sets the REST budget from the tighter of the two, minus `HEADROOM` because T6's heal spends
+the same key), and the historical-data allowance of ~10,000 candle points / week per account (playbook
+§4.3, §6 — shared across keys and services) that the T6 heal is also budgeted against. A REST collector
+would be another spender on those same per-account budgets — hence *visibility*, not just pacing.
+
+Why it is a growth area for the spine: it is **cross-cutting**, and a clean exercise in thinking the spine
+further once both apps are deployed and past v0 —
+- **Platform web app (E9):** job definition and UI, the allowance view, per-user credentials — B1's job
+  model gains a second job type.
+- **Market-data service:** a scheduled REST collector reusing **E1-T6's heal path** (window-clipped, paced,
+  allowance-aware — a REST-only job *is* a scheduled backfill with no stream to heal), the
+  `RequestPacer`/`PacerDiscovery` budget and the allowance parsing; **its own source name**, e.g.
+  `ig-rest-<env>`, so REST-collected rows carry their provenance (P8) beside the seeded `ig-stream-<env>`
+  and `ig-rest-heal` sources — never conflated with streamed bars. D27/D28's resilience tiers apply; a REST
+  job sharing a live stream's key is the D16 shared-key case B1 already flags (login stagger, one request
+  budget).
+
+Not scheduled. Trigger: after E1 (T6, T7) and E9's platform app are deployed and off v0 — Alex's call when.
