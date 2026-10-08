@@ -622,16 +622,38 @@ class SupervisorTest {
         assertEquals(1, stream.rebuilds, "nothing else can start this recovery");
         assertEquals("DISCONNECTED", single(EventType.CONNECTION_DEAD).detail().get("status").asText());
         assertTrue(stream.resubscribed.isEmpty(), "not the watchdog's doing");
+
+        clock.advance(Duration.ofSeconds(1));
+        supervisor.onStatusChange("DISCONNECTED"); // the rebuilt connection is refused too
+        supervisor.sweep();
+        assertEquals(1, stream.rebuilds, "inside the 5s floor: paced, but not forgotten");
+        clock.advance(Duration.ofSeconds(4));
+        supervisor.sweep(); // no new status arrives — the latch asks again
+        assertEquals(2, stream.rebuilds, "exactly the floor: the ladder climbs on its own");
+
         supervisor.onStatusChange("CONNECTED:WS-STREAMING"); // IG is back
         supervisor.sweep();
-        assertEquals(1, count(EventType.RECONNECT), "the outage the rebuild opened closes on the resume");
+        ServiceEvent resume = single(EventType.RECONNECT);
+        assertFalse(resume.detail().get("replayed").asBoolean(),
+                "a rebuild tears the buffer down — a heal is owed (the ladder, not a bare reconnect)");
+    }
+
+    @Test
+    void aServerErrorAloneIsADeathToo() {
+        supervisor.onServerError(2, "Requested Adapter Set not available"); // §3.1: the first is a death
+
+        supervisor.sweep();
+
+        assertEquals(1, stream.rebuilds);
+        assertEquals(2, single(EventType.CONNECTION_DEAD).detail().get("code").asInt());
+        assertEquals(1, count(EventType.IG_API_ERROR), "and it is still recorded as itself");
     }
 
     @Test
     void aServerErrorIsRecordedAndTheDisconnectThatPrecedesItRebuildsOnce() {
         stream.duringRebuild = () -> clock.advance(Duration.ofSeconds(61)); // a paced re-login blocks
         supervisor.onStatusChange("DISCONNECTED"); // the SDK's order: the status first…
-        supervisor.onServerError(2, "Requested Adapter Set not available"); // …then its explanation
+        supervisor.onServerError(2, "Requested Adapter Set not available"); // …then its explanation — one death
 
         supervisor.sweep();
 

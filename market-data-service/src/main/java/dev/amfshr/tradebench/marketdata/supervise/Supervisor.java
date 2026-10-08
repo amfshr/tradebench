@@ -73,6 +73,10 @@ public final class Supervisor implements StreamObserver, BeltView, Runnable {
     private long lastRebuildMono = Long.MIN_VALUE;
     private long firstFailureMono = Long.MIN_VALUE;
     private boolean gaveUp;
+    // A terminal disconnect, latched until a rebuild actually runs for it: the client gave up, so no
+    // status will ever re-fire — the latch is what re-asks past the pacing floor (E1-T10 #2).
+    private @Nullable Instant deadAt;
+    private @Nullable ObjectNode deadDetail;
     private volatile boolean running = true;
 
     public Supervisor(Clock clock, Tuning tuning, DoubleSupplier jitter, EventLog events,
@@ -173,12 +177,11 @@ public final class Supervisor implements StreamObserver, BeltView, Runnable {
             if (observation instanceof Observation.Status status) {
                 applyStatus(status);
             } else if (observation instanceof Observation.ServerError(int code, String message, Instant at)) {
-                // Recorded, not acted on: the SDK sends the bare DISCONNECTED first and this is its
-                // explanation; a second trigger here would rebuild twice after a blocking re-login.
                 record(ServiceEvent.of(EventType.IG_API_ERROR, at)
                         .withDetail(MAPPER.createObjectNode()
                                 .put("code", code)
                                 .put("message", message)));
+                latchDeath(at, MAPPER.createObjectNode().put("code", code).put("message", message));
             } else if (observation instanceof Observation.Subscribed(String epic, WitnessQuarantine.Kind kind)) {
                 witness.onSubscribed(epic, kind);
             } else if (observation instanceof Observation.SubscriptionError error) {
@@ -190,10 +193,23 @@ public final class Supervisor implements StreamObserver, BeltView, Runnable {
             giveUp("budget", clock.wallInstant());
             return;
         }
+        if (deadAt != null && rebuild(EventType.CONNECTION_DEAD, deadAt, null, deadDetail)) {
+            deadAt = null; // cleared only by a rebuild that ran — a paced-out one is asked again next sweep
+            deadDetail = null;
+        }
         if (stuck.rebuildDue(clock.monotonicNanos())) {
             rebuild(EventType.STUCK_SUBSTATE_ESCALATED, clock.wallInstant());
         }
         checkStaleness();
+    }
+
+    /** The first signal dates the death; a second announcement of the same death changes nothing
+     * (playbook §3.1: the first {@code onServerError} is a death, a bare DISCONNECTED is a death). */
+    private void latchDeath(Instant at, ObjectNode detail) {
+        if (deadAt == null) {
+            deadAt = at;
+            deadDetail = detail;
+        }
     }
 
     /** Sample each watched market's freshness, feed the watchdog on-change, and execute its
@@ -248,7 +264,7 @@ public final class Supervisor implements StreamObserver, BeltView, Runnable {
                 // a would-be witness is still inside its confirm window — hold, never race a fast
                 // rejection into a whole-session rebuild (§3.5)
             }
-            case WitnessQuarantine.Judgment.Ignored ignored -> {
+            case WitnessQuarantine.Judgment.Ignored _ -> {
                 // already quarantined — its pair's other leg was rejected too; nothing to do
             }
             case WitnessQuarantine.Judgment.Quarantine(String epic) -> quarantineMarket(epic, error);
@@ -300,35 +316,36 @@ public final class Supervisor implements StreamObserver, BeltView, Runnable {
             rebuilding = false;
         }
         if (ReconnectClassifier.isTerminal(status.status())) {
-            // The client gave up (playbook §3.1): no retry substate will ever escalate this, and the
-            // watchdog stands down on closed markets — so this rebuild is ours to start, paced as ever.
-            rebuild(EventType.CONNECTION_DEAD, Instant.ofEpochMilli(status.wallMillis()), null,
+            // The client gave up: no retry substate will ever escalate this, and the watchdog stands
+            // down on closed markets — so the rebuild is ours to ask for, and the sweep keeps asking.
+            latchDeath(Instant.ofEpochMilli(status.wallMillis()),
                     MAPPER.createObjectNode().put("status", status.status()));
         }
     }
 
-    /** Execute a session rebuild, paced by backoff; give up loud when the ladder is exhausted. */
-    private void rebuild(EventType reason, Instant occurredAt) {
-        rebuild(reason, occurredAt, null, null);
+    /** Execute a session rebuild, paced by backoff; give up loud when the ladder is exhausted.
+     * Returns false only when the request was paced out — ask again next sweep. */
+    private boolean rebuild(EventType reason, Instant occurredAt) {
+        return rebuild(reason, occurredAt, null, null);
     }
 
     /** As above, but scoping the reason event to {@code epic} with {@code detail} — used when one
      * market's rejection with no healthy witness is what forced the whole-session rebuild (§3.5).
      * The reason event is written only when the rebuild actually proceeds (never when paced out or
      * exhausted), so it stays a faithful record of rebuilds that happened. */
-    private void rebuild(EventType reason, Instant occurredAt, @Nullable String epic,
+    private boolean rebuild(EventType reason, Instant occurredAt, @Nullable String epic,
             @Nullable ObjectNode detail) {
         if (gaveUp) {
-            return;
+            return true; // nothing left to ask for
         }
         long now = clock.monotonicNanos();
         if (consecutiveFailures > 0
                 && now - lastRebuildMono < backoff.delayFor(consecutiveFailures).toNanos()) {
-            return; // not yet — space rebuilds so a re-login storm never trips IG's throttles (§3.2)
+            return false; // not yet — space rebuilds so a re-login storm never trips IG's throttles (§3.2)
         }
         if (backoff.exhausted(consecutiveFailures)) {
             giveUp("ceiling", occurredAt);
-            return;
+            return true;
         }
         if (consecutiveFailures == 0) {
             firstFailureMono = now; // the recovery budget runs from an outage's first rebuild
@@ -347,7 +364,7 @@ public final class Supervisor implements StreamObserver, BeltView, Runnable {
         rebuilding = true; // the view reads RECONNECTING until the new connection streams
         if (!stream.rebuild()) {
             giveUp("fatal_config", occurredAt); // never climb a ladder against a lockout
-            return;
+            return true;
         }
         // Re-read the clock: a paced re-login blocks ~61s, and the §3.5 confirm window must start
         // when the new session's subscribes begin, not when the rebuild was decided.
@@ -356,6 +373,7 @@ public final class Supervisor implements StreamObserver, BeltView, Runnable {
         for (String survivor : watched) {
             witness.onSubscribeStarted(survivor, resubscribed); // the survivors re-subscribe now
         }
+        return true;
     }
 
     /** End recovery loud, exactly once: {@code FEED_DEAD} says why, sweeping stops, and the

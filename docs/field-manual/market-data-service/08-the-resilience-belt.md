@@ -143,9 +143,10 @@ hushed. That last one guards a principle, not a log line: **quiet must stay mean
 static rule beside `isStreaming`: `isTerminal` — a bare `DISCONNECTED`, the client having given up
 for good (playbook §3.1), never the two retry substates the escalator paces. The Supervisor rebuilds
 on it at once, backoff-paced, because nothing else can: no substate will escalate it, and the
-watchdog stands down on closed markets (E1-T10 #2). The `onServerError` that the SDK sends after it
-is recorded as the explanation, not acted on — a second trigger would rebuild twice after a
-blocking re-login.
+watchdog stands down on closed markets (E1-T10 #2). The `onServerError` the SDK sends after it latches
+the same death — one death, one rebuild, however many callbacks announce it — and because the
+latch is asked again every sweep, a refusal that recurs inside the pacing floor climbs the ladder
+like any other outage instead of stalling at one rung until the budget.
 
 **`WitnessQuarantine`** — §3.5's blast-radius rule for the multi-market future, built now
 so N=1 is the degenerate case rather than a rewrite. The inference: a subscription
@@ -209,11 +210,13 @@ queue.
 **The sweep.** One pass does three things, in order. First it drains the observation queue:
 each `Status` feeds `ReconnectClassifier` and `StuckSubstateEscalator` (emitting a
 `RECONNECT` or `TRANSPORT_DOWNGRADED` event when the classifier returns one); each
-`ServerError` writes an `IG_API_ERROR`. Second, the recovery budget: if the first rebuild of
+`ServerError` writes an `IG_API_ERROR`; a bare `DISCONNECTED` or a `ServerError` latches a death
+(E1-T10 #2). Second, the recovery budget: if the first rebuild of
 this outage was `giveUpAfter` ago and streaming never resumed, give up — checked here, after
 the drain (a queued resume resets it first) and before any detector, so it never depends on
-how often a detector re-fires. Third, the detectors — if the escalator says a rebuild is due,
-do it; then `checkStaleness()`. Nothing blocks; the pass is microseconds of CPU. Event writes
+how often a detector re-fires. Third, the detectors — a latched death first (asked again every sweep until the pacing lets the
+rebuild run, so a refusal that recurs inside the floor still climbs the ladder), then the
+escalator if a rebuild is due, then `checkStaleness()`. Nothing blocks; the pass is microseconds of CPU. Event writes
 are **best-effort here as in the pump**: a failing write is counted (`eventWriteFailures`,
 surfaced by the heartbeat), never allowed to kill the sweep thread — observability is
 downstream of the decision. **Every event named here is a `ServiceEvent` written through the
