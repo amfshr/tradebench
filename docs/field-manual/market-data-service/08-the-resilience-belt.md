@@ -134,7 +134,7 @@ a broker at 3am.
 we lose data?* Lightstreamer's contract makes it answerable: if the outage contained a
 `WILL-RETRY` sighting, the server discarded its replay buffer → **replaced**, data is
 gone, a heal is owed; no sighting → **replayed**, no gap. The returned `Reconnect` value
-carries `wallOutage`, `awakeOutage`, and `hostSleptDuring` (the 16-minute lid-close that
+carries `wallOutage`, `awakeOutage`, and `hostSleptDuring` (the 16-minute host suspend that
 once logged as "0.4s offline"). Two more notes from `noteFor`: `CONNECTED:HTTP-POLLING`
 is flagged — a silent WebSocket→polling downgrade degrades latency and often precedes a
 drop — and an intentional `close()` sets `closing` so the farewell `DISCONNECTED` is
@@ -249,7 +249,7 @@ The watchdog never reads a clock itself — the sweep hands it two `long`s, `mon
 and `wallMillis`, every round. It measures staleness as *now − last-arrival* on the
 **monotonic** clock (chapter 7: monotonic cannot jump when the wall clock is adjusted). It
 compares the two clocks only to catch the host having slept: if wall advanced far more than
-monotonic, the laptop's lid was shut, every market's "silence" is really that sleep, and the
+monotonic, the host was suspended, every market's "silence" is really that sleep, and the
 round **re-baselines** instead of firing. That is why the tests advance in 5-second steps
 (`advanceAndSweep`) — one jump over the 10s freeze threshold would itself look like a process
 freeze and re-baseline, so production's second-by-second cadence has to be modelled.

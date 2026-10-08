@@ -30,8 +30,9 @@ once.
 
 Monotonic time never goes backwards, which makes it the *only* legitimate input to
 elapsed-time maths. Its price is that it means nothing as a date and — the subtle part —
-it **pauses while the host sleeps**. Sixteen minutes of closed laptop lid is sixteen
-minutes of wall time and roughly *zero* monotonic time.
+it **pauses while the host is suspended** — a paused or live-migrated VM, a hibernated
+instance, a frozen process. Sixteen minutes of suspension is sixteen minutes of wall time and
+roughly *zero* monotonic time.
 
 That asymmetry is not a nuisance. It is a **sensor**. Sample both clocks on a fixed
 cadence and compare the deltas between consecutive rounds:
@@ -51,7 +52,7 @@ pause, a breakpoint, CPU starvation. Two clocks, one subtraction, and you can te
 states of the world apart. No OS callbacks, no platform-specific sleep notifications.
 
 Why care? Because a supervisor measuring *silence* must never confuse "the feed died"
-with "I wasn't awake to listen". Fire a resubscribe the instant the lid opens and you are
+with "I wasn't awake to listen". Fire a resubscribe the instant the host resumes and you are
 remedying an outage that never happened — possibly into a session that is mid-recovery.
 
 ## Our code path
@@ -86,7 +87,7 @@ Silence is measured from the wake, not from before the sleep: the watchdog can n
 `Tuning.playbook()` with the rest of the §8 numbers.
 
 Because everything is injected, the tests drive time as plain longs.
-`StalenessWatchdogTest.hostSleepSkipsTheRoundAndRebaselines` replays the lid-close as a
+`StalenessWatchdogTest.hostSleepSkipsTheRoundAndRebaselines` replays a 16-minute suspend as a
 wall clock 960 seconds ahead of monotonic; `processFreezeSkipsTheRoundAndRebaselines`
 jumps monotonic by 11s. Both assert the skipped round *and* that a full fresh 90s window
 after the anomaly does fire. The whole suite — 13 outage-shaped scenarios — runs in
@@ -97,16 +98,18 @@ payoff of the injectable-clock doctrine: timing logic tested at the speed of ari
 
 > **Scar** — **"0.4s offline"** · a 16-minute gap, mis-measured
 >
-> The prototype logged a lid-closed outage of sixteen minutes as **"0.4s offline"** — it
-> measured the gap on the monotonic clock, which had slept along with the machine. Awake-outage:
+> The prototype — then a server running on a laptop — logged a sixteen-minute suspend as
+> **"0.4s offline"**: it measured the gap on the monotonic clock, which had slept along with the
+> host. The lesson is about any suspended host; a deployed service meets it as a paused VM or
+> a hibernated instance, never as a lid. Awake-outage:
 > 0.4s. Wall-outage: ~16 minutes of missing market data.
 >
 > **Lesson.** Wall time for stamps, monotonic for spans, and the *pair* for anomaly detection.
 > `ReconnectClassifier` now reports `wallOutage`, `awakeOutage`, and `hostSleptDuring` side by side.
 
 The complementary hazard is hypothetical only because the doctrine forbids it: a watchdog
-measuring staleness against wall time declares every market dead the moment a laptop
-wakes — one lid-open away from a remedy storm. Hence the standing convention (tech-notes;
+measuring staleness against wall time declares every market dead the moment the host
+resumes — one wake-up away from a remedy storm. Hence the standing convention (tech-notes;
 playbook §3.3–§3.4):
 **wall time for stamps, monotonic for spans, and the pair for anomaly detection.**
 
