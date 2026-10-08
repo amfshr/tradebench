@@ -25,6 +25,8 @@ public final class ScriptedCaptureStore implements CaptureStore {
     private static final String SCHEMA = "42P01";
     /** Disk full — retryable by the taxonomy, invisible to a recovery that only reconnects. */
     private static final String DISK_FULL = "53100";
+    /** {@code PostgresStore.TICK_BATCH_LIMIT}: a full batch lands without waiting for an idle flush. */
+    private static final int TICK_BATCH_LIMIT = 500;
 
     /** What landed, in order: {@code bar@<startUtc seconds>} / {@code tick@<timestamp millis>}. */
     public final List<String> landed = new ArrayList<>();
@@ -49,6 +51,9 @@ public final class ScriptedCaptureStore implements CaptureStore {
         pending.add(tick); // held before anything can fail, as the real store does
         refuseIfBroken();
         failIfScripted("tick write failed");
+        if (pending.size() >= TICK_BATCH_LIMIT) {
+            flush();
+        }
     }
 
     @Override

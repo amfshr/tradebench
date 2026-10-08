@@ -101,9 +101,12 @@ public final class FakeStreamTransport implements StreamTransport {
             active.remove(handle);
         }
 
+        /** Closing fires the farewell {@code DISCONNECTED} the SDK sends — after the owner has moved
+         * on, so the generation gate is exercised on every rebuild. */
         @Override
         public void close() {
             closed = true;
+            listener.onStatusChange("DISCONNECTED");
         }
 
         // --- playing the wire back ------------------------------------------------------------

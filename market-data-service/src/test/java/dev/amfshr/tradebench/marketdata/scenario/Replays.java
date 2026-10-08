@@ -11,6 +11,8 @@ import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 
+import org.jspecify.annotations.Nullable;
+
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
@@ -45,35 +47,42 @@ public final class Replays {
         JsonNode meta = header.path("payload");
         List<String> epics = new ArrayList<>();
         meta.path("epics").forEach(e -> epics.add(e.asText()));
-        Scenario.Builder scenario = Scenario.named(meta.path("name").asText())
+        Instant origin = meta.hasNonNull("origin") ? Instant.parse(text(meta, "origin")) : null;
+        Scenario.Builder scenario = Scenario.named(text(meta, "name"))
                 .markets(epics.toArray(String[]::new))
-                .until(Duration.ofMillis(meta.path("untilMs").asLong()));
+                .until(Duration.ofMillis(number(meta, "untilMs")));
         if (meta.path("serverAnswers").asBoolean()) {
             scenario.serverAnswers();
         }
+        if (origin != null) {
+            scenario.origin(origin);
+        }
         for (int i = 1; i < lines.size(); i++) {
             JsonNode line = MAPPER.readTree(lines.get(i));
-            scenario.at(Duration.ofMillis(line.path("at").asLong()), event(line.path("kind").asText(), line.path("payload")));
+            long at = number(line, "at");
+            scenario.at(Duration.ofMillis(at), event(text(line, "kind"), line.path("payload"),
+                    origin == null ? null : origin.plusMillis(at)));
         }
         return scenario;
     }
 
-    private static Event event(String kind, JsonNode p) {
+    private static Event event(String kind, JsonNode p, @Nullable Instant at) {
         return switch (kind) {
             case "status" -> new Event.Status(text(p, "status"));
-            case "serverError" -> new Event.ServerError(p.path("code").asInt(), text(p, "message"));
+            case "serverError" -> new Event.ServerError((int) number(p, "code"), text(p, "message"));
             case "confirm" -> new Event.Confirm(text(p, "epic"), Event.Leg.valueOf(text(p, "leg")));
             case "reject" -> new Event.Reject(text(p, "epic"), Event.Leg.valueOf(text(p, "leg")),
-                    p.path("code").asInt(), text(p, "message"));
+                    (int) number(p, "code"), text(p, "message"));
             case "tick" -> new Event.Tick(text(p, "epic"), text(p, "bid"), text(p, "ask"),
-                    p.has("dealFlag") ? text(p, "dealFlag") : "DEAL");
+                    p.has("dealFlag") ? text(p, "dealFlag") : "DEAL", at);
             case "bar" -> new Event.Bar(text(p, "epic"), quote(p.path("bid")), quote(p.path("ask")),
-                    p.has("startUtc") ? Instant.parse(text(p, "startUtc")) : null);
+                    p.has("startUtc") ? Instant.parse(text(p, "startUtc")) : null,
+                    p.hasNonNull("ltv") ? number(p, "ltv") : null);
             case "dbDown" -> new Event.DbDown();
             case "dbUp" -> new Event.DbUp();
             case "dbBroken" -> new Event.DbBroken();
             case "dbWritesRefused" -> new Event.DbWritesRefused();
-            case "hostSleep" -> new Event.HostSleep(Duration.ofMillis(p.path("ms").asLong()));
+            case "hostSleep" -> new Event.HostSleep(Duration.ofMillis(number(p, "ms")));
             case "igDown" -> new Event.IgDown();
             case "igUp" -> new Event.IgUp();
             case "stop" -> new Event.Stop();
@@ -83,6 +92,12 @@ public final class Replays {
 
     private static Event.Quote quote(JsonNode q) {
         return new Event.Quote(text(q, "open"), text(q, "high"), text(q, "low"), text(q, "close"));
+    }
+
+    private static long number(JsonNode node, String field) {
+        require(node.hasNonNull(field) && node.get(field).isNumber(),
+                "a replay line needs a number for '" + field + "': " + node);
+        return node.get(field).asLong();
     }
 
     private static String text(JsonNode node, String field) {

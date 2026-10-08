@@ -293,18 +293,24 @@ Fix: append `!**/src/**/build/`, `!**/src/**/out/`, `!**/src/**/tmp/` (a `/build
 
 ## Addendum — findings added after the review
 
-### 33. The session verdict needs the markets stale in the same sweep
-`market-data-service/src/main/java/dev/amfshr/tradebench/marketdata/supervise/StalenessWatchdog.java:110`
-*(found 2026-10-08 by E1-T11's replay of the 2026-08-04 scar)*
+### 33. One stray per-market resubscribe the sweep before the session verdict
+`market-data-service/src/main/java/dev/amfshr/tradebench/marketdata/supervise/StalenessWatchdog.java:98-135`
+*(found 2026-10-08 by E1-T11's replay of the 2026-08-04 scar; severity **low**)*
 
-`evaluate()` counts the markets stale *now*, and a market remedied in the previous sweep is no
-longer stale. The scar's two feeds died 584ms apart (DAX 12:38:08.916Z, NASDAQ 12:38:09.500Z). At
-the sweep 90s later only DAX has crossed `tickSilent` → a per-market resubscribe; one sweep on
-NASDAQ crosses it, but DAX was just remedied → per-market again. Chapter 10's "≥2 markets stale
-together → rebuild at once" never fires, and the session rebuild arrives at T+450 by the per-market
-ladder instead of T+90 — on the exact shape of the scar the rule exists for. Whether two markets
-land in the same sweep is sub-second luck. **Severity:** medium. **Fix shape (policy — Alex rules):**
-count a market remedied within the last grace window as still stale for the session verdict, or
-hold a per-market remedy for one sweep when another market is within a sweep of its threshold.
-**Scenario:** `BeltScenariosTest.theScarsTwoDeadMarketsEarnOneSessionVerdictAtNinetySeconds`
-(`@Disabled`, expects one rebuild at 451 and no market surgery). **Triage:** E1-T10 slice A2.
+`evaluate()` renders the session verdict when two or more markets are stale in the same sweep, and
+staleness is purely time-based — a market remedied a sweep earlier still counts. The scar's two
+feeds died 584ms apart (DAX 12:38:08.916Z, NASDAQ 12:38:09.500Z): at the sweep 90s after DAX's
+last tick only DAX is stale, so it gets a per-market resubscribe (the pair dropped and re-asked, a
+`WATCHDOG_STALE{resubscribe}` row); one sweep later both are stale and the session is rebuilt, as
+chapter 10 promises. The deviation is the wasted resubscribe and its misleading row, issued one
+sweep before the session it belongs to is torn down — whenever two feeds die on either side of a
+sweep boundary. **Fix shape (small; Alex rules whether it earns a rule):** withhold a per-market
+remedy for one sweep when another market is within a sweep of its own threshold, so two markets
+dying within a second of each other earn one verdict. **Scenario:**
+`BeltScenariosTest.theScarsTwoDeadMarketsEarnOneSessionVerdictAtNinetySeconds` (`@Disabled`; its
+session-rebuild-at-451 assertion already holds, the "no market surgery" assertion is the exposing
+one). **Triage:** E1-T10 slice A2.
+
+*Correction, same day: the first version of this entry said the session verdict never fired and
+the rebuild came at T+450 by the per-market ladder. That was inferred, not observed, and wrong — the
+scenario's connect assertion passes today (the ticket's doctrine review caught it). Recorded per G8.*

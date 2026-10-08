@@ -5,7 +5,7 @@
 -- indicators) and sealed only where the feed was still alive at the minute's end. The prototype
 -- stored no Lightstreamer statuses, so the header asks the harness to answer as a healthy server.
 --
---   docker exec -i <postgres> psql -U igtrader_svc -d igtrader_demo -At \
+--   docker exec -i <postgres> psql -U <user> -d igtrader_demo -At \
 --     -v anchor='2026-08-04 12:38:08.916+00' -v before_secs=360 -v until_secs=460 \
 --     -v name='2026-08-04 silent while connected' -f - < export-prototype.sql > <fixture>.jsonl
 --

@@ -6,6 +6,7 @@ import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 
 import org.jspecify.annotations.Nullable;
@@ -41,9 +42,17 @@ public final class ScenarioRunner {
     /** Cycles the pump may take at one instant before the harness calls it a runaway. */
     private static final int BUSY_LIMIT = 100_000;
 
+    /** The instrument failed — a fixture that cannot be applied, a guard tripped, a sweep that
+     * threw. Never a verdict on the system under test: it ends the run as an error, not an exit. */
+    public static final class HarnessError extends RuntimeException {
+        HarnessError(String message, Throwable cause) {
+            super(message, cause);
+        }
+    }
+
     private final Scenario scenario;
-    private final FakeClock clock = new FakeClock();
-    private final FakeSleeper sleeper = new FakeSleeper(clock);
+    private final FakeClock clock;
+    private final FakeSleeper sleeper;
     private final FakeStreamTransport transport = new FakeStreamTransport();
     private final FakeSessions sessions = new FakeSessions();
     private final ScriptedCaptureStore sink = new ScriptedCaptureStore();
@@ -72,6 +81,10 @@ public final class ScenarioRunner {
 
     private ScenarioRunner(Scenario scenario) {
         this.scenario = scenario;
+        this.clock = new FakeClock(scenario.origin != null ? scenario.origin : FakeClock.DEFAULT_START);
+        this.sleeper = new FakeSleeper(clock);
+        // one idle wait is 250ms; a scenario that stands down for twelve hours sleeps 170 000 times
+        sleeper.maxSleeps = (int) Math.max(FakeSleeper.RUNAWAY, scenario.until.toMillis() / 50);
         this.start = clock.wallInstant();
         capture = CaptureAssembly.compose(new CaptureAssembly.Ports("scenario", scenario.epics,
                 clock, sleeper, () -> 1.0, Tuning.playbook(), sessions, transport, sink, events, gaps,
@@ -94,6 +107,8 @@ public final class ScenarioRunner {
             long before = clock.monotonicNanos();
             try {
                 capture.pump.cycle();
+            } catch (HarnessError e) {
+                throw e; // the instrument failed, not the pump — never laundered into a death
             } catch (RuntimeException e) {
                 pumpDead = true;
                 capture.pump.die(e); // Pump.run()'s catch, in its place
@@ -117,9 +132,16 @@ public final class ScenarioRunner {
         }
         inHook = true;
         try {
-            deliverDue();
+            if (deliverDue()) {
+                clock.advance(Duration.ofNanos(1)); // a callback's stamp precedes the sweep that reads it
+            }
             while (!stopped && now().compareTo(nextSweep) >= 0) {
-                capture.supervisor.sweep();
+                try {
+                    capture.supervisor.sweep();
+                } catch (RuntimeException e) {
+                    throw new HarnessError("Supervisor.sweep() threw at " + now()
+                            + " — in production the sweep thread dies silently (review #19)", e);
+                }
                 observeWire();
                 nextSweep = nextSweep.plus(CaptureAssembly.SWEEP_INTERVAL);
                 exitIfAsked();
@@ -138,13 +160,24 @@ public final class ScenarioRunner {
         }
     }
 
-    private void deliverDue() {
+    /** Delivers every event now due; true if there was one. A fixture that cannot be applied is
+     * a harness error, never a fact about the system under test. */
+    private boolean deliverDue() {
+        boolean any = false;
         while (!stopped && delivered < scenario.steps.size()
                 && scenario.steps.get(delivered).at().compareTo(now()) <= 0
                 && scenario.steps.get(delivered).at().compareTo(scenario.until) < 0) {
             Scenario.Step step = scenario.steps.get(delivered++);
-            apply(step.event());
+            try {
+                apply(step.event());
+            } catch (HarnessError e) {
+                throw e;
+            } catch (RuntimeException e) {
+                throw new HarnessError("the fixture could not be applied at " + step.at() + ": " + step.event(), e);
+            }
+            any = true;
         }
+        return any;
     }
 
     private void apply(Event event) {
@@ -155,16 +188,17 @@ public final class ScenarioRunner {
             case Event.Confirm(String epic, Event.Leg leg) -> wire.confirm(item(epic, leg));
             case Event.Reject(String epic, Event.Leg leg, int code, String message) ->
                     wire.reject(item(epic, leg), code, message);
-            case Event.Tick(String epic, String bid, String ask, String flag) -> {
+            case Event.Tick(String epic, String bid, String ask, String flag, Instant tsUtc) -> {
+                Instant stamp = tsUtc != null ? tsUtc : clock.wallInstant();
                 wire.deliver(item(epic, Event.Leg.PRICE),
-                        FakeStreamTransport.Wire.tick(clock.wallInstant().toEpochMilli(), bid, ask, flag));
+                        FakeStreamTransport.Wire.tick(stamp.toEpochMilli(), bid, ask, flag));
                 observed.ticksDelivered++;
             }
-            case Event.Bar(String epic, Event.Quote bid, Event.Quote ask, Instant startUtc) -> {
+            case Event.Bar(String epic, Event.Quote bid, Event.Quote ask, Instant startUtc, Long ltv) -> {
                 Instant start = startUtc != null ? startUtc
                         : clock.wallInstant().truncatedTo(ChronoUnit.MINUTES).minus(Duration.ofMinutes(1));
                 wire.deliver(item(epic, Event.Leg.CHART),
-                        FakeStreamTransport.Wire.sealedBar(start.toEpochMilli(), ohlc(bid), ohlc(ask), null));
+                        FakeStreamTransport.Wire.sealedBar(start.toEpochMilli(), ohlc(bid), ohlc(ask), ltv));
                 observed.barsDelivered++;
             }
             case Event.DbDown() -> {
@@ -233,9 +267,14 @@ public final class ScenarioRunner {
             }
             for (FakeStreamTransport.Subscribed s : connection.subscriptions) {
                 if (handlesSeen.add(s.handle())) {
-                    observed.remedies.add(new Observed.Remedy(now(), "subscribe", s.spec().items().get(0)));
-                    if (scenario.serverAnswers) {
-                        connection.confirm(s.spec().items().get(0));
+                    String item = s.spec().items().get(0);
+                    observed.remedies.add(new Observed.Remedy(now(), "subscribe", item));
+                    Integer refusal = scenario.serverRejects.entrySet().stream()
+                            .filter(e -> item.contains(e.getKey())).map(Map.Entry::getValue).findFirst().orElse(null);
+                    if (refusal != null) {
+                        connection.reject(item, refusal, "rejected");
+                    } else if (scenario.serverAnswers) {
+                        connection.confirm(item);
                     }
                 }
                 if (!s.handle().active() && inactiveRecorded.add(s.handle())) {

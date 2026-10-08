@@ -312,12 +312,13 @@ class BeltScenariosTest {
     }
 
     @Test
-    @Disabled("E1-T10 A2 — finding #33: the session verdict needs both markets stale in the same sweep (found by this replay)")
+    @Disabled("E1-T10 A2 — finding #33: one stray per-market resubscribe the sweep before the session verdict (found by this replay)")
     void theScarsTwoDeadMarketsEarnOneSessionVerdictAtNinetySeconds() throws Exception {
         // Chapter 10: ≥2 markets stale together → rebuild at once. NASDAQ's last tick is 584ms after
-        // DAX's (360.584 vs 360.000), so at the sweep at 450 only DAX is 90s silent and gets market
-        // surgery; at 451 NASDAQ is stale but DAX has just been remedied. The session verdict should
-        // come at 451 — the second market's 90s mark — not two per-market ladders.
+        // DAX's (360.584 vs 360.000). The session verdict does come at 451, the second market's 90s
+        // mark — but at 450 DAX alone is stale and gets market surgery first: a wasted pair of
+        // subscriptions and a misleading WATCHDOG_STALE{resubscribe} row, one sweep before the
+        // session it belongs to is torn down. Two feeds dying within a second should earn one verdict.
         Scenario scar = Replays.load("/replays/2026-08-04-silent-while-connected.jsonl").build();
 
         Observed o = ScenarioRunner.run(scar);
@@ -339,7 +340,7 @@ class BeltScenariosTest {
                 .every(s(1), s(1), s(60), t -> tick(DAX)).every(s(1), s(1), s(60), t -> tick(NASDAQ))
                 .at(s(60), status(TRYING_RECOVERY))
                 .at(s(361), streaming()).at(s(361), subscribed(DAX)).at(s(361), subscribed(NASDAQ))
-                .every(s(1), s(362), s(400), t -> tick(DAX))
+                .every(s(1), s(362), s(400), t -> tick(DAX)).every(s(1), s(362), s(400), t -> tick(NASDAQ))
                 .until(s(400)).build();
 
         Observed o = ScenarioRunner.run(patience);
@@ -377,8 +378,9 @@ class BeltScenariosTest {
     void aRejectionHeldForAnUnconfirmedWitnessIsJudgedWhenTheWitnessConfirms() throws Exception {
         // §3.5: DAX strikes out at 3 while NASDAQ is still inside its confirm window — wait, never
         // race a fast rejection into a session verdict. When NASDAQ confirms at 20 the held verdict
-        // is rendered at once: a confirmed witness means quarantine at 20, not silence until the
-        // watchdog's 90s.
+        // is rendered at once: a confirmed witness means quarantine, not silence until the watchdog's
+        // 90s. The verdict is dated when it is rendered (20), not when the strike landed (3) — a
+        // choice chapter 10 does not make; the slice may rule otherwise.
         Scenario held = Scenario.named("a verdict held for its witness").markets(DAX, NASDAQ)
                 .at(s(0), streaming())
                 .at(s(1), reject(DAX, Event.Leg.PRICE, 40))
@@ -398,25 +400,49 @@ class BeltScenariosTest {
     }
 
     @Test
+    @Disabled("E1-T10 A2 — finding #4: Judgment.Wait is never re-armed (the window-lapse arm)")
+    void aVerdictHeldForAWitnessThatNeverConfirmsIsSessionShapedWhenTheWindowLapses() throws Exception {
+        // §3.5's other arm: NASDAQ never confirms. When its 30s window lapses nothing proves the
+        // session innocent, so the held verdict is session-shaped — a rebuild at 30, the rejected
+        // market named — not silence until the watchdog's 90s.
+        Scenario lapsed = Scenario.named("a verdict held for a witness that never comes").markets(DAX, NASDAQ)
+                .at(s(0), streaming())
+                .at(s(1), reject(DAX, Event.Leg.PRICE, 40))
+                .at(s(2), reject(DAX, Event.Leg.PRICE, 40))
+                .at(s(3), reject(DAX, Event.Leg.PRICE, 40))
+                .at(s(31), streaming()).at(s(31), subscribed(DAX)).at(s(31), subscribed(NASDAQ))
+                .every(s(1), s(32), s(120), t -> tick(DAX)).every(s(1), s(32), s(120), t -> tick(NASDAQ))
+                .until(s(120)).build();
+
+        Observed o = ScenarioRunner.run(lapsed);
+
+        assertEquals(List.of(0L, 30L), o.secondsOf("connect"), "no witness when the window lapsed: session-shaped");
+        assertEquals(DAX, o.events(EventType.SUBSCRIPTION_REJECTED).get(0).epic());
+        assertTrue(o.events(EventType.WATCHDOG_STALE).isEmpty(), "not left to the watchdog");
+    }
+
+    @Test
     @Disabled("E1-T10 A2 — finding #8: strikes are counted per leg rejection, not per attempt")
     void aMarketWhoseBothLegsAreRejectedGetsItsTwoSurgicalRetries() throws Exception {
-        // §3.5: initial subscribe + two surgical retries, a fresh pair each time. A bad epic has
-        // both legs rejected per attempt; that is one strike, not two — so the quarantine comes at
-        // the third attempt (3), not after one retry (2), and never two resubscribes in one sweep.
+        // §3.5: initial subscribe + two surgical retries, a fresh pair each time. The server refuses
+        // DAX outright, so both legs are rejected per attempt; that is one strike, not two. Each
+        // answer is applied at the next sweep: the boot pair rejected → retry at 0, rejected → retry
+        // at 1, rejected → the verdict at 2. Today the two legs count as two strikes, two
+        // resubscribes go out in one sweep, and the verdict comes a sweep early.
         Scenario badEpic = Scenario.named("both legs rejected").markets(DAX, NASDAQ)
+                .serverRejects(DAX, 40)
                 .at(s(0), streaming()).at(s(0), subscribed(NASDAQ))
-                .at(s(1), reject(DAX, Event.Leg.PRICE, 40), reject(DAX, Event.Leg.CHART, 40))
-                .at(s(2), reject(DAX, Event.Leg.PRICE, 40), reject(DAX, Event.Leg.CHART, 40))
-                .at(s(3), reject(DAX, Event.Leg.PRICE, 40), reject(DAX, Event.Leg.CHART, 40))
                 .every(s(1), s(1), s(60), t -> tick(NASDAQ))
                 .until(s(60)).build();
 
         Observed o = ScenarioRunner.run(badEpic);
 
-        assertEquals(List.of(1L, 1L, 2L, 2L, 3L, 3L), o.secondsOf("unsubscribe"));
-        assertEquals(List.of(0L, 0L, 0L, 0L, 1L, 1L, 2L, 2L), o.secondsOf("subscribe"));
+        assertEquals(List.of(0L, 0L, 1L, 1L, 2L, 2L), o.secondsOf("unsubscribe"),
+                "each attempt drops the pair before it: two retries, then the quarantine");
+        assertEquals(List.of(0L, 0L, 0L, 0L, 0L, 0L, 1L, 1L), o.secondsOf("subscribe"),
+                "boot subscribed both markets; one fresh DAX pair per retry — never two in one sweep");
         assertEquals(1, o.events(EventType.MARKET_QUARANTINED).size());
-        assertEquals(3L, o.events(EventType.MARKET_QUARANTINED).get(0).at().toSeconds());
+        assertEquals(2L, o.events(EventType.MARKET_QUARANTINED).get(0).at().toSeconds());
     }
 
     @Test

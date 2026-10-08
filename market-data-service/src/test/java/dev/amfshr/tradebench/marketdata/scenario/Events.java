@@ -40,16 +40,16 @@ public final class Events {
     }
 
     public static Event tick(String epic) {
-        return new Event.Tick(epic, "24510.5", "24511.5", "DEAL");
+        return new Event.Tick(epic, "24510.5", "24511.5", "DEAL", null);
     }
 
     public static Event tick(String epic, String dealFlag) {
-        return new Event.Tick(epic, "24510.5", "24511.5", dealFlag);
+        return new Event.Tick(epic, "24510.5", "24511.5", dealFlag, null);
     }
 
     public static Event bar(String epic) {
         Event.Quote quote = new Event.Quote("24510", "24520", "24500", "24515");
-        return new Event.Bar(epic, quote, quote, null);
+        return new Event.Bar(epic, quote, quote, null, null);
     }
 
     /** {@code n} ticks at one instant — a burst. */

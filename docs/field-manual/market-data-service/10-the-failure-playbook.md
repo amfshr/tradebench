@@ -329,8 +329,8 @@ in-ticket record.
   policy above is unchanged):** the watchdog's 90s
   verdict can pre-empt the 300s replay patience (#5); after a failed reconnect the rebuild ceiling can
   beat the ten-minute budget (#18); the CLOSED stand-down is unbounded (#3 — bounded by **D29**); two
-  markets dying within one sweep of each other get two per-market ladders instead of the session
-  verdict (#33 — found by the scar replay, 2026-10-08). The scenarios awaiting a fix (#3, #4, #5,
+  markets dying on either side of a sweep boundary cost one stray per-market resubscribe the sweep
+  before the session verdict (#33 — low; found by the scar replay, 2026-10-08). The scenarios awaiting a fix (#3, #4, #5,
   #6, #8, #20, #33) are `@Disabled` in `BeltScenariosTest`, each enabled by its fix as the exposing
   test. The record: `.claude/reviews/2026-10-05-pr14-resilience-belt.md`.
 

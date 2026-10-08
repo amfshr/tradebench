@@ -28,8 +28,9 @@ public sealed interface Event {
     record Reject(String epic, Leg leg, int code, String message) implements Event {
     }
 
-    /** A price update on the PRICE leg; the deal flag drives the watchdog's stand-down. */
-    record Tick(String epic, String bid, String ask, String dealFlag) implements Event {
+    /** A price update on the PRICE leg; the deal flag drives the watchdog's stand-down. Stamped
+     * with the clock's instant unless the fixture carries its own (a replay does). */
+    record Tick(String epic, String bid, String ask, String dealFlag, @Nullable Instant tsUtc) implements Event {
     }
 
     /** One side of a candle, as the wire carries it. */
@@ -38,7 +39,7 @@ public sealed interface Event {
 
     /** A sealed 1-minute candle on the CHART leg — for the minute that just closed, unless the
      * fixture names the candle's own start (a replay does). */
-    record Bar(String epic, Quote bid, Quote ask, @Nullable Instant startUtc) implements Event {
+    record Bar(String epic, Quote bid, Quote ask, @Nullable Instant startUtc, @Nullable Long ltv) implements Event {
     }
 
     /** Postgres goes away: the sink, the event log and the status store all fail retryably. */

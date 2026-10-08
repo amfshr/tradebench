@@ -15,6 +15,8 @@ public final class FakeSleeper implements Sleeper {
 
     private final FakeClock clock;
     public int sleeps;
+    /** The guard — a scenario that legitimately sleeps longer (a twelve-hour stand-down) raises it. */
+    public int maxSleeps = RUNAWAY;
     public Runnable onSleep = () -> {
     };
 
@@ -24,7 +26,7 @@ public final class FakeSleeper implements Sleeper {
 
     @Override
     public void sleep(Duration duration) {
-        if (++sleeps > RUNAWAY) {
+        if (++sleeps > maxSleeps) {
             throw new IllegalStateException("runaway wait — a stop() or a deadline not honoured?");
         }
         clock.advance(duration);
