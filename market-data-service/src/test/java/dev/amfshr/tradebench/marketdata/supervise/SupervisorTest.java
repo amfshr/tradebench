@@ -583,6 +583,85 @@ class SupervisorTest {
                 "NASDAQ is inside its fresh 30s confirm window: wait, never a second rebuild");
     }
 
+    @Test
+    void aQuarantinedMarketsTwinLegRejectionDoesNotReadmitIt() {
+        supervisor.watch(DAX);
+        supervisor.watch(NASDAQ);
+        supervisor.onSubscribed(NASDAQ, WitnessQuarantine.Kind.PRICE);
+        supervisor.onSubscribed(NASDAQ, WitnessQuarantine.Kind.CHART);
+        failToTheStrikeCeiling(DAX);
+        supervisor.onSubscriptionError(DAX, 40, "rejected"); // the pair's other leg — queued before the verdict
+        supervisor.sweep();
+
+        assertEquals(List.of(DAX), stream.quarantined, "quarantined exactly once");
+        assertEquals(2, stream.resubscribed.size(), "the two in-place retries before the verdict — none after");
+        assertEquals(0, stream.rebuilds);
+        assertEquals(1, count(EventType.MARKET_QUARANTINED));
+    }
+
+    @Test
+    void theTerminalRuleIsExactlyTheBareDisconnected() {
+        assertTrue(ReconnectClassifier.isTerminal("DISCONNECTED"), "the client gave up for good");
+        assertFalse(ReconnectClassifier.isTerminal(WILL_RETRY), "the escalator's, not ours");
+        assertFalse(ReconnectClassifier.isTerminal(TRYING_RECOVERY));
+        assertFalse(ReconnectClassifier.isTerminal("CONNECTED:WS-STREAMING"));
+        assertFalse(ReconnectClassifier.isTerminal("STALLED"));
+    }
+
+    @Test
+    void aBareDisconnectRebuildsEvenWhenEveryMarketReadsClosed() {
+        supervisor.watch(DAX);
+        supervisor.watch(NASDAQ);
+        freshness.flag.put(DAX, "CLOSED");    // overnight: the watchdog stands down on both markets,
+        freshness.flag.put(NASDAQ, "CLOSED"); // and no tick will arrive to change that
+        supervisor.sweep();
+        supervisor.onStatusChange("DISCONNECTED"); // the client gave up — no substate will ever escalate
+
+        supervisor.sweep();
+
+        assertEquals(1, stream.rebuilds, "nothing else can start this recovery");
+        assertEquals("DISCONNECTED", single(EventType.CONNECTION_DEAD).detail().get("status").asText());
+        assertTrue(stream.resubscribed.isEmpty(), "not the watchdog's doing");
+
+        clock.advance(Duration.ofSeconds(1));
+        supervisor.onStatusChange("DISCONNECTED"); // the rebuilt connection is refused too
+        supervisor.sweep();
+        assertEquals(1, stream.rebuilds, "inside the 5s floor: paced, but not forgotten");
+        clock.advance(Duration.ofSeconds(4));
+        supervisor.sweep(); // no new status arrives — the latch asks again
+        assertEquals(2, stream.rebuilds, "exactly the floor: the ladder climbs on its own");
+
+        supervisor.onStatusChange("CONNECTED:WS-STREAMING"); // IG is back
+        supervisor.sweep();
+        ServiceEvent resume = single(EventType.RECONNECT);
+        assertFalse(resume.detail().get("replayed").asBoolean(),
+                "a rebuild tears the buffer down — a heal is owed (the ladder, not a bare reconnect)");
+    }
+
+    @Test
+    void aServerErrorAloneIsADeathToo() {
+        supervisor.onServerError(2, "Requested Adapter Set not available"); // §3.1: the first is a death
+
+        supervisor.sweep();
+
+        assertEquals(1, stream.rebuilds);
+        assertEquals(2, single(EventType.CONNECTION_DEAD).detail().get("code").asInt());
+        assertEquals(1, count(EventType.IG_API_ERROR), "and it is still recorded as itself");
+    }
+
+    @Test
+    void aServerErrorIsRecordedAndTheDisconnectThatPrecedesItRebuildsOnce() {
+        stream.duringRebuild = () -> clock.advance(Duration.ofSeconds(61)); // a paced re-login blocks
+        supervisor.onStatusChange("DISCONNECTED"); // the SDK's order: the status first…
+        supervisor.onServerError(2, "Requested Adapter Set not available"); // …then its explanation — one death
+
+        supervisor.sweep();
+
+        assertEquals(1, stream.rebuilds, "one death, one rebuild — however long the re-login blocked");
+        assertEquals(1, count(EventType.CONNECTION_DEAD));
+        assertEquals(1, count(EventType.IG_API_ERROR), "the explanation is still recorded");
+    }
+
     // --- helpers + fakes --------------------------------------------------------------------
 
     /** jitter = 1.0 → deterministic backoff; Sleeper/interval unused (tests drive sweep() directly). */

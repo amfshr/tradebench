@@ -139,7 +139,14 @@ once logged as "0.4s offline"). Two more notes from `noteFor`: `CONNECTED:HTTP-P
 is flagged — a silent WebSocket→polling downgrade degrades latency and often precedes a
 drop — and an intentional `close()` sets `closing` so the farewell `DISCONNECTED` is
 hushed. That last one guards a principle, not a log line: **quiet must stay meaningful**
-(P9's inverse — if routine shutdowns print scare-lines, real ones stop being read).
+(P9's inverse — if routine shutdowns print scare-lines, real ones stop being read). And one
+static rule beside `isStreaming`: `isTerminal` — a bare `DISCONNECTED`, the client having given up
+for good (playbook §3.1), never the two retry substates the escalator paces. The Supervisor rebuilds
+on it at once, backoff-paced, because nothing else can: no substate will escalate it, and the
+watchdog stands down on closed markets (E1-T10 #2). The `onServerError` the SDK sends after it latches
+the same death — one death, one rebuild, however many callbacks announce it — and because the
+latch is asked again every sweep, a refusal that recurs inside the pacing floor climbs the ladder
+like any other outage instead of stalling at one rung until the budget.
 
 **`WitnessQuarantine`** — §3.5's blast-radius rule for the multi-market future, built now
 so N=1 is the degenerate case rather than a rewrite. The inference: a subscription
@@ -151,7 +158,10 @@ case is the craft: a would-be witness still inside its 30s confirm window return
 Strikes are per-session attempt counts, so a flapping error code can't reset them;
 quarantine exit is **restart-only** (config-shaped failures don't self-heal); a refused
 unsubscribe always rebuilds (it would double-deliver every update). At N=1 the structure
-guarantees the last market dies loud, never quarantined into a silently idle service.
+guarantees the last market dies loud, never quarantined into a silently idle service. Once quarantined, a market's further rejections
+return `Ignored` — every market is two legs, and the pair's second rejection is already on the
+queue when the verdict falls (E1-T10 #1); `IgStreamControl.resubscribe` refuses a quarantined epic
+too, the second lock on the same door.
 
 **`coverage.GapDetector`** — sealed bars land on a minute grid, so coverage is checkable
 *online*: per epic, a watermark of the latest bar start; a bar landing more than one
@@ -200,11 +210,13 @@ queue.
 **The sweep.** One pass does three things, in order. First it drains the observation queue:
 each `Status` feeds `ReconnectClassifier` and `StuckSubstateEscalator` (emitting a
 `RECONNECT` or `TRANSPORT_DOWNGRADED` event when the classifier returns one); each
-`ServerError` writes an `IG_API_ERROR`. Second, the recovery budget: if the first rebuild of
+`ServerError` writes an `IG_API_ERROR`; a bare `DISCONNECTED` or a `ServerError` latches a death
+(E1-T10 #2). Second, the recovery budget: if the first rebuild of
 this outage was `giveUpAfter` ago and streaming never resumed, give up — checked here, after
 the drain (a queued resume resets it first) and before any detector, so it never depends on
-how often a detector re-fires. Third, the detectors — if the escalator says a rebuild is due,
-do it; then `checkStaleness()`. Nothing blocks; the pass is microseconds of CPU. Event writes
+how often a detector re-fires. Third, the detectors — a latched death first (asked again every sweep until the pacing lets the
+rebuild run, so a refusal that recurs inside the floor still climbs the ladder), then the
+escalator if a rebuild is due, then `checkStaleness()`. Nothing blocks; the pass is microseconds of CPU. Event writes
 are **best-effort here as in the pump**: a failing write is counted (`eventWriteFailures`,
 surfaced by the heartbeat), never allowed to kill the sweep thread — observability is
 downstream of the decision. **Every event named here is a `ServiceEvent` written through the

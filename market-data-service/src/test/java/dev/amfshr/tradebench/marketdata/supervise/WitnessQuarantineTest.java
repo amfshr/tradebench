@@ -91,4 +91,20 @@ class WitnessQuarantineTest {
         assertEquals(new Judgment.Retry(NDX), quarantine.onSubscriptionError(NDX, 101 * S),
                 "strikes are per-session");
     }
+
+    @Test
+    void aRejectionAfterQuarantineIsIgnoredNotReadmitted() {
+        healthyWitness(NDX);
+        quarantine.onSubscribeStarted(DAX, 0);
+        for (int i = 1; i <= 3; i++) {
+            quarantine.onSubscriptionError(DAX, i * S);
+        }
+
+        // the pair's other leg is rejected too — its error was already queued when the verdict fell
+        assertEquals(new Judgment.Ignored(DAX), quarantine.onSubscriptionError(DAX, 4 * S),
+                "quarantined means ignored — never a fresh strike, never re-admitted");
+        assertEquals(new Judgment.Ignored(DAX), quarantine.onSubscriptionError(DAX, 100 * S),
+                "however late");
+        assertEquals(Set.of(DAX), quarantine.quarantined());
+    }
 }
