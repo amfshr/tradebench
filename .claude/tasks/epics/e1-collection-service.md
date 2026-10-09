@@ -501,10 +501,10 @@ sweep thread via a bounded queue drained by one writer thread, drops counted in 
 (finding 12); (4) the `closing()`/`GRACEFUL_CLOSE` hush is deleted — the generation gate is the §3.6 hush
 (finding 29).
 
-**Slices (Alex's sequencing, refreshed 2026-10-09: A1 first with targeted tests — ✅ PR #15 → E1-T11 the harness — ✅ PR #16,
-merged 2026-10-08 → A2 as scenarios on it — ✅ PR #17, merged 2026-10-09 → the review-only branch for the cloud session's
-interim re-review, opened now (re-ruled 2026-10-09 — the close-out ruling, below) → B/C as scenarios, one PR per slice →
-E1-T12 replay acceptance → E1-T6):**
+**Slices (Alex's sequencing, 2026-10-08, standing: A1 first with targeted tests — ✅ PR #15 → E1-T11 the harness — ✅ PR #16,
+merged 2026-10-08 → A2 as scenarios on it — ✅ PR #17, merged 2026-10-09 → B/C as scenarios, one PR per slice →
+E1-T12 replay acceptance → the belt's single cloud re-review, once every T10 finding is resolved (the close-out ruling,
+below) → E1-T6):**
 
 - **A1 — the two highs, targeted tests, first.** **#1** a quarantined market's twin-leg rejection re-admits it:
   gate `SubscriptionError`s for epics in `quarantinedMarkets` in `Supervisor.sweep()`;
@@ -652,9 +652,8 @@ Tests at the PR and at merge: market-data-service 212 (3 skipped — slice B's) 
 the merged head (`build` 52s, GitGuardian pass); the local branch deleted. Commits as merged: `92d73f3` (1/4) · `a21e8d7` (2/4)
 · `6e0a82d` (3/4) · `ba7fe45` (4/4) · `3e7ca9a` (the review fixes) · `fb24eb5` (board). The board's Done history carries the
 entry (tagged E1-T10); T5 § residual 3 is closed, final. **Next:** slice B as scenarios on the harness (#6, #20 ×2 — the three
-`@Disabled`; with #7, #12, #15/#16, #17, #24, #30) → C, one PR per slice — the next build work once the cloud session's interim
-re-review of the belt (its review-only branch opened 2026-10-09 after A2 — re-ruled, the close-out ruling below) has its
-findings read.
+`@Disabled`; with #7, #12, #15/#16, #17, #24, #30) → C, one PR per slice — the next build work → E1-T12 → the belt's single cloud
+re-review once every T10 finding is resolved (the close-out ruling below) → E1-T6.
 
 **The A2/B backlog on the harness (E1-T11 — merged 2026-10-08, PR #16; written 2026-10-08, the tenth, #4's window-lapse arm, added at T11's
 doctrine review; each verified red for its finding's reason):** the ten `@Disabled` scenarios in `BeltScenariosTest` —
@@ -703,14 +702,12 @@ review session re-verify.
 **Close-out ruling (Alex, 2026-10-08):** once every finding is resolved **and E1-T12's replay acceptance is
 green** (sequenced 2026-10-08: T12 lands before the re-review, so the re-review judges a belt proven against real
 captured outages), a review-only branch (base `ee35f9b`, head `main`, as PR #14 was) carries all the belt work —
-T10, T11 and T12 — for the cloud review session's re-review; a pass gates E1-T6.
-
-**Re-ruled (Alex, 2026-10-09) — the re-review's timing:** the review-only branch for the cloud session's re-review is
-opened **now, after A2** — an interim re-review, before slices B/C and E1-T12 — not after T12 as sequenced above. It is a
-review-only PR with its base pinned at `ee35f9b` and its head = `main`, as PR #14 was, opened 2026-10-09 (its number is in
-the PR list — the build session reports it; not recorded here until known). Slices B/C and E1-T12 remain the next build
-work after the re-review's findings are read. The ruling as reported covers the timing; the 2026-10-08 clauses above (what
-the branch carries, a pass gating E1-T6) are not re-ruled here.
+T10, T11 and T12 — for the cloud review session's re-review; a pass gates E1-T6. **Clarified (Alex, 2026-10-09):** the
+re-review runs **once, after all of T10 is complete** — slices B and C merged — in his words, "i only want to re do the
+review once all of t10 is complete then i will do the full review once with cloud claude"; no interim pass after A2. His
+clarification named only T10, so whether T12 still precedes the re-review as sequenced above awaits his word. A
+review-only PR opened 2026-10-09 after A2 on a misreading of that intent (**PR #18**, base pinned at `ee35f9b`, head =
+main) was closed unmerged the same day and its two branches deleted; nothing of it stands.
 
 ## T11 — The belt's scenario harness ✅ (PR #16, 2026-10-08 — complete; ticketed 2026-10-05, started 2026-10-08, design nod ruled 2026-10-08)
 
@@ -907,13 +904,13 @@ language — the belt's scenarios, test names, comments and docs frame a **suspe
 `aLidCloseIsAnnotatedNotTreatedAsAnOutage` rename and the comment purge ride A2's PR, Field Manual ch. 07/08/10 reworded
 2026-10-08 direct to main (docs-only). All three enacted at A2 (PR #17, merged 2026-10-09). Detail: T10 § A2.
 
-**Sequencing (Alex, 2026-10-08; refreshed 2026-10-09):** E1-T10 slice A1 is on main (PR #15, merged 2026-10-08); this harness
+**Sequencing (Alex, 2026-10-08, standing):** E1-T10 slice A1 is on main (PR #15, merged 2026-10-08); this harness
 is on main (PR #16, merged 2026-10-08); **T10 A2 is on main (PR #17, merged 2026-10-09)** — its seven scenarios switched on
-(#3 · #4 ×2 · #5 ×2 · #8 · #33), the host-suspend-then-stuck variant and the ruling-3 rename built. Next: the review-only
-branch of the belt work for the cloud session's **interim** re-review, opened now, after A2 (re-ruled 2026-10-09, Alex —
-not after T12; T10 § close-out ruling) → T10's B/C land as scenarios here, one PR per slice — the three remaining `@Disabled`
-scenarios are B's backlog (#6 · #20 ×2; the list by test name is in T10 §) → **E1-T12** replay acceptance (unblocked by
-this merge) → E1-T6 (the 2026-10-08 ruling: a re-review pass gates it).
+(#3 · #4 ×2 · #5 ×2 · #8 · #33), the host-suspend-then-stuck variant and the ruling-3 rename built. Next: T10's B/C land as
+scenarios here, one PR per slice — the three remaining `@Disabled` scenarios are B's backlog (#6 · #20 ×2; the list by test
+name is in T10 §) → **E1-T12** replay acceptance (unblocked by this merge) → the belt's single cloud re-review, once every
+T10 finding is resolved (T10 § close-out ruling; Alex's 2026-10-09 clarification named only T10 — whether T12 still precedes
+it awaits his word) → E1-T6 (a re-review pass gates it).
 
 **DoD (met at the merge, 2026-10-08; residual 3 closed in its rebaseline half here and in its rebuild half at T10 A2, PR #17,
 2026-10-09 — ruled 2026-10-08, see "Closed" above; residual 3 final; wording kept as written):** the nine policy scenarios run deterministically with no real waiting, the scar replay as scenario ten
@@ -979,10 +976,10 @@ field-manual note on the replay library (where it lives, how a new outage become
 
 **Estimate:** ≈ two sessions.
 
-**Sequencing (Alex, 2026-10-08; refreshed 2026-10-09):** T11 (✅ PR #16, merged 2026-10-08) → T10 A2 as scenarios (✅ PR #17,
-merged 2026-10-09) → the review-only branch of the belt work for the cloud session's interim re-review, opened now after A2
-(re-ruled 2026-10-09 — not after T12; T10 § close-out ruling) → T10 B/C as scenarios → **T12** → T6 (the 2026-10-08 ruling:
-a re-review pass gates T6).
+**Sequencing (Alex, 2026-10-08, standing):** T11 (✅ PR #16, merged 2026-10-08) → T10 A2 as scenarios (✅ PR #17,
+merged 2026-10-09) → T10 B/C as scenarios → **T12** → the belt's single cloud re-review, once every T10 finding is resolved
+(T10 § close-out ruling; Alex's 2026-10-09 clarification named only T10 — whether T12 still precedes it awaits his word)
+→ T6 (a re-review pass gates T6).
 
 **Cross-references:** G1 (market data only — never strategy content) · P8 · E1-T6 (the heal consumes these
 bar-gap windows) · E1-T8 (the live-tier acceptance this does not replace) · Field Manual ch. 10 ·
