@@ -115,6 +115,7 @@ public final class CaptureAssembly {
             log.accept("pump did not stop within 5s — leaving sink open to avoid a close/write"
                     + " race; file may miss its tail");
         }
+        log.accept("queued writes at shutdown: " + queues.pendingWrites());
         if (pump.failure() != null) {
             log.accept("pump failure at shutdown: " + pump.failure() + " — " + queues.pendingWrites()
                     + " queued writes and the sink's held batch were not written");

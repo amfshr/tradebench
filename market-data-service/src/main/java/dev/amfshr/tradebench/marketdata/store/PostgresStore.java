@@ -134,9 +134,9 @@ public final class PostgresStore implements CaptureStore {
 
     @Override
     public void recover() {
-        @Nullable Connection fresh = null;
-        @Nullable PreparedStatement freshTicks = null;
-        @Nullable PreparedStatement freshBars = null;
+        Connection fresh = null;
+        PreparedStatement freshTicks = null;
+        PreparedStatement freshBars = null;
         try {
             fresh = dataSource.getConnection();
             freshTicks = fresh.prepareStatement(INSERT_TICK);

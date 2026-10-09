@@ -61,6 +61,30 @@ public final class Pump implements Runnable {
     private final AtomicLong sinkFailures = new AtomicLong();
     private volatile boolean running = true;
     private volatile @Nullable RuntimeException failure;
+    private @Nullable Episode episode;
+
+    /** The sink outage in progress: opened by a retryable failure, closed only once a write lands
+     * after a recovery. A recovery that only reconnected is provisional — if the next write fails
+     * before one lands, the same episode continues and the ladder keeps climbing (E1-T10 #6). */
+    private static final class Episode {
+        final PersistenceException cause;
+        final long since;
+        final Instant failedAt;
+        final long droppedBefore;
+        int attempts;
+        boolean lossy;
+        boolean recovered;
+        long shed;
+        int queuedAtRecovery;
+        int ticksWrittenSinceRecovery;
+
+        Episode(PersistenceException cause, long since, Instant failedAt, long droppedBefore) {
+            this.cause = cause;
+            this.since = since;
+            this.failedAt = failedAt;
+            this.droppedBefore = droppedBefore;
+        }
+    }
 
     public Pump(Buffers queues, CaptureStore sink, GapDetector gapDetector, GapStore gaps,
             EventLog events, Sleeper sleeper, Clock clock, BackoffPolicy backoff,
@@ -82,6 +106,7 @@ public final class Pump implements Runnable {
         Bar1m bar;
         while ((bar = queues.peekBarNow()) != null) {
             sink.write(bar);
+            landed(); // a bar is its own round trip
             queues.removeBarNow();
             written.incrementAndGet();
             detectGap(bar);
@@ -96,6 +121,9 @@ public final class Pump implements Runnable {
         Tick tick;
         for (int i = 0; i < TICK_BATCH && (tick = queues.pollTickNow()) != null; i++) {
             sink.write(tick);
+            if (episode != null) {
+                episode.ticksWrittenSinceRecovery++; // batched: the flush is the round trip
+            }
             written.incrementAndGet();
             count++;
         }
@@ -136,7 +164,7 @@ public final class Pump implements Runnable {
     public void cycle() throws InterruptedException {
         try {
             if (drainOnce() == 0) {
-                sink.flush();
+                flush();
                 sleeper.sleep(IDLE_WAIT);
             }
         } catch (PersistenceException e) {
@@ -150,22 +178,29 @@ public final class Pump implements Runnable {
     /** Hold-and-retry (E1-T9): the data is already safe — bars queued, the store's batch held —
      * so wait, paced by backoff from its floor, until the sink recovers. One episode is one
      * {@link #sinkFailures()} count and one {@code SINK_FAILURE} event, dated from its first
-     * failure and written once the database is back (nothing is attempted while it is down). */
+     * failure and written once a write has landed again (nothing is attempted while it is down). A
+     * failure after a recovery that only reconnected continues the episode (E1-T10 #6). */
     private void hold(PersistenceException cause) throws InterruptedException {
-        sinkFailures.incrementAndGet();
-        long since = clock.monotonicNanos();
-        Instant failedAt = clock.wallInstant();
-        long droppedBefore = queues.droppedTicks();
-        boolean lossy = false;
-        log.accept("sink unavailable — holding " + queues.pendingWrites() + " queued writes: " + cause);
-        for (int attempt = 1; running; attempt++) {
-            Duration wait = backoff.delayFor(attempt);
-            log.accept("sink retry " + attempt + " in " + wait.toSeconds() + "s");
+        Episode current = episode;
+        if (current == null) {
+            current = new Episode(cause, clock.monotonicNanos(), clock.wallInstant(), queues.droppedTicks());
+            episode = current;
+            sinkFailures.incrementAndGet();
+            log.accept("sink unavailable — holding " + queues.pendingWrites() + " queued writes: " + cause);
+        } else {
+            current.recovered = false;
+            log.accept("sink failed again before a write landed — the episode continues at attempt "
+                    + (current.attempts + 1) + ": " + cause);
+        }
+        while (running) {
+            current.attempts++;
+            Duration wait = backoff.delayFor(current.attempts);
+            log.accept("sink retry " + current.attempts + " in " + wait.toSeconds() + "s");
             if (!holdFor(wait)) {
                 return; // stopped mid-hold — the shutdown path takes over
             }
-            if (!lossy && queues.droppedTicks() > droppedBefore) {
-                lossy = true;
+            if (!current.lossy && queues.droppedTicks() > current.droppedBefore) {
+                current.lossy = true;
                 log.accept("the hold is now lossy — the tick queue has begun shedding");
             }
             try {
@@ -174,16 +209,38 @@ public final class Pump implements Runnable {
                 if (!e.retryable()) {
                     throw e;
                 }
-                log.accept("sink still unavailable after attempt " + attempt + ": " + e);
+                log.accept("sink still unavailable after attempt " + current.attempts + ": " + e);
                 continue;
             }
-            Duration outage = Duration.ofNanos(clock.monotonicNanos() - since);
-            long shed = queues.droppedTicks() - droppedBefore;
-            log.accept("sink recovered after " + outage.toSeconds() + "s and " + attempt
-                    + " attempt(s); " + queues.pendingWrites() + " queued writes to drain"
-                    + (shed > 0 ? "; " + shed + " ticks shed during the hold" : ""));
-            recordRecovery(cause, failedAt, outage, attempt, shed);
+            current.recovered = true;
+            current.ticksWrittenSinceRecovery = 0;
+            current.shed = queues.droppedTicks() - current.droppedBefore;
+            current.queuedAtRecovery = queues.pendingWrites();
+            log.accept("sink recovered after " + Duration.ofNanos(clock.monotonicNanos() - current.since).toSeconds()
+                    + "s and " + current.attempts + " attempt(s); " + current.queuedAtRecovery
+                    + " queued writes to drain"
+                    + (current.shed > 0 ? "; " + current.shed + " ticks shed during the hold" : ""));
             return;
+        }
+    }
+
+    /** A write landed after a recovery: the episode is over, and only now is it recorded — a
+     * recovery that merely reconnected proves nothing (E1-T10 #6). */
+    private void landed() {
+        Episode current = episode;
+        if (current != null && current.recovered) {
+            episode = null;
+            recordRecovery(current, Duration.ofNanos(clock.monotonicNanos() - current.since));
+        }
+    }
+
+    /** The idle flush: a round trip only if ticks were batched since the recovery — an empty flush
+     * is a no-op in the store and proves nothing. */
+    private void flush() {
+        sink.flush();
+        Episode current = episode;
+        if (current != null && current.ticksWrittenSinceRecovery > 0) {
+            landed();
         }
     }
 
@@ -201,16 +258,15 @@ public final class Pump implements Runnable {
         return false;
     }
 
-    private void recordRecovery(PersistenceException cause, Instant failedAt, Duration outage,
-            int attempts, long shed) {
+    private void recordRecovery(Episode over, Duration outage) {
         try {
-            events.write(ServiceEvent.of(EventType.SINK_FAILURE, failedAt)
+            events.write(ServiceEvent.of(EventType.SINK_FAILURE, over.failedAt)
                     .withDetail(mapper.createObjectNode()
-                            .put("cause", cause.getMessage() + " — " + cause.getCause())
+                            .put("cause", over.cause.getMessage() + " — " + over.cause.getCause())
                             .put("outageMs", outage.toMillis())
-                            .put("attempts", attempts)
-                            .put("ticksShed", shed)
-                            .put("queuedAtRecovery", queues.pendingWrites())));
+                            .put("attempts", over.attempts)
+                            .put("ticksShed", over.shed)
+                            .put("queuedAtRecovery", over.queuedAtRecovery)));
         } catch (RuntimeException e) {
             observabilityFailures.incrementAndGet(); // the breadcrumb is Tier 2 — counted, never thrown
         }
@@ -244,16 +300,35 @@ public final class Pump implements Runnable {
         }
     }
 
-    /** The tail after {@link #stop()}: one last drain and flush into whatever sink there is. A
-     * failure here is recorded, not held — the process is already leaving. {@link #run()} does this
-     * on the pump thread; the scenario harness calls it in run()'s place. */
+    /** The tail after {@link #stop()}: drain everything and flush into whatever sink there is. A
+     * sink broken at stop gets one recovery attempt with no wait — a restart must not lose what
+     * the database would take (E1-T10 #20) — and a failure past that is recorded, not held: the
+     * process is already leaving. {@link #run()} does this on the pump thread; the scenario
+     * harness calls it in run()'s place. */
     public void drainTail() {
         try {
-            drainOnce();
-            sink.flush();
+            drainAll();
+        } catch (PersistenceException e) {
+            if (!e.retryable()) {
+                failure = e;
+                return;
+            }
+            try {
+                sink.recover();
+                drainAll();
+            } catch (RuntimeException again) {
+                failure = again;
+            }
         } catch (RuntimeException e) {
             failure = e;
         }
+    }
+
+    private void drainAll() {
+        while (drainOnce() > 0) {
+            // every batch, not one — a stop with a backlog lands all of it
+        }
+        flush();
     }
 
     private void recordDeath(RuntimeException cause) {
@@ -282,7 +357,8 @@ public final class Pump implements Runnable {
         return observabilityFailures.get();
     }
 
-    /** Sink outages held through (one per episode, however many retries) — the database blinked. */
+    /** Sink outages held through — one per episode, however many retries or provisional
+     * recoveries — the database blinked. */
     public long sinkFailures() {
         return sinkFailures.get();
     }

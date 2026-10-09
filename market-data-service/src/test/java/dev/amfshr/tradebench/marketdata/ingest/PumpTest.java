@@ -371,12 +371,14 @@ class PumpTest {
         r.sink().armed.add(retryable("bar write failed"));
         r.sink().recoverRefusals = 3; // the database stays down through three retries
 
-        r.pump().cycle();
+        r.pump().cycle(); // the hold: four attempts, the fourth recovers
+        r.pump().cycle(); // the bar lands — the episode is proven over and recorded
 
         assertEquals(List.of(5L, 10L, 15L, 23L), r.sink().recoverCalledAtSeconds,
                 "playbook §8 backoff: 1s base doubling under a 5s floor — 5, 5, 5, then 8");
-        assertEquals(4, r.events().written.get(0).detail().get("attempts").asInt());
-        assertEquals(23_000, r.events().written.get(0).detail().get("outageMs").asLong());
+        ServiceEvent episode = r.events().ofType(EventType.SINK_FAILURE).get(0);
+        assertEquals(4, episode.detail().get("attempts").asInt());
+        assertEquals(23_000, episode.detail().get("outageMs").asLong());
         assertEquals(1, r.pump().sinkFailures(), "one episode, however many retries");
     }
 
@@ -485,11 +487,51 @@ class PumpTest {
 
         assertEquals(7, r.sleeper().sleeps,
                 "stop() is honoured at the next 250ms slice, not at the end of the 5s wait");
-        assertTrue(r.sink().recoverCalledAtSeconds.isEmpty());
+        assertEquals(List.of(1L), r.sink().recoverCalledAtSeconds,
+                "one no-wait recovery attempt in the tail — the database is still down");
         assertNotNull(r.pump().failure(), "the tail drain's failure is recorded for the summary");
         assertTrue(r.deaths().isEmpty(),
                 "a stop is not a death — an exit from inside the shutdown hook would deadlock");
         assertNotNull(r.queues().peekBarNow());
+    }
+
+    @Test
+    void aFalseRecoveryContinuesTheEpisodeUntilAWriteLands() throws InterruptedException {
+        // E1-T10 #6: the database answers connections but refuses writes. A recovery that only
+        // reconnected proves nothing; the next failure continues the same episode — the ladder
+        // climbs, one SINK_FAILURE — instead of a fresh attempt one every five seconds forever.
+        Rig r = rig(10);
+        r.queues().onSealedBar(bar(60));
+        r.sink().armed.add(retryable("bar write failed"));
+        r.pump().cycle(); // fails → hold → recover at 5 (provisional)
+        r.sink().armed.add(retryable("bar write failed again"));
+        r.pump().cycle(); // fails again before anything landed → the episode continues
+        r.pump().cycle(); // lands
+
+        assertEquals(List.of("bar@60"), r.sink().order);
+        assertEquals(List.of(5L, 10L), r.sink().recoverCalledAtSeconds, "attempt two, not a new attempt one");
+        assertEquals(1, r.pump().sinkFailures(), "one episode");
+        assertEquals(1, r.events().written.size(), "recorded once, when a write landed");
+        ServiceEvent event = r.events().written.get(0);
+        assertEquals(2, event.detail().get("attempts").asInt());
+        assertEquals(10_000, event.detail().get("outageMs").asLong());
+        assertTrue(r.log().stream().anyMatch(line -> line.contains("the episode continues at attempt 2")));
+    }
+
+    @Test
+    void anIdleFlushAfterAProvisionalRecoveryProvesNothing() throws InterruptedException {
+        // An empty flush is a no-op in the store — not evidence. The episode closes on the first
+        // real write after it: here the bar, one cycle later.
+        Rig r = rig(10);
+        r.queues().onTick(tick(1));
+        r.sink().armed.add(retryable("tick write failed"));
+        r.pump().cycle(); // fails → hold → recover (provisional)
+        r.pump().cycle(); // nothing queued: an idle flush
+        assertEquals(0, r.events().count(EventType.SINK_FAILURE), "no round trip yet — the episode is still open");
+
+        r.queues().onSealedBar(bar(60));
+        r.pump().cycle();
+        assertEquals(1, r.events().count(EventType.SINK_FAILURE), "the bar landed: now it is over");
     }
 
     @Test
@@ -523,12 +565,13 @@ class PumpTest {
         r.sink().armed.add(retryable("bar write failed"));
         r.sleeper().onSleep = () -> r.queues().onTick(tick(r.sleeper().sleeps)); // ticks keep arriving
 
-        r.pump().cycle();
+        r.pump().cycle(); // the hold
+        r.pump().cycle(); // the bar lands — the episode is recorded
 
         assertEquals(23, r.queues().droppedTicks(), "3 before + 20 during the 5s hold into a full queue");
         assertTrue(r.log().stream().anyMatch(line -> line.contains("lossy")),
                 "the moment the hold stops being lossless is announced");
-        assertEquals(20, r.events().written.get(0).detail().get("ticksShed").asLong(),
+        assertEquals(20, r.events().ofType(EventType.SINK_FAILURE).get(0).detail().get("ticksShed").asLong(),
                 "the episode's own shedding, not the lifetime count");
     }
 }
