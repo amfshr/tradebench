@@ -40,5 +40,6 @@ class TuningTest {
         assertEquals(Duration.ofSeconds(210), playbook.barSilentWhileTicksFlow());
         assertEquals(Duration.ofSeconds(60), playbook.watchdogGraceBase());
         assertEquals(2, playbook.watchdogMaxResubscribes());
+        assertEquals(Duration.ofHours(12), playbook.standDownTeach(), "D29 (1): the stand-down is bounded");
     }
 }

@@ -1,5 +1,6 @@
 package dev.amfshr.tradebench.marketdata.supervise;
 
+import java.time.Duration;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -32,7 +33,7 @@ class StalenessWatchdogTest {
 
     @BeforeEach
     void setUp() {
-        dog = new StalenessWatchdog(Tuning.playbook());
+        dog = new StalenessWatchdog(Tuning.playbook(), Duration.ofSeconds(1));
         dog.track(DAX, 0);
         clockSecond = 0;
         fired.clear();
@@ -77,21 +78,21 @@ class StalenessWatchdogTest {
 
     @Test
     void closedFlagStandsTheWatchdogDown() {
-        dog.onDealFlag(DAX, "CLOSED");
+        dog.onDealFlag(DAX, "CLOSED", 0);
         runTo(500);
         assertTrue(fired.isEmpty(), "weekends self-suppress — no calendar, no hours config");
     }
 
     @Test
     void suspendFlagStandsTheWatchdogDown() {
-        dog.onDealFlag(DAX, "SUSPEND");
+        dog.onDealFlag(DAX, "SUSPEND", 0);
         runTo(500);
         assertTrue(fired.isEmpty(), "suspended markets are legitimately silent");
     }
 
     @Test
     void unknownFlagDoesNotSuppress() {
-        dog.onDealFlag(DAX, "AUCTION");
+        dog.onDealFlag(DAX, "AUCTION", 0);
         runTo(95);
         assertEquals(90, fired.get(0).second(),
                 "a resubscribe on a closed market is harmless and its snapshot teaches");
@@ -145,7 +146,7 @@ class StalenessWatchdogTest {
     @Test
     void hostSleepSkipsTheRoundAndRebaselines() {
         runTo(50);
-        // lid closed: one round later the wall clock has jumped 16 minutes, awake ~1s
+        // the host suspended: one round later the wall clock has jumped 16 minutes, awake ~1s
         clockSecond++;
         assertEquals(List.of(),
                 dog.evaluate(clockSecond * S, (clockSecond + 960) * 1000),
@@ -181,5 +182,93 @@ class StalenessWatchdogTest {
         dog.forget(DAX);
         runTo(500);
         assertTrue(fired.isEmpty());
+    }
+
+    @Test
+    void noVerdictWhileTheConnectionIsDownAndAFreshWindowOnResume() {
+        // E1-T10 #5: silence on a down connection is the connection's, not a market's — the
+        // escalator's domain; when streaming resumes every stopwatch starts afresh.
+        dog.onConnection(false, 0);
+        runTo(300);
+        assertTrue(fired.isEmpty(), "stood down for the whole outage");
+        dog.onConnection(true, 300 * S);
+        runTo(389);
+        assertTrue(fired.isEmpty(), "a fresh 90s window from the resume");
+        runTo(390);
+        assertEquals(List.of(new Fired(390, new Remedy(DAX, Action.RESUBSCRIBE, Signal.TICK_SILENT))), fired);
+    }
+
+    @Test
+    void twoMarketsDyingWithinASweepEarnOneSessionVerdict() {
+        // E1-T10 #33: the scar's feeds died 584ms apart. At 90 only DAX has crossed; NASDAQ is
+        // within a sweep of crossing, so the round holds — at 91 they are stale together: one verdict.
+        dog.track(NDX, 0);
+        dog.onTick(NDX, 600_000_000L);
+        runTo(90);
+        assertTrue(fired.isEmpty(), "held: no market surgery for a session-shaped death");
+        runTo(91);
+        assertEquals(1, fired.size());
+        assertEquals(91, fired.get(0).second());
+        assertEquals(Action.REBUILD, fired.get(0).remedy().action());
+    }
+
+    @Test
+    void aMarketClosedForTheWholePeriodIsTaughtOncePerPeriod() {
+        // D29 (1): one teaching resubscribe per twelve hours of stand-down; still closed afterwards
+        // (the snapshot re-taught the flag) means the next one is a period later, not a sweep later.
+        dog.onDealFlag(DAX, "CLOSED", 0);
+        runTo(43_199);
+        assertTrue(fired.isEmpty());
+        runTo(43_200);
+        assertEquals(List.of(new Fired(43_200, new Remedy(DAX, Action.RESUBSCRIBE, Signal.STAND_DOWN_TEACHING))), fired);
+        runTo(86_399);
+        assertEquals(1, fired.size(), "once per period");
+        runTo(86_400);
+        assertEquals(2, fired.size());
+    }
+
+    @Test
+    void aTaughtMarketThatStaysSilentClimbsTheOrdinaryLadderFromTheFreshSubscription() {
+        // The zombie: nothing answers the teaching resubscribe, the shell forgets the old flag, and
+        // the market is judged like any open, silent one — +90 resubscribe, +210 resubscribe, +450 rebuild.
+        dog.onDealFlag(DAX, "CLOSED", 0);
+        runTo(43_200);
+        dog.clearDealFlag(DAX); // what the shell does as it re-asks for the pair
+        runTo(43_650);
+        assertEquals(List.of(43_200L, 43_290L, 43_410L, 43_650L),
+                fired.stream().map(Fired::second).toList());
+        assertEquals(Action.REBUILD, fired.get(3).remedy().action());
+    }
+
+    @Test
+    void clearingTheFlagLiftsTheStandDown() {
+        dog.onDealFlag(DAX, "CLOSED", 0);
+        runTo(200);
+        assertTrue(fired.isEmpty());
+        dog.clearDealFlag(DAX);
+        runTo(201);
+        assertEquals(201, fired.get(0).second(), "the old subscription's flag no longer excuses the silence");
+    }
+
+    @Test
+    void theHoldsBoundaryIsExactlyOneSweepBeforeTheNeighboursThreshold() {
+        // NASDAQ's last tick one full second after DAX's: at 90 it is 89.0s silent — within one sweep
+        // of its own 90 — so the round holds, and 91 renders the one session verdict.
+        dog.track(NDX, 0);
+        dog.onTick(NDX, 1 * S);
+        runTo(90);
+        assertTrue(fired.isEmpty(), "exactly one sweep short: held");
+        runTo(91);
+        assertEquals(List.of(91L), fired.stream().map(Fired::second).toList());
+        assertEquals(Action.REBUILD, fired.get(0).remedy().action());
+    }
+
+    @Test
+    void aNeighbourOneNanosecondOutsideTheSweepDoesNotHoldTheRound() {
+        dog.track(NDX, 0);
+        dog.onTick(NDX, 1 * S + 1);
+        runTo(90);
+        assertEquals(List.of(new Fired(90, new Remedy(DAX, Action.RESUBSCRIBE, Signal.TICK_SILENT))), fired,
+                "not within a sweep: DAX gets its own remedy");
     }
 }

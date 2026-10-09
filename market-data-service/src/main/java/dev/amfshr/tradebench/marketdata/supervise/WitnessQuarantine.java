@@ -1,7 +1,9 @@
 package dev.amfshr.tradebench.marketdata.supervise;
 
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
@@ -10,9 +12,13 @@ import java.util.Set;
  * rebuild the whole session and wobble the healthy market. The witness rule: a failure
  * while another market's pair is fully SUBSCRIBED means the epic is the only differing
  * variable → market-shaped → quarantine just that market. No witness → session-shaped →
- * rebuild. Quarantine exit is restart-only: config-shaped failures don't self-heal — and a
- * quarantined market's later rejections (the pair's second leg, a late one) are {@code Ignored}:
- * never a fresh strike, never re-admitted (E1-T10 #1).
+ * rebuild. A strike is one failed <i>attempt</i> — a pair is two legs, and the second leg's
+ * rejection (or a straggler from a pair already replaced) is not a second strike (E1-T10 #8).
+ * A verdict due while a would-be witness is still inside its confirm window {@code Wait}s,
+ * keeping its strike, and is rendered by {@link #rejudge} as soon as that witness confirms or
+ * its window lapses (E1-T10 #4). Quarantine exit is restart-only: config-shaped failures don't
+ * self-heal — and a quarantined market's later rejections are {@code Ignored}: never a fresh
+ * strike, never re-admitted (E1-T10 #1).
  */
 public final class WitnessQuarantine {
 
@@ -21,13 +27,15 @@ public final class WitnessQuarantine {
     public sealed interface Judgment {
         record Retry(String epic) implements Judgment { }
 
+        /** A would-be witness is still inside its confirm window — held; {@link #rejudge} renders it. */
         record Wait() implements Judgment { }
 
         record Quarantine(String epic) implements Judgment { }
 
-        record Rebuild() implements Judgment { }
+        record Rebuild(String epic) implements Judgment { }
 
-        /** Already quarantined — nothing to judge; the shell does nothing with it. */
+        /** Nothing to judge: the market is quarantined, or this rejection is a leg of an attempt
+         * already struck or already replaced; the shell does nothing with it. */
         record Ignored(String epic) implements Judgment { }
     }
 
@@ -43,6 +51,8 @@ public final class WitnessQuarantine {
         long subscribeStartedMono;
         final Set<Kind> confirmed = new HashSet<>();
         int strikes;
+        long struckAttempt = Long.MIN_VALUE;
+        boolean verdictPending;
     }
 
     public void onSubscribeStarted(String epic, long monotonicNanos) {
@@ -59,18 +69,51 @@ public final class WitnessQuarantine {
     }
 
     /**
-     * Judge a subscription failure. Strikes are per-session attempt counts, not
-     * exact-string matches — a flapping rejection code must not launder the count.
+     * Judge a subscription failure stamped {@code monotonicNanos} on the callback thread. Strikes
+     * are per-session attempt counts, not exact-string matches — a flapping rejection code must
+     * not launder the count — and one attempt strikes once, however many legs the server refuses.
      */
     public Judgment onSubscriptionError(String epic, long monotonicNanos) {
         if (quarantined.contains(epic)) {
             return new Judgment.Ignored(epic); // the twin leg's rejection arrives after the verdict
         }
         Market failing = markets.computeIfAbsent(epic, e -> new Market());
+        if (failing.strikes > 0 && monotonicNanos < failing.subscribeStartedMono) {
+            // a leg of the pair a retry replaced — only a retry can leave one: after a rebuild the
+            // gate has dropped the old session's, and the shell stamps the new attempt only after
+            // its subscribes went out, so a first rejection stamped earlier is still the first
+            return new Judgment.Ignored(epic);
+        }
+        if (failing.strikes > 0 && failing.struckAttempt == failing.subscribeStartedMono) {
+            return new Judgment.Ignored(epic); // this attempt has struck — the pair's other leg
+        }
         failing.strikes++;
+        failing.struckAttempt = failing.subscribeStartedMono;
         if (failing.strikes < tuning.subscriptionStrikes()) {
             return new Judgment.Retry(epic);
         }
+        return verdict(epic, failing, monotonicNanos);
+    }
+
+    /** Render every held verdict whose witness has now confirmed or whose window has lapsed. */
+    public List<Judgment> rejudge(long monotonicNanos) {
+        List<String> pending = new ArrayList<>();
+        for (Map.Entry<String, Market> entry : markets.entrySet()) {
+            if (entry.getValue().verdictPending) {
+                pending.add(entry.getKey());
+            }
+        }
+        List<Judgment> rendered = new ArrayList<>();
+        for (String epic : pending) {
+            Judgment judgment = verdict(epic, markets.get(epic), monotonicNanos);
+            if (!(judgment instanceof Judgment.Wait)) {
+                rendered.add(judgment);
+            }
+        }
+        return rendered;
+    }
+
+    private Judgment verdict(String epic, Market failing, long monotonicNanos) {
         boolean pendingWitness = false;
         for (Map.Entry<String, Market> entry : markets.entrySet()) {
             if (entry.getKey().equals(epic) || quarantined.contains(entry.getKey())) {
@@ -90,18 +133,19 @@ public final class WitnessQuarantine {
         if (pendingWitness) {
             // A would-be witness is still inside its confirm window: wait rather than
             // race a fast rejection into a whole-service rebuild (§3.5).
-            failing.strikes--;
+            failing.verdictPending = true;
             return new Judgment.Wait();
         }
-        return new Judgment.Rebuild();
+        failing.verdictPending = false;
+        return new Judgment.Rebuild(epic);
     }
 
     /** A refused unsubscribe would double-deliver every update — always rebuild. */
     public Judgment onUnsubscribeRefused(String epic) {
-        return new Judgment.Rebuild();
+        return new Judgment.Rebuild(epic);
     }
 
-    /** Session rebuilt: strikes reset; quarantine persists (exit is restart-only). */
+    /** Session rebuilt: strikes and held verdicts reset; quarantine persists (exit is restart-only). */
     public void onSessionRebuilt() {
         markets.clear();
     }

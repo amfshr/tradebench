@@ -50,4 +50,10 @@ class StuckSubstateEscalatorTest {
         assertFalse(escalator.rebuildDue(700 * S));
         assertTrue(escalator.rebuildDue(720 * S));
     }
+    @Test
+    void resetForgetsTheSubstateSoANewConnectionReportsItsOwn() {
+        escalator.onStatus(StuckSubstateEscalator.WILL_RETRY, 0);
+        escalator.reset();
+        assertFalse(escalator.rebuildDue(1_000L * 1_000_000_000L), "the connection this belonged to is gone");
+    }
 }

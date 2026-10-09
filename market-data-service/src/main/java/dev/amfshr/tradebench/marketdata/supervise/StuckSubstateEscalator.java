@@ -21,6 +21,11 @@ public final class StuckSubstateEscalator {
         this.tuning = tuning;
     }
 
+    /** The connection this substate belonged to is gone: a new one reports its own (E1-T10 #18). */
+    public void reset() {
+        substate = null;
+    }
+
     public void onStatus(String status, long monotonicNanos) {
         if (WILL_RETRY.equals(status) || TRYING_RECOVERY.equals(status)) {
             if (!status.equals(substate)) {

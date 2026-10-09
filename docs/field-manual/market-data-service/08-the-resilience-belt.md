@@ -70,12 +70,23 @@ data freshness is truth, connection status is hearsay. Per market, two signals:
   When both are silent, tick-silence wins (`staleSignal` checks it first) — a dead feed
   must not be misread as a dead chart.
 
-Around the signals, four pieces of judgment, each visible in the code:
+Around the signals, seven pieces of judgment, each visible in the code:
 
 - *Stand-down by the market's own flag*: `DLG_FLAG` values `CLOSED`/`SUSPEND` suppress
   (`SUPPRESSING_FLAGS`) — weekends need no calendar and no hours config. Unknown flags
   deliberately do **not** suppress: a spurious resubscribe on a closed market is
   harmless, and its snapshot teaches us the real flag.
+- *The stand-down is bounded* (`standDownTeach`, 12h — D29 (1), E1-T10 #3): a closing flag is
+  dated when it arrives (`onDealFlag`); a market that has read it for the whole period gets one
+  teaching resubscribe per period (`STAND_DOWN_TEACHING`), its silence counted from the fresh
+  subscription. A live item re-teaches its flag within a tick; a dead one is then judged like any
+  open, silent market. The shell forgets a market's remembered flag whenever its pair is re-asked
+  for (`clearDealFlag`) and feeds a flag back only when a newer tick carries it — so a server-side
+  zombie cannot hide behind a weekend.
+- *No verdict while the connection is down* (`onConnection`, E1-T10 #5): a retry substate, the
+  handshake, a rebuild in flight — that silence is the connection's, the escalator's domain; when
+  streaming resumes every stopwatch and episode starts afresh, so the new session gets its full
+  window and the watchdog never fires into a recovery.
 - *Episodes with doubling grace* (`remedyFor`): first remedy at the threshold (90s tick-silent);
   the grace then doubles **before** each wait — 120s, 240s, 480s … capped at 30min (the 60s base
   is the seed, never itself waited) — so the second resubscribe lands at T+210s and the
@@ -84,7 +95,10 @@ Around the signals, four pieces of judgment, each visible in the code:
   storm. Healing (`healIf`) is **same-signal-kind only**: flowing ticks must never reset
   a dead-CHART episode, or the failure mode this signal exists for becomes undetectable.
 - *Session-shaped verdict*: ≥2 markets stale together is never market noise — one
-  `REBUILD`, not N remedies. It carries its own doubling grace
+  `REBUILD`, not N remedies. "Together" means within one sweep of each other
+  (`anotherWithinASweep`, E1-T10 #33): a lone stale market whose neighbour is one sweep from its
+  own threshold waits a round, so two feeds dying 584ms apart earn one verdict, not a stray
+  resubscribe the sweep before it. It carries its own doubling grace
   (`lastSessionVerdict`/`sessionGraceNanos`), added after the test harness caught the
   verdict re-firing every round.
 - *Clock-anomaly immunity*: chapter 7's discriminator; anomalous rounds re-baseline every
@@ -106,7 +120,8 @@ stateDiagram-v2
     }
     Episode --> Healthy: same-signal-kind data arrives (fresh budget)
     Healthy --> StoodDown: DLG_FLAG CLOSED / SUSPEND
-    StoodDown --> Healthy: flag clears
+    StoodDown --> StoodDown: 12h stood down → one teaching resubscribe, flag forgotten
+    StoodDown --> Healthy: flag clears, or forgotten at a re-ask
 ```
 
 **`StuckSubstateEscalator`** — the 2h56m scar (§3.3): the SDK hung in
@@ -124,7 +139,7 @@ so tests are exact), capped at 60s — then the part IG taught us: a **5s floor 
 rebuild, including the first**, because rapid re-logins hit IG's response cache and come
 back with stale tokens; being slower here is being correct. And nothing retries forever:
 recovery is **budgeted** — `giveUpAfter`, 10 minutes of continuous no-streaming from an
-outage's first rebuild (the 10-rebuild ceiling stays as a cap; rung cadence is set by the
+outage's first rebuild (the 10-rebuild ceiling stays as a cap, counting rebuilds that connected (#18); rung cadence is set by the
 detectors, so a full ten-rung ladder spans anywhere from 20 minutes to 3.5 hours depending
 on which one drives it — which is why the budget is a clock, not a count) → the Supervisor gives up with `FEED_DEAD` and the runner exits **1** — a deliberate
 stop with a written record, restarted by the process supervisor, not a crash loop hammering
@@ -135,11 +150,13 @@ we lose data?* Lightstreamer's contract makes it answerable: if the outage conta
 `WILL-RETRY` sighting, the server discarded its replay buffer → **replaced**, data is
 gone, a heal is owed; no sighting → **replayed**, no gap. The returned `Reconnect` value
 carries `wallOutage`, `awakeOutage`, and `hostSleptDuring` (the 16-minute host suspend that
-once logged as "0.4s offline"). Two more notes from `noteFor`: `CONNECTED:HTTP-POLLING`
-is flagged — a silent WebSocket→polling downgrade degrades latency and often precedes a
-drop — and an intentional `close()` sets `closing` so the farewell `DISCONNECTED` is
-hushed. That last one guards a principle, not a log line: **quiet must stay meaningful**
-(P9's inverse — if routine shutdowns print scare-lines, real ones stop being read). And one
+once logged as "0.4s offline"). One more note from `noteFor`: `CONNECTED:HTTP-POLLING` is
+flagged — a silent WebSocket→polling downgrade degrades latency and often precedes a drop. A
+torn-down connection's farewell `DISCONNECTED` never reaches the classifier at all:
+`IgStreamControl` bumps its generation before closing, and the gate drops everything the dying
+connection says from then on — the §3.6 hush, with no flag to set and no race to lose (D29 (4),
+E1-T10 #29). The principle it guards stands: **quiet must stay meaningful** (P9's inverse — if
+routine shutdowns print scare-lines, real ones stop being read). And one
 static rule beside `isStreaming`: `isTerminal` — a bare `DISCONNECTED`, the client having given up
 for good (playbook §3.1), never the two retry substates the escalator paces. The Supervisor rebuilds
 on it at once, backoff-paced, because nothing else can: no substate will escalate it, and the
@@ -153,9 +170,11 @@ so N=1 is the degenerate case rather than a rewrite. The inference: a subscripti
 failing its third strike *while another market's PRICE+CHART pair is fully confirmed*
 means the session is provably fine and the epic is the only differing variable →
 market-shaped → `Quarantine` just it. No witness → session-shaped → `Rebuild`. The middle
-case is the craft: a would-be witness still inside its 30s confirm window returns `Wait`
-(and un-counts the strike) — never race a fast rejection into a whole-service rebuild.
-Strikes are per-session attempt counts, so a flapping error code can't reset them;
+case is the craft: a would-be witness still inside its 30s confirm window returns `Wait` —
+the strike stands and the verdict is held, rendered by `rejudge` the moment that witness confirms
+or its window lapses (E1-T10 #4) — never race a fast rejection into a whole-service rebuild.
+Strikes are per-session attempt counts — a pair's two legs are one strike, and a leg of a pair
+already replaced is none (#8) — so a flapping error code can't reset them;
 quarantine exit is **restart-only** (config-shaped failures don't self-heal); a refused
 unsubscribe always rebuilds (it would double-deliver every update). At N=1 the structure
 guarantees the last market dies loud, never quarantined into a silently idle service. Once quarantined, a market's further rejections

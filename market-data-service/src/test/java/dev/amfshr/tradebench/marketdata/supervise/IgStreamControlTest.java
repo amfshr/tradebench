@@ -91,22 +91,22 @@ class IgStreamControlTest {
         final List<String> statuses = new ArrayList<>();
 
         @Override
-        public void onStatusChange(String status) {
+        public void onStatusChange(int generation, String status) {
             statuses.add(status);
         }
 
         @Override
-        public void onServerError(int code, String message) {
+        public void onServerError(int generation, int code, String message) {
         }
 
         @Override
-        public void onSubscribed(String epic, WitnessQuarantine.Kind kind) {
+        public void onSubscribed(int generation, String epic, WitnessQuarantine.Kind kind) {
             subscribed.add(epic + "/" + kind);
         }
 
         @Override
-        public void onSubscriptionError(String epic, int code, String message) {
-            rejected.add(epic + "/" + code + "/" + message);
+        public void onSubscriptionError(int generation, String epic, WitnessQuarantine.Kind kind, int code, String message) {
+            rejected.add(epic + "/" + kind + "/" + code + "/" + message);
         }
     }
 
@@ -246,7 +246,7 @@ class IgStreamControlTest {
         legs.get(3).onSubscriptionError(123, "nope");  // FTSE chart
 
         assertEquals(List.of(DAX + "/PRICE", DAX + "/CHART"), observer.subscribed);
-        assertEquals(List.of(FTSE + "/123/nope"), observer.rejected);
+        assertEquals(List.of(FTSE + "/CHART/123/nope"), observer.rejected);
     }
 
     @Test
@@ -254,7 +254,7 @@ class IgStreamControlTest {
         boot();
         control.quarantine(FTSE);
 
-        assertTrue(control.rebuild());
+        assertEquals(StreamControl.Outcome.CONNECTED, control.rebuild());
 
         assertTrue(fake.connections.get(0).closed, "the old stream is torn down first");
         assertEquals(2, fake.connections.size());
@@ -314,7 +314,7 @@ class IgStreamControlTest {
         boot();
         sessions.afterFailureFailsWith = new IOException("IG unreachable");
 
-        assertTrue(control.rebuild(), "transient — the ladder continues; the sweep thread survives");
+        assertEquals(StreamControl.Outcome.FAILED, control.rebuild(), "transient — the ladder continues; the sweep thread survives");
 
         assertTrue(fake.connections.get(0).closed);
         assertEquals(1, fake.connections.size(), "no new connection — the stream is left down");
@@ -328,7 +328,7 @@ class IgStreamControlTest {
         boot();
         fake.failNextConnect = true;
 
-        assertTrue(control.rebuild());
+        assertEquals(StreamControl.Outcome.FAILED, control.rebuild());
 
         assertEquals(1, fake.connections.size());
         assertTrue(log.getLast().contains("rebuild failed"));
@@ -339,7 +339,7 @@ class IgStreamControlTest {
         boot();
         sessions.afterFailureFailsWith = new IgFatalConfigException("account disabled");
 
-        assertFalse(control.rebuild(), "false tells the Supervisor to give up at once");
+        assertEquals(StreamControl.Outcome.FATAL, control.rebuild(), "FATAL tells the Supervisor to give up at once");
 
         assertTrue(fake.connections.get(0).closed);
         assertEquals(1, fake.connections.size());
@@ -351,10 +351,10 @@ class IgStreamControlTest {
         boot();
         sessions.afterFailureFailsWith = new InterruptedException("shutdown");
 
-        boolean ladderContinues = control.rebuild();
+        StreamControl.Outcome outcome = control.rebuild();
 
         assertTrue(Thread.interrupted(), "the interrupt is preserved for the sweep loop to honour");
-        assertTrue(ladderContinues, "an interrupt is not a rejected configuration");
+        assertEquals(StreamControl.Outcome.FAILED, outcome, "an interrupt is not a rejected configuration");
         assertEquals(1, fake.connections.size());
     }
 
@@ -379,7 +379,7 @@ class IgStreamControlTest {
     void quarantineWhileTheStreamIsDownIsAcceptedAndStillExcludesTheMarketLater() throws Exception {
         boot();
         fake.failNextConnect = true;
-        assertTrue(control.rebuild(), "transient — the stream is left down for the ladder");
+        assertEquals(StreamControl.Outcome.FAILED, control.rebuild(), "transient — the stream is left down for the ladder");
 
         assertTrue(control.quarantine(FTSE), "nothing is subscribed while down — nothing to refuse");
 

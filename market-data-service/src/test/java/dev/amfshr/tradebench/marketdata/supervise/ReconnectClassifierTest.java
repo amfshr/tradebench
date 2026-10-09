@@ -44,7 +44,7 @@ class ReconnectClassifierTest {
     @Test
     void hostSleepIsAnnotatedByClockDivergence() {
         classifier.onStatus(StuckSubstateEscalator.WILL_RETRY, 0, 0);
-        // the 16-minute lid-close once reported as "0.4s offline": wall 960s, awake 1s
+        // the 16-minute host suspend once reported as "0.4s offline": wall 960s, awake 1s
         Reconnect summary = classifier.onStatus("CONNECTED:WS-STREAMING", 1 * S, 960_000);
         assertTrue(summary.hostSleptDuring());
         assertEquals(Duration.ofSeconds(960), summary.wallOutage());
@@ -57,13 +57,6 @@ class ReconnectClassifierTest {
         assertNull(classifier.noteFor("CONNECTED:WS-STREAMING"));
     }
 
-    @Test
-    void gracefulCloseIsHushed() {
-        classifier.closing();
-        assertEquals(Note.GRACEFUL_CLOSE, classifier.noteFor("DISCONNECTED"));
-        assertNull(classifier.onStatus("DISCONNECTED", 5 * S, 5_000),
-                "a scheduled stop must not write scare-lines into the warnings stream");
-    }
 
     @Test
     void aRebuildOpensTheOutageSoTheResumeCountsAndIsAReplacement() {

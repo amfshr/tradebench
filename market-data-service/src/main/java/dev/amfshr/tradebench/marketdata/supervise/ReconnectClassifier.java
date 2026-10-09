@@ -9,8 +9,9 @@ import org.jspecify.annotations.Nullable;
  * A WILL-RETRY sighting means the server abandoned lossless recovery, and our own rebuild
  * tears the connection down — either way the outage's data is gone and a heal is owed;
  * otherwise the server replayed and there is no gap. Also
- * annotates host sleep (a lid-closed 16 minutes once reported as "0.4s offline") and
- * flags silent transport downgrades.
+ * annotates a host suspend (a 16-minute suspend once reported as "0.4s offline") and flags
+ * silent transport downgrades. A torn-down connection's farewell never reaches here — the
+ * generation gate is the §3.6 hush (E1-T10 #29).
  */
 public final class ReconnectClassifier {
 
@@ -18,12 +19,11 @@ public final class ReconnectClassifier {
             boolean hostSleptDuring) {
     }
 
-    public enum Note { TRANSPORT_DOWNGRADED, GRACEFUL_CLOSE }
+    public enum Note { TRANSPORT_DOWNGRADED }
 
     private static final String POLLING = "CONNECTED:HTTP-POLLING";
 
     private final Tuning tuning;
-    private boolean closing;
     private boolean inOutage;
     private boolean dataGone;
     private long outageStartMono;
@@ -31,11 +31,6 @@ public final class ReconnectClassifier {
 
     public ReconnectClassifier(Tuning tuning) {
         this.tuning = tuning;
-    }
-
-    /** Set before an intentional close so the farewell DISCONNECTED is hushed (§3.6). */
-    public void closing() {
-        closing = true;
     }
 
     /** The Supervisor is tearing the connection down to rebuild it. The outage is open from here
@@ -56,9 +51,6 @@ public final class ReconnectClassifier {
         if (POLLING.equals(status)) {
             return Note.TRANSPORT_DOWNGRADED;
         }
-        if (closing && status.startsWith("DISCONNECTED")) {
-            return Note.GRACEFUL_CLOSE;
-        }
         return null;
     }
 
@@ -78,7 +70,7 @@ public final class ReconnectClassifier {
 
     /** Returns the outage summary when this status change ends one; else null. */
     public @Nullable Reconnect onStatus(String status, long monotonicNanos, long wallMillis) {
-        if (status.startsWith("DISCONNECTED") && !closing) {
+        if (status.startsWith("DISCONNECTED")) {
             if (!inOutage) {
                 inOutage = true;
                 dataGone = false;

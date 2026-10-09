@@ -139,8 +139,7 @@ public final class ScenarioRunner {
                 try {
                     capture.supervisor.sweep();
                 } catch (RuntimeException e) {
-                    throw new HarnessError("Supervisor.sweep() threw at " + now()
-                            + " — in production the sweep thread dies silently (review #19)", e);
+                    capture.supervisor.die(e); // Supervisor.run()'s catch, in its place
                 }
                 observeWire();
                 nextSweep = nextSweep.plus(CaptureAssembly.SWEEP_INTERVAL);

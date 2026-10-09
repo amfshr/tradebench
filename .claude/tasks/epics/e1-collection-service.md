@@ -201,7 +201,9 @@ the host-suspend scenario pins the rebaseline — a 16-minute wall jump raises n
 stuck in `DISCONNECTED:WILL-RETRY` and the escalator rebuilds 120s after the wake, measured in awake time — was pinned
 at T11 only by the `@Disabled` dead-socket scenario, without the suspend (T11's doctrine review, finding 6), and is
 now an A2 scenario: that scenario with a 16-minute host suspend in front of the hang; T11's DoD wording stays as
-written).
+written). **Update 2026-10-09: residual 3's rebuild half is closed at A2 — `aHostThatWakesWithTheClientStuckIsRebuiltInAwakeTime`
+on `e1-t10-a2-detectors-verdicts` (PR #17, open), the hang then the suspend as reordered at A2's doctrine review so it
+discriminates awake from wall time; final at the merge of PR #17.**
 1. The gated demo smoke (`IG_SMOKE=1 ./gradlew :ig-client:demoSmoke`) has not run, so the
    `application-allowance.json` wire fixture is *authored*, not captured — run it and re-golden before
    T6's heal budget leans on pacer discovery. A skew fails safe today: refused at the boundary, 10/min kept.
@@ -209,11 +211,14 @@ written).
    `bind()`. Each layer is tested; the composition is not. **→ E1-T11 (DoD) — closed, final at T11's merge (PR #16, 2026-10-08).**
 3. No shell-level suspend → wake → `WILL-RETRY` → rebuild scenario — the rebaseline path is pinned only
    in slice A's `StalenessWatchdogTest`. **→ E1-T11 (DoD) — closed in its rebaseline half at T11's merge
-   (PR #16, 2026-10-08)** (`aLidCloseIsAnnotatedNotTreatedAsAnOutage` — renamed to a host-suspend name at A2, ruling 3:
-   a 16-minute wall jump, no `WATCHDOG_STALE`, annotated `hostSlept`, no rebuild); **the rebuild half → T10 A2 (ruled
-   2026-10-08, Alex):** a variant of the dead-socket scenario (`aDeadSocketIsTheEscalatorsToRebuildAtOneHundredAndTwentySeconds`,
-   #5) with a 16-minute host suspend in front of the hang — the host wakes with the Lightstreamer client stuck in
-   `DISCONNECTED:WILL-RETRY`, the escalator rebuilds 120s after the wake, measured in awake time.
+   (PR #16, 2026-10-08)** (`aLidCloseIsAnnotatedNotTreatedAsAnOutage` — renamed `aHostSuspendIsAnnotatedNotTreatedAsAnOutage`
+   at A2, ruling 3, PR #17: a 16-minute wall jump, no `WATCHDOG_STALE`, annotated `hostSlept`, no rebuild); **the rebuild
+   half → T10 A2 (ruled 2026-10-08, Alex) — closed at A2 (2026-10-09, PR #17 open; final at its merge):**
+   `aHostThatWakesWithTheClientStuckIsRebuiltInAwakeTime` — a variant of the dead-socket scenario
+   (`aDeadSocketIsTheEscalatorsToRebuildAtOneHundredAndTwentySeconds`, #5) with a 16-minute host suspend; the ruling placed
+   the suspend in front of the hang, and A2's doctrine review (finding 1, medium) reordered it — the hang, then the suspend,
+   `hostSlept=true` asserted — so a consistent-wall-clock escalator fails it (rebuild at 60, not 180): the host wakes with the
+   Lightstreamer client stuck in `DISCONNECTED:WILL-RETRY` and the escalator rebuilds it, measured in awake time.
 
 ## T6 — Daily completeness + archive + digest (D6)
 
@@ -464,9 +469,9 @@ Results, this run:
 real stack. `written=` lagging `ticks=` + `bars=` by one on two later heartbeats is a snapshot artefact (a
 tick sitting in the queue at the instant the line is printed), not a loss.
 
-## T10 — Resilience belt hardening: the PR #14 review 🔶 (ticketed 2026-10-05; started 2026-10-08 — A1 ✅ PR #15; A2/B/C next as scenarios on the merged E1-T11 harness, PR #16)
+## T10 — Resilience belt hardening: the PR #14 review 🔶 (ticketed 2026-10-05; started 2026-10-08 — A1 ✅ PR #15; A2 🔶 built 2026-10-09 as scenarios on the merged E1-T11 harness — four increments + the review's fixes, PR #17 open, awaiting Alex's merge; B/C next)
 
-**Type** build · **Branch** `e1-t10-belt-hardening` · **Started** 2026-10-08 · **Blocked by** —
+**Type** build · **Branch** `e1-t10-a2-detectors-verdicts` (A2, from main `c2d46e8`; A1 merged from `e1-t10-belt-hardening`, PR #15) · **Started** 2026-10-08 · **Blocked by** —
 
 **Goal:** the belt's 32 review findings fixed or answered, each fix carrying the test that would have caught
 it — so chapter 10's promises hold on the code, not only in prose.
@@ -540,7 +545,7 @@ the re-review → E1-T6):**
   `ReconnectClassifier`'s javadoc, `ReconnectClassifierTest` and `StalenessWatchdogTest`. Field Manual chapters 07, 08
   and 10 reworded 2026-10-08 direct to main (docs-only, the build session). On this plan and the board, "lid close"
   describing our scenario reads "host suspend"; the prototype's captured `host_slept` outages keep the fact with "the
-  prototype ran on a laptop" (T12 §).
+  prototype ran on a laptop" (T12 §). **Started 2026-10-09 — progress in "A2 — in progress", below.**
 - **B — the sink and the database edge.** **#6** `recover()` makes a round trip — executes the held batch inside
   recovery, so "recovered" means a write landed — and carries attempt/since across consecutive episodes; **#7**
   `socketTimeout` 30s + `tcpKeepAlive` (D29 (2)) on the pool and `dedicatedConnection()`, with a Testcontainers
@@ -566,6 +571,79 @@ the re-review → E1-T6):**
   `core.md:15`, `:28`).
 - **#23** (no combined-detector test) *is* the harness — **E1-T11**.
 
+**A2 — in progress.** **Started 2026-10-09** on `e1-t10-a2-detectors-verdicts` (branched from main at `c2d46e8`); design nod
+posted and accepted by Alex 2026-10-09 ("I accept your recommendations"). **Four increments, one PR for the slice:** **1 the
+watchdog** (#5, #33, #3) · **2 the witness** (#8, #4, #14) · **3 the session** (#18, #11, #13, #19, #21, #29) · **4
+housekeeping** (the host-suspend-then-stuck scenario — T5 residual 3's rebuild half; the ruling-3 rename of
+`aLidCloseIsAnnotatedNotTreatedAsAnOutage` and the lid/laptop comment purge; chapter 10's known-deviations note removed and
+its "together" clause added). **In-ticket decisions accepted at the nod:** `StreamControl.rebuild()` returns an outcome
+(CONNECTED / FAILED / FATAL) — a failed connect is re-asked next sweep and only connected rebuilds count toward the ceiling
+(#18); observations carry the connection generation and are applied only when current (#11); the teaching resubscribe
+reuses the watchdog's resubscribe remedy with a new signal `STAND_DOWN_TEACHING`, recorded as `WATCHDOG_STALE`, the twelve
+hours as `Tuning.standDownTeach` (#3); the one-sweep hold window is the sweep interval passed to the watchdog, not a
+tunable (#33); the leg kind rides on the rejection (#8); `Supervisor.die(cause)` mirrors the pump's (#19).
+**Increment 1 — the watchdog, `92d73f3` (2026-10-09)** (`StalenessWatchdog`, `Supervisor`, `Tuning`, their
+tests, and `BeltScenariosTest`): `StalenessWatchdog` renders no verdict while the connection is not streaming and starts
+every stopwatch afresh on resume (`onConnection`); the one-sweep hold (`anotherWithinASweep`); the bounded stand-down —
+`onDealFlag` now stamps when a closing flag began, `clearDealFlag` forgets it on a re-ask, and a market closed for
+`standDownTeach` (12h, D29 (1)) gets one `RESUBSCRIBE` with signal `STAND_DOWN_TEACHING` per period, its silence counted
+from the fresh subscription. `Supervisor` feeds a remembered flag only when a tick newer than the market's last re-ask
+carries it (`reasking` on retry, watchdog resubscribe and rebuild) and tells the watchdog the connection's state. Four
+scenarios switched on: `tryingRecoveryIsGivenItsThreeHundredSecondsBeforeAnyRebuild` and
+`aDeadSocketIsTheEscalatorsToRebuildAtOneHundredAndTwentySeconds` (#5),
+`theScarsTwoDeadMarketsEarnOneSessionVerdictAtNinetySeconds` (#33),
+`aWeekendZombieBehindAClosedFlagIsFoundByTheTwelveHourTeachingResubscribe` (#3 — tightened to exact offsets: the teach at
+43201, resubscribes at 43291 and 43411, the session rebuild at 43651). Five new `StalenessWatchdogTest` tests, one new
+`SupervisorTest` test, `TuningTest` pins the 12h. Tests: market-data-service 199 (6 skipped), 0 failures. Eight mutations
+red and restored byte-identical (judging a down connection; no fresh window on resume; no hold; the teaching period
+doubled; teaching every sweep; the teach not restarting the silence; the stale flag fed back; the shell never telling the
+watchdog the connection's state). **Remaining `@Disabled` after increment 1:** #4 ×2, #8 (increment 2); #6, #20 ×2 (slice
+B).
+**Increment 2 — the witness, `a21e8d7` (2026-10-09):** **#8** one strike per (epic, attempt), the leg named on the rejection;
+**#4** a `Wait` keeps its strike and `rejudge` renders the held verdict when the witness confirms or its window lapses,
+`Judgment.Rebuild` carrying the epic; **#14** a watchdog resubscribe opens a fresh confirm window; **#21** (planned for
+increment 3, landed here) verdicts dated when rendered with the rejection in the detail, the outage opened on the sweep's
+own clocks. Scenarios switched on: both #4 arms (`aRejectionHeldForAnUnconfirmedWitnessIsJudgedWhenTheWitnessConfirms`,
+`aVerdictHeldForAWitnessThatNeverConfirmsIsSessionShapedWhenTheWindowLapses`) and #8
+(`aMarketWhoseBothLegsAreRejectedGetsItsTwoSurgicalRetries`). Eight mutations red and restored byte-identical.
+**Increment 3 — the session, `6e0a82d` (2026-10-09):** **#18** `StreamControl.rebuild()` returns `Outcome {CONNECTED, FAILED,
+FATAL}` — a failed connect is latched and re-asked next sweep, paced; only connected rebuilds count toward the ceiling; the
+escalator's substate is reset after a rebuild; **#11** observations carry the connection generation (a generation-carrying
+`StreamObserver`, `StreamControl.generation()`) and the shell applies only `expectedGeneration`; **#13** `giveUp` once, the
+sweep short-circuits; **#19** `Supervisor.die(cause)` writes `FEED_DEAD{reason: fatal, cause}` and hands over — `run()` and
+the harness use it; **#29** `closing()`/`GRACEFUL_CLOSE` deleted, chapter 08 naming the generation gate as the §3.6 hush. One
+new scenario: `aFeedThatCannotBeRebuiltDiesByTheBudgetNotTheCeiling` — IG unreachable for good dies by the budget at 780
+with fifteen reason rows. Five mutations red and restored byte-identical.
+**Increment 4 — housekeeping, `ba7fe45` (2026-10-09):** the stuck-after-a-suspend scenario
+`aHostThatWakesWithTheClientStuckIsRebuiltInAwakeTime` (T5 residual 3's rebuild half); the server-first rename
+`aLidCloseIsAnnotatedNotTreatedAsAnOutage` → `aHostSuspendIsAnnotatedNotTreatedAsAnOutage` and the last laptop framing out
+of the code (ruling 3); chapters 08/10 updated — chapter 10's rows carry the one-sweep "together", the 12h stand-down bound
+with a `standDownTeach` numbers-table row, the per-attempt strike and the held verdict, the ceiling counting connected
+rebuilds; its known-deviations note reduced to slice B's #6 and #20. One mutation red and restored byte-identical.
+**Doctrine review 2026-10-09 — pass-with-findings; seven findings, all fixed on the branch in `3e7ca9a`:** (1) **medium** —
+the stuck-after-a-suspend scenario had the suspend before the hang, so it did not discriminate awake from wall time;
+reordered — the hang, then the suspend — with `hostSlept=true` asserted; a consistent-wall-clock escalator now fails it
+(rebuild at 60, not 180); (2) low — the per-attempt straggler rule could drop a rebuilt pair's first rejection stamped
+before the shell read its clock; narrowed to after a surgical retry only, with a unit test; (3) low — `run()`'s catch lost
+the stack trace; it now rethrows after `die()`; (4) low — the one-sweep hold's boundary pinned to the nanosecond with two
+unit tests; (5) low — the held rejection required non-null by name; (6) low — chapter 08's watchdog section gained the
+stand-down bound, the connection stand-down and the one-sweep "together" (seven pieces of judgment; the state diagram's
+teach edge); (7) low — the shutdown javadoc lost the hush. Observations accepted, not changed: FAILED re-asks reuse the
+original reason row (fifteen `STUCK_SUBSTATE_ESCALATED` rows for one escalation — a slice-C loudness nicety); two mutants
+equivalent (the escalator reset behind the re-ask latch; the give-up guard behind the short-circuits). Three mutations red
+and restored byte-identical.
+**Totals at the PR:** all twelve A2 findings fixed with their exposing tests (#3, #4, #5, #8, #11, #13, #14, #18, #19, #21,
+#29, #33); T5 residual 3's rebuild half closed by the reordered scenario (final at the merge); the server-first rename
+done. 25 mutations red and restored byte-identical (8 + 8 + 5 + 1 across the increments, 3 on the review's fixes).
+`BeltScenariosTest` at 23: seven scenarios switched on (#3, #4 ×2, #5 ×2, #8, #33), two new
+(`aFeedThatCannotBeRebuiltDiesByTheBudgetNotTheCeiling`, `aHostThatWakesWithTheClientStuckIsRebuiltInAwakeTime`) plus the
+rename; three remain `@Disabled` for slice B (`aDatabaseThatRefusesWritesIsOneEpisodeClimbingTheLadder`,
+`aStopWithABacklogDrainsAllOfItIntoAHealthySink`, `aStopDuringAHoldAfterPostgresReturnedRecoversOnceAndLandsEverything`).
+Tests at the PR: market-data-service 212 (3 skipped) · ig-client 99 · docs site 63 · 0 failures; `./gradlew build` and the
+docs build green as CI runs them. **PR #17** opened 2026-10-09 (https://github.com/amfshr/tradebench/pull/17), awaiting
+Alex's merge; CI green (`build` and GitGuardian passed). **Next:** Alex merges PR #17 → the A2 close-out (this section, the board's
+T10 row, a Done history entry tagged E1-T10) → slice B as scenarios on the harness (#6, #20 ×2) → C.
+
 **The A2/B backlog on the harness (E1-T11 — merged 2026-10-08, PR #16; written 2026-10-08, the tenth, #4's window-lapse arm, added at T11's
 doctrine review; each verified red for its finding's reason):** the ten `@Disabled` scenarios in `BeltScenariosTest` —
 A2: #3 `aWeekendZombieBehindAClosedFlagIsFoundByTheTwelveHourTeachingResubscribe`,
@@ -586,7 +664,13 @@ suspend in front of the hang, the rebuild 120s after the wake in awake time) —
 the test and code comments (the A2 bullet above). **Noted for the slices (T11's doctrine review, 2026-10-08):** the fake store's `recover()`
 deliberately models the unfixed #6 — slice B must give it a round trip with the production fix; the #3 scenario's window
 assertions tighten to exact offsets when A2 enables it; a `Supervisor.sweep()` exception is modelled as a harness error
-(a test error) until #19 lands.
+(a test error) until #19 lands. **Update 2026-10-09 (A2 built — PR #17, awaiting Alex's merge):** all seven A2 scenarios are switched on — #3, #5 ×2 and #33 at
+increment 1 (the #3 window assertions tightened to exact offsets as noted), #4 ×2 and #8 at increment 2; the two ruled
+additions are built (`aHostThatWakesWithTheClientStuckIsRebuiltInAwakeTime`, reordered at A2's doctrine review so the hang
+precedes the suspend; `aLidCloseIsAnnotatedNotTreatedAsAnOutage` → `aHostSuspendIsAnnotatedNotTreatedAsAnOutage`); a
+throwing `Supervisor.sweep()` now dies loud (#19 landed). Only slice B's three remain `@Disabled` — #6
+`aDatabaseThatRefusesWritesIsOneEpisodeClimbingTheLadder`, #20 `aStopWithABacklogDrainsAllOfItIntoAHealthySink` +
+`aStopDuringAHoldAfterPostgresReturnedRecoversOnceAndLandsEverything` (the suite at 212, 3 skipped, 0 failures).
 
 **Tests to doctrine (G5):** each fix carries the exposing test the review names, mutation-verified (apply the
 exact break → red); A2 and B land as scenarios on the E1-T11 harness with chapter 10's numbers as the expected

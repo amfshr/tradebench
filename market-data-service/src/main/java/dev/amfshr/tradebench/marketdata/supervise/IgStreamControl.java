@@ -110,21 +110,27 @@ public final class IgStreamControl implements StreamControl, AutoCloseable {
     }
 
     @Override
-    public boolean rebuild() {
+    public Outcome rebuild() {
         closeStream();
         try {
             connect(sessions.afterFailure());
+            return Outcome.CONNECTED;
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
             log.accept("rebuild interrupted — stream left down");
         } catch (IgFatalConfigException e) {
             log.accept("FATAL: IG rejected the configuration — recovery is pointless: "
                     + e.getMessage());
-            return false;
+            return Outcome.FATAL;
         } catch (IOException | RuntimeException e) {
             log.accept("rebuild failed — stream left down for the backoff ladder: " + e);
         }
-        return true;
+        return Outcome.FAILED;
+    }
+
+    @Override
+    public int generation() {
+        return generation.get();
     }
 
     @Override
@@ -207,14 +213,14 @@ public final class IgStreamControl implements StreamControl, AutoCloseable {
             @Override
             public void onStatusChange(String status) {
                 if (live(gen)) {
-                    target.onStatusChange(status);
+                    target.onStatusChange(gen, status);
                 }
             }
 
             @Override
             public void onServerError(int code, String message) {
                 if (live(gen)) {
-                    target.onServerError(code, message);
+                    target.onServerError(gen, code, message);
                 }
             }
         };
@@ -226,14 +232,14 @@ public final class IgStreamControl implements StreamControl, AutoCloseable {
             @Override
             public void onSubscribed() {
                 if (live(gen)) {
-                    target.onSubscribed(epic, kind);
+                    target.onSubscribed(gen, epic, kind);
                 }
             }
 
             @Override
             public void onSubscriptionError(int code, String message) {
                 if (live(gen)) {
-                    target.onSubscriptionError(epic, code, message);
+                    target.onSubscriptionError(gen, epic, kind, code, message);
                 }
             }
         };

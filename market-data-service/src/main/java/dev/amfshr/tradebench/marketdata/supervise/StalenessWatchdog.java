@@ -1,5 +1,6 @@
 package dev.amfshr.tradebench.marketdata.supervise;
 
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -11,13 +12,18 @@ import org.jspecify.annotations.Nullable;
 /**
  * "A connected socket is not a live feed" (§3.4, ported whole). Pure logic: observations
  * in, {@link Remedy} values out; the supervisor executes them. Market state comes from
- * the stream's own DLG_FLAG — no calendar, no per-market hours config. Host sleep and
+ * the stream's own DLG_FLAG — no calendar, no per-market hours config. Host suspend and
  * process freeze are detected by comparing the two clocks and re-baseline every stopwatch
- * so the watchdog never fires INTO a recovery.
+ * so the watchdog never fires INTO a recovery; for the same reason it renders no verdict while
+ * the connection itself is down (a retry substate, the handshake, a rebuild in flight — the
+ * escalator's domain, E1-T10 #5) and starts every stopwatch afresh when streaming resumes.
+ * The CLOSED/SUSPEND stand-down is bounded (D29 (1)): a market that has read a closing flag for
+ * {@code standDownTeach} gets one teaching resubscribe per period, whose snapshot re-learns the
+ * flag — so a server-side zombie cannot hide behind a weekend.
  */
 public final class StalenessWatchdog {
 
-    public enum Signal { TICK_SILENT, BAR_SILENT_TICKS_FLOWING }
+    public enum Signal { TICK_SILENT, BAR_SILENT_TICKS_FLOWING, STAND_DOWN_TEACHING }
 
     public enum Action { RESUBSCRIBE, REBUILD }
 
@@ -25,23 +31,30 @@ public final class StalenessWatchdog {
     }
 
     private static final Set<String> SUPPRESSING_FLAGS = Set.of("CLOSED", "SUSPEND");
+    private static final long NEVER = Long.MIN_VALUE;
 
     private final Tuning tuning;
+    private final long sweepNanos;
     private final Map<String, Market> markets = new HashMap<>();
     private long lastRoundMono;
     private long lastRoundWallMillis;
     private boolean baselined;
+    private boolean connectionDown;
     private long lastSessionVerdict;
     private long sessionGraceNanos;
 
-    public StalenessWatchdog(Tuning tuning) {
+    /** {@code sweepInterval} is the shell's cadence, not a tunable: "stale together" (§3.4) means
+     * within one sweep of each other (E1-T10 #33). */
+    public StalenessWatchdog(Tuning tuning, Duration sweepInterval) {
         this.tuning = tuning;
+        this.sweepNanos = sweepInterval.toNanos();
     }
 
     private static final class Market {
         long lastTick;
         long lastBar;
         @Nullable String dealFlag;
+        long stoodDownSince = NEVER;
         @Nullable Episode episode;
     }
 
@@ -87,10 +100,45 @@ public final class StalenessWatchdog {
         healIf(m, Signal.BAR_SILENT_TICKS_FLOWING);
     }
 
-    public void onDealFlag(String epic, String flag) {
+    /** The market's latest DLG_FLAG; a closing flag starts (or continues) its stand-down. */
+    public void onDealFlag(String epic, String flag, long monotonicNanos) {
+        Market m = markets.get(epic);
+        if (m == null) {
+            return;
+        }
+        m.dealFlag = flag;
+        if (!SUPPRESSING_FLAGS.contains(flag)) {
+            m.stoodDownSince = NEVER;
+        } else if (m.stoodDownSince == NEVER) {
+            m.stoodDownSince = monotonicNanos;
+        }
+    }
+
+    /** The market's pair was re-asked for (a resubscribe, a rebuild): the remembered flag is the
+     * old subscription's, so it is forgotten until the new one's snapshot re-teaches it (D29 (1)). */
+    public void clearDealFlag(String epic) {
         Market m = markets.get(epic);
         if (m != null) {
-            m.dealFlag = flag;
+            m.dealFlag = null;
+            m.stoodDownSince = NEVER;
+        }
+    }
+
+    /** The connection's state: down (any retry substate, the handshake, a rebuild in flight) means
+     * no verdicts — silence is the connection's, not a market's; streaming again means every
+     * stopwatch and episode starts afresh, so the new session gets its full window. */
+    public void onConnection(boolean streaming, long monotonicNanos) {
+        if (!streaming) {
+            connectionDown = true;
+            return;
+        }
+        if (connectionDown) {
+            connectionDown = false;
+            rebaseline(monotonicNanos);
+            for (Market m : markets.values()) {
+                m.episode = null;
+            }
+            sessionGraceNanos = 0;
         }
     }
 
@@ -98,6 +146,9 @@ public final class StalenessWatchdog {
     public List<Remedy> evaluate(long monotonicNanos, long wallMillis) {
         if (clockAnomaly(monotonicNanos, wallMillis)) {
             rebaseline(monotonicNanos);
+            return List.of();
+        }
+        if (connectionDown) {
             return List.of();
         }
         List<Map.Entry<String, Signal>> stale = new ArrayList<>();
@@ -122,7 +173,10 @@ public final class StalenessWatchdog {
                     stale.getFirst().getValue()));
         }
         sessionGraceNanos = 0;
-        List<Remedy> remedies = new ArrayList<>();
+        List<Remedy> remedies = teachingRemedies(monotonicNanos);
+        if (stale.size() == 1 && anotherWithinASweep(stale.getFirst().getKey(), monotonicNanos)) {
+            return remedies; // hold: next round they are stale together, and that is one verdict
+        }
         for (Map.Entry<String, Signal> e : stale) {
             Remedy remedy = remedyFor(markets.get(e.getKey()), e.getKey(), e.getValue(),
                     monotonicNanos);
@@ -131,6 +185,37 @@ public final class StalenessWatchdog {
             }
         }
         return remedies;
+    }
+
+    /** The bounded stand-down: a market closed for the whole period is re-asked for once, and its
+     * silence counts from the fresh subscription — a live item re-teaches its flag within a tick,
+     * a dead one is then judged like any open, silent market. */
+    private List<Remedy> teachingRemedies(long now) {
+        List<Remedy> remedies = new ArrayList<>();
+        for (Map.Entry<String, Market> entry : markets.entrySet()) {
+            Market m = entry.getValue();
+            if (m.stoodDownSince != NEVER && now - m.stoodDownSince >= tuning.standDownTeach().toNanos()) {
+                m.stoodDownSince = now; // one per period, whatever comes back
+                m.lastTick = now;
+                m.lastBar = now;
+                remedies.add(new Remedy(entry.getKey(), Action.RESUBSCRIBE, Signal.STAND_DOWN_TEACHING));
+            }
+        }
+        return remedies;
+    }
+
+    private boolean anotherWithinASweep(String epic, long now) {
+        for (Map.Entry<String, Market> entry : markets.entrySet()) {
+            Market m = entry.getValue();
+            if (entry.getKey().equals(epic) || isStoodDown(m)) {
+                continue;
+            }
+            if (now - m.lastTick >= tuning.tickSilent().toNanos() - sweepNanos
+                    || now - m.lastBar >= tuning.barSilentWhileTicksFlow().toNanos() - sweepNanos) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private boolean clockAnomaly(long monotonicNanos, long wallMillis) {
@@ -156,8 +241,12 @@ public final class StalenessWatchdog {
         }
     }
 
+    private static boolean isStoodDown(Market m) {
+        return m.dealFlag != null && SUPPRESSING_FLAGS.contains(m.dealFlag);
+    }
+
     private @Nullable Signal staleSignal(Market m, long now) {
-        if (m.dealFlag != null && SUPPRESSING_FLAGS.contains(m.dealFlag)) {
+        if (isStoodDown(m)) {
             return null;
         }
         boolean tickSilent = now - m.lastTick >= tuning.tickSilent().toNanos();

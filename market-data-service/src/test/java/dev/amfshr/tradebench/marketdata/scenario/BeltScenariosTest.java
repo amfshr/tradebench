@@ -9,6 +9,7 @@ import static dev.amfshr.tradebench.marketdata.scenario.Events.dbDown;
 import static dev.amfshr.tradebench.marketdata.scenario.Events.dbWritesRefused;
 import static dev.amfshr.tradebench.marketdata.scenario.Events.dbUp;
 import static dev.amfshr.tradebench.marketdata.scenario.Events.hostSleep;
+import static dev.amfshr.tradebench.marketdata.scenario.Events.igDown;
 import static dev.amfshr.tradebench.marketdata.scenario.Events.reject;
 import static dev.amfshr.tradebench.marketdata.scenario.Events.serverError;
 import static dev.amfshr.tradebench.marketdata.scenario.Events.status;
@@ -153,11 +154,35 @@ class BeltScenariosTest {
     }
 
     @Test
-    void aLidCloseIsAnnotatedNotTreatedAsAnOutage() throws Exception {
-        // Chapter 7's discriminator at the shell: the socket dies as the lid closes, the wall clock
-        // jumps sixteen minutes, the monotonic clock does not; on wake the client reconnects by
-        // itself. No rebuild, no staleness alarm — one RECONNECT that says the host slept.
-        Scenario lidClose = Scenario.named("lid close").markets(DAX)
+    void aFeedThatCannotBeRebuiltDiesByTheBudgetNotTheCeiling() throws Exception {
+        // Chapter 10: the budget is a clock, not a count. IG becomes unreachable and the client hangs
+        // in WILL-RETRY; the escalator asks for a rebuild at 180, no attempt connects, and the belt
+        // keeps asking — paced 5,5,5,8,16,32 then 60s: fifteen attempts by 731 — until ten minutes
+        // from the first, FEED_DEAD{budget} at 780. Never the ten-rebuild ceiling: that counts
+        // rebuilds that connected.
+        Scenario unreachable = Scenario.named("IG unreachable for good").markets(DAX)
+                .at(s(0), streaming()).at(s(0), subscribed(DAX))
+                .every(s(1), s(1), s(60), t -> tick(DAX))
+                .at(s(60), igDown(), status(WILL_RETRY))
+                .until(s(900)).build();
+
+        Observed o = ScenarioRunner.run(unreachable);
+
+        assertEquals(List.of("FEED_DEAD → exit(1)"), o.exits.stream().map(Observed.Exit::how).toList());
+        assertEquals(780L, o.exits.get(0).at().toSeconds());
+        assertEquals("budget", o.events(EventType.FEED_DEAD).get(0).detail().get("reason").asText());
+        assertEquals(15, o.events(EventType.STUCK_SUBSTATE_ESCALATED).size(), "one reason row per attempt");
+        assertEquals(List.of(0L), o.secondsOf("connect"), "nothing ever came up");
+        assertTrue(o.events(EventType.WATCHDOG_STALE).isEmpty(), "stood down on a dead wire");
+    }
+
+    @Test
+    void aHostSuspendIsAnnotatedNotTreatedAsAnOutage() throws Exception {
+        // Chapter 7's discriminator at the shell: the host is suspended (a paused VM, a hibernated
+        // instance) — the socket dies, the wall clock jumps sixteen minutes, the monotonic clock does
+        // not; on resume the client reconnects by itself. No rebuild, no staleness alarm — one
+        // RECONNECT that says the host slept.
+        Scenario suspend = Scenario.named("host suspend").markets(DAX)
                 .at(s(0), streaming()).at(s(0), subscribed(DAX))
                 .every(s(1), s(1), s(60), t -> tick(DAX))
                 .at(s(60), status(WILL_RETRY), hostSleep(Duration.ofMinutes(16)))
@@ -165,7 +190,7 @@ class BeltScenariosTest {
                 .every(s(1), s(62), s(180), t -> tick(DAX))
                 .until(s(180)).build();
 
-        Observed o = ScenarioRunner.run(lidClose);
+        Observed o = ScenarioRunner.run(suspend);
 
         assertEquals(List.of(0L), o.secondsOf("connect"), "the client resumed by itself — no rebuild");
         Observed.Seen resume = o.events(EventType.RECONNECT).get(0);
@@ -173,6 +198,32 @@ class BeltScenariosTest {
         assertTrue(o.events(EventType.WATCHDOG_STALE).isEmpty(), "the stopwatches were rebaselined, not alarmed");
         assertTrue(o.remedies("unsubscribe").isEmpty());
         assertEquals(o.ticksDelivered, o.landed.size(), "capture carried on");
+        assertTrue(o.exits.isEmpty());
+    }
+
+    @Test
+    void aHostThatWakesWithTheClientStuckIsRebuiltInAwakeTime() throws Exception {
+        // T5 residual 3's other half: the client reports WILL-RETRY as the socket dies, then the
+        // host is suspended sixteen minutes. On resume the wall clock says the hang is already
+        // sixteen minutes old; the escalator's 120s run in awake time — the rebuild at 180, not at
+        // once — and the watchdog, stood down on a dead wire, raises nothing for the jump either.
+        Scenario stuckOnWake = Scenario.named("stuck after a suspend").markets(DAX)
+                .at(s(0), streaming()).at(s(0), subscribed(DAX))
+                .every(s(1), s(1), s(60), t -> tick(DAX))
+                .at(s(60), status(WILL_RETRY), hostSleep(Duration.ofMinutes(16)))
+                .at(s(181), streaming()).at(s(181), subscribed(DAX))
+                .every(s(1), s(182), s(240), t -> tick(DAX))
+                .until(s(240)).build();
+
+        Observed o = ScenarioRunner.run(stuckOnWake);
+
+        assertEquals(List.of(0L, 180L), o.secondsOf("connect"), "120s of awake time after the hang was reported");
+        assertEquals(1, o.events(EventType.STUCK_SUBSTATE_ESCALATED).size());
+        assertTrue(o.events(EventType.WATCHDOG_STALE).isEmpty(), "no alarm on a dead wire, no alarm for the jump");
+        Observed.Seen resume = o.events(EventType.RECONNECT).get(0);
+        assertFalse(resume.detail().get("replayed").asBoolean(), "a rebuild owes a heal");
+        assertTrue(resume.detail().get("hostSlept").asBoolean(), "sixteen minutes of wall inside two of awake");
+        assertEquals(o.ticksDelivered, o.landed.size());
         assertTrue(o.exits.isEmpty());
     }
 
@@ -312,7 +363,6 @@ class BeltScenariosTest {
     }
 
     @Test
-    @Disabled("E1-T10 A2 — finding #33: one stray per-market resubscribe the sweep before the session verdict (found by this replay)")
     void theScarsTwoDeadMarketsEarnOneSessionVerdictAtNinetySeconds() throws Exception {
         // Chapter 10: ≥2 markets stale together → rebuild at once. NASDAQ's last tick is 584ms after
         // DAX's (360.584 vs 360.000). The session verdict does come at 451, the second market's 90s
@@ -324,12 +374,12 @@ class BeltScenariosTest {
         Observed o = ScenarioRunner.run(scar);
 
         assertEquals(List.of(0L, 451L), o.secondsOf("connect"), "one session rebuild when the second market is 90s silent");
-        assertTrue(o.events(EventType.WATCHDOG_STALE).stream().noneMatch(e -> "resubscribe".equals(e.detail().path("action").asText())),
+        assertTrue(o.events(EventType.WATCHDOG_STALE).stream()
+                .noneMatch(e -> e.detail() != null && "resubscribe".equals(e.detail().path("action").asText())),
                 "no market surgery — the two died together");
     }
 
     @Test
-    @Disabled("E1-T10 A2 — finding #5: the watchdog's 90s verdict pre-empts the 300s replay patience")
     void tryingRecoveryIsGivenItsThreeHundredSecondsBeforeAnyRebuild() throws Exception {
         // Chapter 10 / 08: in TRYING-RECOVERY the server may still complete a lossless replay, so
         // the escalator waits 300s. Two open markets go silent with it; the watchdog must stand
@@ -351,7 +401,6 @@ class BeltScenariosTest {
     }
 
     @Test
-    @Disabled("E1-T10 A2 — finding #5: the watchdog fires on a connection that is not streaming")
     void aDeadSocketIsTheEscalatorsToRebuildAtOneHundredAndTwentySeconds() throws Exception {
         // ⑥ The socket dies; the SDK says WILL-RETRY and hangs. The escalator rebuilds at +120
         // (180). The watchdog must not resubscribe at +90 (150) on a connection with no session —
@@ -374,7 +423,6 @@ class BeltScenariosTest {
     }
 
     @Test
-    @Disabled("E1-T10 A2 — finding #4: Judgment.Wait is never re-armed")
     void aRejectionHeldForAnUnconfirmedWitnessIsJudgedWhenTheWitnessConfirms() throws Exception {
         // §3.5: DAX strikes out at 3 while NASDAQ is still inside its confirm window — wait, never
         // race a fast rejection into a session verdict. When NASDAQ confirms at 20 the held verdict
@@ -400,7 +448,6 @@ class BeltScenariosTest {
     }
 
     @Test
-    @Disabled("E1-T10 A2 — finding #4: Judgment.Wait is never re-armed (the window-lapse arm)")
     void aVerdictHeldForAWitnessThatNeverConfirmsIsSessionShapedWhenTheWindowLapses() throws Exception {
         // §3.5's other arm: NASDAQ never confirms. When its 30s window lapses nothing proves the
         // session innocent, so the held verdict is session-shaped — a rebuild at 30, the rejected
@@ -422,7 +469,6 @@ class BeltScenariosTest {
     }
 
     @Test
-    @Disabled("E1-T10 A2 — finding #8: strikes are counted per leg rejection, not per attempt")
     void aMarketWhoseBothLegsAreRejectedGetsItsTwoSurgicalRetries() throws Exception {
         // §3.5: initial subscribe + two surgical retries, a fresh pair each time. The server refuses
         // DAX outright, so both legs are rejected per attempt; that is one strike, not two. Each
@@ -446,12 +492,11 @@ class BeltScenariosTest {
     }
 
     @Test
-    @Disabled("E1-T10 A2 — finding #3: the CLOSED stand-down is unbounded (bounded by D29)")
     void aWeekendZombieBehindAClosedFlagIsFoundByTheTwelveHourTeachingResubscribe() throws Exception {
         // D29 (1): the watchdog stands down on a market's last DLG_FLAG; a market that has read
         // CLOSED for twelve hours gets one teaching resubscribe, whose snapshot re-teaches the flag.
-        // Here the item is dead server-side: nothing arrives, the flag is cleared, the ordinary
-        // ladder runs, and the session is rebuilt — within 12h + 450s of the last CLOSED update.
+        // Here the item is dead server-side: nothing answers, the shell forgets the old flag, and
+        // the ordinary ladder runs from the fresh subscription — +90, +210, then the session at +450.
         Scenario zombie = Scenario.named("weekend zombie").markets(DAX)
                 .at(s(0), streaming()).at(s(0), subscribed(DAX))
                 .at(s(1), tick(DAX, "CLOSED"))
@@ -459,13 +504,12 @@ class BeltScenariosTest {
 
         Observed o = ScenarioRunner.run(zombie);
 
-        long twelveHours = Duration.ofHours(12).toSeconds();
-        assertTrue(o.remedies.stream().filter(r -> r.at().toSeconds() > 0).allMatch(r -> r.at().toSeconds() >= twelveHours),
-                "stood down through the night — no remedy before the twelve hours");
-        assertTrue(o.secondsOf("unsubscribe").stream().anyMatch(t -> t >= twelveHours && t <= twelveHours + 2),
-                "the teaching resubscribe");
-        assertTrue(o.secondsOf("connect").stream().anyMatch(t -> t > twelveHours && t <= twelveHours + 450 + 2),
-                "the zombie is found and the session rebuilt");
+        // The flag landed at the sweep at 1, so the twelve hours end at 43201.
+        assertEquals(List.of(43_201L, 43_201L, 43_291L, 43_291L, 43_411L, 43_411L), o.secondsOf("unsubscribe"),
+                "stood down through the night; the teaching resubscribe at 12h; then +90 and +210 from it");
+        assertEquals(List.of(0L, 43_651L), o.secondsOf("connect"), "the zombie is found: the session at +450");
+        assertEquals("STAND_DOWN_TEACHING", o.events(EventType.WATCHDOG_STALE).get(0).detail().get("signal").asText());
+        assertEquals(4, o.events(EventType.WATCHDOG_STALE).size(), "the teach, two resubscribes, the rebuild");
     }
 
     @Test

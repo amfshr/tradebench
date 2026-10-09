@@ -25,7 +25,10 @@ public record Tuning(
         int subscriptionStrikes,
         Duration subscribeConfirmWindow,
         Duration hostSleepSkew,
-        Duration processFreezeJump) {
+        Duration processFreezeJump,
+        /** How long a market may read CLOSED/SUSPEND before one teaching resubscribe re-learns its
+         * flag — the bound on the watchdog's stand-down (D29 (1)). */
+        Duration standDownTeach) {
 
     public Tuning {
         if (willRetryRebuild.compareTo(tryingRecoveryRebuild) > 0) {
@@ -52,7 +55,8 @@ public record Tuning(
                 3,
                 Duration.ofSeconds(30),
                 Duration.ofSeconds(5),
-                Duration.ofSeconds(10));
+                Duration.ofSeconds(10),
+                Duration.ofHours(12));
     }
 
     /** The same policy with a different recovery budget — lets a test pin the rebuild ceiling
@@ -62,6 +66,6 @@ public record Tuning(
                 tryingRecoveryRebuild, watchdogGraceBase, watchdogGraceCap,
                 watchdogMaxResubscribes, backoffBase, backoffCap, rebuildFloor,
                 maxConsecutiveFailures, giveUpAfter, subscriptionStrikes, subscribeConfirmWindow,
-                hostSleepSkew, processFreezeJump);
+                hostSleepSkew, processFreezeJump, standDownTeach);
     }
 }
