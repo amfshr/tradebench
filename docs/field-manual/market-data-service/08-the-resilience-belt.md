@@ -124,7 +124,7 @@ so tests are exact), capped at 60s — then the part IG taught us: a **5s floor 
 rebuild, including the first**, because rapid re-logins hit IG's response cache and come
 back with stale tokens; being slower here is being correct. And nothing retries forever:
 recovery is **budgeted** — `giveUpAfter`, 10 minutes of continuous no-streaming from an
-outage's first rebuild (the 10-rebuild ceiling stays as a cap; rung cadence is set by the
+outage's first rebuild (the 10-rebuild ceiling stays as a cap, counting rebuilds that connected (#18); rung cadence is set by the
 detectors, so a full ten-rung ladder spans anywhere from 20 minutes to 3.5 hours depending
 on which one drives it — which is why the budget is a clock, not a count) → the Supervisor gives up with `FEED_DEAD` and the runner exits **1** — a deliberate
 stop with a written record, restarted by the process supervisor, not a crash loop hammering
@@ -155,9 +155,11 @@ so N=1 is the degenerate case rather than a rewrite. The inference: a subscripti
 failing its third strike *while another market's PRICE+CHART pair is fully confirmed*
 means the session is provably fine and the epic is the only differing variable →
 market-shaped → `Quarantine` just it. No witness → session-shaped → `Rebuild`. The middle
-case is the craft: a would-be witness still inside its 30s confirm window returns `Wait`
-(and un-counts the strike) — never race a fast rejection into a whole-service rebuild.
-Strikes are per-session attempt counts, so a flapping error code can't reset them;
+case is the craft: a would-be witness still inside its 30s confirm window returns `Wait` —
+the strike stands and the verdict is held, rendered by `rejudge` the moment that witness confirms
+or its window lapses (E1-T10 #4) — never race a fast rejection into a whole-service rebuild.
+Strikes are per-session attempt counts — a pair's two legs are one strike, and a leg of a pair
+already replaced is none (#8) — so a flapping error code can't reset them;
 quarantine exit is **restart-only** (config-shaped failures don't self-heal); a refused
 unsubscribe always rebuilds (it would double-deliver every update). At N=1 the structure
 guarantees the last market dies loud, never quarantined into a silently idle service. Once quarantined, a market's further rejections

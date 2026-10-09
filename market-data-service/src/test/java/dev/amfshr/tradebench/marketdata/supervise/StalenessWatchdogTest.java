@@ -146,7 +146,7 @@ class StalenessWatchdogTest {
     @Test
     void hostSleepSkipsTheRoundAndRebaselines() {
         runTo(50);
-        // lid closed: one round later the wall clock has jumped 16 minutes, awake ~1s
+        // the host suspended: one round later the wall clock has jumped 16 minutes, awake ~1s
         clockSecond++;
         assertEquals(List.of(),
                 dog.evaluate(clockSecond * S, (clockSecond + 960) * 1000),

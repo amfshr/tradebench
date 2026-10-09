@@ -59,7 +59,8 @@ public sealed interface Event {
     record DbBroken() implements Event {
     }
 
-    /** The lid closes: the wall clock jumps, the monotonic clock does not. */
+    /** The host is suspended (a paused or migrated VM, a hibernated instance): the wall clock jumps,
+     * the monotonic clock does not. */
     record HostSleep(Duration by) implements Event {
     }
 

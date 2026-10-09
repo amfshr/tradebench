@@ -177,11 +177,12 @@ class BeltScenariosTest {
     }
 
     @Test
-    void aLidCloseIsAnnotatedNotTreatedAsAnOutage() throws Exception {
-        // Chapter 7's discriminator at the shell: the socket dies as the lid closes, the wall clock
-        // jumps sixteen minutes, the monotonic clock does not; on wake the client reconnects by
-        // itself. No rebuild, no staleness alarm — one RECONNECT that says the host slept.
-        Scenario lidClose = Scenario.named("lid close").markets(DAX)
+    void aHostSuspendIsAnnotatedNotTreatedAsAnOutage() throws Exception {
+        // Chapter 7's discriminator at the shell: the host is suspended (a paused VM, a hibernated
+        // instance) — the socket dies, the wall clock jumps sixteen minutes, the monotonic clock does
+        // not; on resume the client reconnects by itself. No rebuild, no staleness alarm — one
+        // RECONNECT that says the host slept.
+        Scenario suspend = Scenario.named("host suspend").markets(DAX)
                 .at(s(0), streaming()).at(s(0), subscribed(DAX))
                 .every(s(1), s(1), s(60), t -> tick(DAX))
                 .at(s(60), status(WILL_RETRY), hostSleep(Duration.ofMinutes(16)))
@@ -189,7 +190,7 @@ class BeltScenariosTest {
                 .every(s(1), s(62), s(180), t -> tick(DAX))
                 .until(s(180)).build();
 
-        Observed o = ScenarioRunner.run(lidClose);
+        Observed o = ScenarioRunner.run(suspend);
 
         assertEquals(List.of(0L), o.secondsOf("connect"), "the client resumed by itself — no rebuild");
         Observed.Seen resume = o.events(EventType.RECONNECT).get(0);
@@ -197,6 +198,30 @@ class BeltScenariosTest {
         assertTrue(o.events(EventType.WATCHDOG_STALE).isEmpty(), "the stopwatches were rebaselined, not alarmed");
         assertTrue(o.remedies("unsubscribe").isEmpty());
         assertEquals(o.ticksDelivered, o.landed.size(), "capture carried on");
+        assertTrue(o.exits.isEmpty());
+    }
+
+    @Test
+    void aHostThatWakesWithTheClientStuckIsRebuiltInAwakeTime() throws Exception {
+        // T5 residual 3's other half: the host is suspended sixteen minutes; on resume the client
+        // reports WILL-RETRY and hangs. The escalator's 120s run in awake time from that report —
+        // the rebuild at 180, not at once because the wall clock says it has waited long enough —
+        // and the watchdog, stood down on a dead wire, raises nothing.
+        Scenario stuckOnWake = Scenario.named("stuck after a suspend").markets(DAX)
+                .at(s(0), streaming()).at(s(0), subscribed(DAX))
+                .every(s(1), s(1), s(60), t -> tick(DAX))
+                .at(s(60), hostSleep(Duration.ofMinutes(16)), status(WILL_RETRY))
+                .at(s(181), streaming()).at(s(181), subscribed(DAX))
+                .every(s(1), s(182), s(240), t -> tick(DAX))
+                .until(s(240)).build();
+
+        Observed o = ScenarioRunner.run(stuckOnWake);
+
+        assertEquals(List.of(0L, 180L), o.secondsOf("connect"), "120s of awake time after the hang was reported");
+        assertEquals(1, o.events(EventType.STUCK_SUBSTATE_ESCALATED).size());
+        assertTrue(o.events(EventType.WATCHDOG_STALE).isEmpty(), "no alarm on a dead wire, no alarm for the jump");
+        assertFalse(o.events(EventType.RECONNECT).get(0).detail().get("replayed").asBoolean(), "a rebuild owes a heal");
+        assertEquals(o.ticksDelivered, o.landed.size());
         assertTrue(o.exits.isEmpty());
     }
 
