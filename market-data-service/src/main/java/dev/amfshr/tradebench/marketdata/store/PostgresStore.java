@@ -25,8 +25,10 @@ import dev.amfshr.tradebench.core.domain.Tick;
  * from its queue only after this write returns); ticks batch and land on {@link #flush()} or
  * when the batch fills. The pending batch is <b>held here</b>, not only in the driver: a
  * {@link PersistenceException#retryable() retryable} failure leaves it intact for
- * {@link #recover()}, which re-acquires a pooled connection, re-prepares, and re-binds every held
- * tick (E1-T9 hold-and-retry; the dedupe constraint makes a re-sent batch idempotent). After a
+ * {@link #recover()}, which re-acquires a pooled connection, re-prepares, re-binds every held
+ * tick and lands them — recovered means a write landed; with nothing held, the next write is the
+ * proof and the pump's episode runs until one lands (E1-T9 hold-and-retry, E1-T10 #6; the dedupe
+ * constraint makes a re-sent batch idempotent). After a
  * failure every write and flush is <b>refused</b> until {@code recover()}: the driver drops its
  * batch on a failed {@code executeBatch}, so a retry on the same statement would send nothing and
  * acknowledge everything. Market data only (decision #1)
@@ -60,7 +62,7 @@ public final class PostgresStore implements CaptureStore {
     private Connection connection;
     private PreparedStatement tickInsert;
     private PreparedStatement barUpsert;
-    private  SQLException brokenBy; // the failure that broke the sink — set until recover()
+    private @Nullable SQLException brokenBy; // the failure that broke the sink — set until recover()
 
     public PostgresStore(DataSource dataSource, String userName, String sourceName) {
         this.dataSource = dataSource;
@@ -143,6 +145,8 @@ public final class PostgresStore implements CaptureStore {
                 bind(freshTicks, fresh, held);
                 freshTicks.addBatch();
             }
+            freshTicks.executeBatch(); // recovered means a write landed — a database that answers
+            pending.clear(); // but refuses writes fails here, not at the next flush (E1-T10 #6)
         } catch (SQLException e) {
             closeQuietly(freshTicks, freshBars, fresh);
             throw new PersistenceException("sink recovery failed — still unavailable", e);

@@ -1,6 +1,7 @@
 package dev.amfshr.tradebench.marketdata.store;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTimeoutPreemptively;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -17,6 +18,7 @@ import javax.sql.DataSource;
 
 import com.zaxxer.hikari.HikariDataSource;
 import java.sql.Statement;
+import java.time.Duration;
 import java.time.Instant;
 
 import org.junit.jupiter.api.AfterEach;
@@ -346,6 +348,65 @@ class PostgresStoreTest extends PostgresTestBase {
         @Override
         public boolean isWrapperFor(Class<?> iface) throws SQLException {
             return real.isWrapperFor(iface);
+        }
+    }
+
+    @Test
+    void recoverAgainstADatabaseThatRefusesWritesFailsRetryablyAndKeepsTheBatch() throws SQLException {
+        // E1-T10 #6: disk full answers connections and refuses writes (SQLSTATE 53100). A recovery
+        // that only reconnected would "succeed" and the next flush would start a fresh episode at
+        // attempt one, every five seconds, forever. Recovery lands the held batch, so it fails here.
+        execute("CREATE FUNCTION refuse_writes() RETURNS trigger AS $$ BEGIN"
+                + " RAISE EXCEPTION 'disk full (simulated)' USING ERRCODE = '53100'; END $$ LANGUAGE plpgsql");
+        execute("CREATE TRIGGER refuse_ticks BEFORE INSERT ON ticks FOR EACH ROW EXECUTE FUNCTION refuse_writes()");
+        try {
+            sink.write(tick(DAX, "2026-09-28T09:00:00.001Z", "24510.5", "24511.5"));
+            PersistenceException refused = assertThrows(PersistenceException.class, sink::flush);
+            assertTrue(refused.retryable(), "53100 is weather by the taxonomy");
+            PersistenceException stillRefused = assertThrows(PersistenceException.class, sink::recover,
+                    "the held batch is the round trip: it did not land, so nothing recovered");
+            assertTrue(stillRefused.retryable());
+            assertEquals(0, count("ticks"));
+            assertThrows(PersistenceException.class, () -> sink.write(bar("2026-09-28T09:00:00Z", "24512.0", 7L)),
+                    "still broken until a recovery lands");
+        } finally {
+            execute("DROP TRIGGER refuse_ticks ON ticks");
+            execute("DROP FUNCTION refuse_writes()");
+        }
+        sink.recover();
+        assertEquals(1, count("ticks"), "the disk came back: recovery landed the held tick");
+    }
+
+    @Test
+    void aPausedDatabaseSurfacesAsARetryableFailureWithinTheSocketTimeout() throws Exception {
+        // E1-T10 #7 (D29 (2)): a half-open connection — the server frozen without a RST — must
+        // become a PersistenceException the hold can see, not a thread parked in a socket read.
+        try (Database quick = Database.connect(postgres.getJdbcUrl(), postgres.getUsername(),
+                postgres.getPassword(), Duration.ofSeconds(2))) {
+            PostgresStore frozen = new PostgresStore(quick.dataSource(), "default-user", "ig-stream-demo");
+            String containerId = postgres.getContainerId();
+            postgres.getDockerClient().pauseContainerCmd(containerId).exec();
+            try {
+                long started = System.nanoTime();
+                PersistenceException timedOut = assertTimeoutPreemptively(Duration.ofSeconds(15),
+                        () -> assertThrows(PersistenceException.class,
+                                () -> frozen.write(bar("2026-09-28T09:01:00Z", "24512.0", 7L))));
+                assertTrue(timedOut.retryable(), "a socket timeout is weather: " + timedOut.getCause());
+                assertTrue(Duration.ofNanos(System.nanoTime() - started).compareTo(Duration.ofSeconds(10)) < 0,
+                        "surfaced within the timeout, not a silent hang");
+            } finally {
+                postgres.getDockerClient().unpauseContainerCmd(containerId).exec();
+            }
+            frozen.recover();
+            frozen.write(bar("2026-09-28T09:01:00Z", "24512.0", 7L));
+            assertEquals(1, count("bars_1m"), "the server is back: a fresh connection lands the bar");
+            frozen.close();
+        }
+    }
+
+    private void execute(String sql) throws SQLException {
+        try (Connection c = database.dataSource().getConnection(); Statement s = c.createStatement()) {
+            s.execute(sql);
         }
     }
 }
