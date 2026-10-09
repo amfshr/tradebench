@@ -177,7 +177,12 @@ public final class Main {
         new Thread(() -> System.exit(1), "capture-exit").start();
     }
 
-    private static boolean join(Thread thread) {
+    /** Up to five seconds. A thread never started — a SIGTERM during boot — has nothing to wait
+     * for; asking the JDK to join it throws, which would end the hook before it closed anything. */
+    static boolean join(Thread thread) {
+        if (thread.getState() == Thread.State.NEW) {
+            return true;
+        }
         try {
             return thread.join(Duration.ofSeconds(5));
         } catch (InterruptedException e) {

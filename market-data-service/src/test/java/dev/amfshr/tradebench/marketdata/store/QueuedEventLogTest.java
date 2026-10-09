@@ -83,4 +83,24 @@ class QueuedEventLogTest {
         writer.join(2_000);
         assertFalse(writer.isAlive(), "stopped after its poll");
     }
+
+    @Test
+    void theShutdownsDrainStopsAtTheFirstRefusalAndCountsTheRest() {
+        // A dead database must not hold the exit for five seconds an event: one refusal, and the
+        // rest are counted as dropped without being attempted.
+        int[] attempts = {0};
+        QueuedEventLog queued = new QueuedEventLog(event -> {
+            attempts[0]++;
+            throw new IllegalStateException("postgres is away");
+        }, 10);
+        queued.write(event(EventType.RECONNECT, 1));
+        queued.write(event(EventType.RECONNECT, 2));
+        queued.write(event(EventType.FEED_DEAD, 3));
+
+        assertEquals(0, queued.drainRemainder());
+
+        assertEquals(1, attempts[0], "one refusal is enough");
+        assertEquals(3, queued.writeFailures(), "all three counted as dropped");
+        assertEquals(0, queued.queued());
+    }
 }

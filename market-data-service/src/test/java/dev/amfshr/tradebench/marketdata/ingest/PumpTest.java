@@ -75,8 +75,9 @@ class PumpTest {
         }
 
         @Override
-        public void recover() {
+        public boolean recover() {
             recoveries++;
+            return false; // holds nothing, so proves nothing
         }
 
         @Override
@@ -276,6 +277,7 @@ class PumpTest {
         final List<Long> recoverCalledAtSeconds = new ArrayList<>();
         int recoverRefusals;
         @Nullable RuntimeException recoverFailure; // thrown by the next recover(), once
+        boolean recoverLands; // when true, recover() reports that it landed held writes
         private final FakeClock clock;
 
         FlakySink(FakeClock clock) {
@@ -308,7 +310,7 @@ class PumpTest {
         }
 
         @Override
-        public void recover() {
+        public boolean recover() {
             recoverCalledAtSeconds.add(clock.seconds());
             super.recover();
             if (recoverFailure != null) {
@@ -319,6 +321,7 @@ class PumpTest {
             if (recoverRefusals-- > 0) {
                 throw retryable("still down");
             }
+            return recoverLands;
         }
     }
 
@@ -509,7 +512,7 @@ class PumpTest {
         r.pump().cycle(); // lands
 
         assertEquals(List.of("bar@60"), r.sink().order);
-        assertEquals(List.of(5L, 10L), r.sink().recoverCalledAtSeconds, "attempt two, not a new attempt one");
+        assertEquals(List.of(5L, 10L), r.sink().recoverCalledAtSeconds, "the second retry waited its own floor");
         assertEquals(1, r.pump().sinkFailures(), "one episode");
         assertEquals(1, r.events().written.size(), "recorded once, when a write landed");
         ServiceEvent event = r.events().written.get(0);
@@ -532,6 +535,22 @@ class PumpTest {
         r.queues().onSealedBar(bar(60));
         r.pump().cycle();
         assertEquals(1, r.events().count(EventType.SINK_FAILURE), "the bar landed: now it is over");
+    }
+
+    @Test
+    void aRecoveryThatLandedTheHeldBatchClosesTheEpisodeAtOnce() throws InterruptedException {
+        // The store's recovery re-sends what it held — a real round trip. When it reports that, the
+        // episode needs no further proof: recorded now, not at the next write (which on a quiet
+        // market could be days away).
+        Rig r = rig(10);
+        r.queues().onTick(tick(1));
+        r.sink().armed.add(retryable("tick write failed"));
+        r.sink().recoverLands = true;
+
+        r.pump().cycle(); // fails → hold → recover at 5, landing the held tick
+
+        assertEquals(1, r.events().count(EventType.SINK_FAILURE), "recorded with the recovery");
+        assertEquals(1, r.events().ofType(EventType.SINK_FAILURE).get(0).detail().get("attempts").asInt());
     }
 
     @Test

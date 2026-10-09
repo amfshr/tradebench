@@ -14,7 +14,7 @@ import dev.amfshr.tradebench.marketdata.store.PersistenceException;
  * land on write, ticks batch and land on flush, a tick is held before anything can fail, every
  * write and flush is refused after a failure until {@link #recover()}, {@link #down} makes every
  * write fail retryably — Postgres is away — for as long as a scenario says, {@link #rejectWrites}
- * refuses writes — and a recovery holding ticks, which lands them as its round trip — and {@link #terminal} makes the next write fail for a reason no retry will fix.
+ * refuses writes, including a recovery's own round trip — the held batch it lands — and {@link #terminal} makes the next write fail for a reason no retry will fix.
  */
 public final class ScriptedCaptureStore implements CaptureStore {
 
@@ -69,12 +69,13 @@ public final class ScriptedCaptureStore implements CaptureStore {
     }
 
     @Override
-    public void recover() {
+    public boolean recover() {
         recoveries++;
         if (down) {
             fail("sink recovery failed — still unavailable", BLIP);
         }
-        if (!pending.isEmpty()) { // the held batch is the round trip: it lands, or nothing recovered
+        boolean landsHeld = !pending.isEmpty();
+        if (landsHeld) { // the held batch is the round trip: it lands, or nothing recovered
             if (rejectWrites) {
                 fail("sink recovery failed — the held batch was refused", DISK_FULL);
             }
@@ -84,6 +85,7 @@ public final class ScriptedCaptureStore implements CaptureStore {
             pending.clear();
         }
         broken = false;
+        return landsHeld;
     }
 
     @Override

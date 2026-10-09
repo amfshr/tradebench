@@ -50,7 +50,7 @@ re-serves them).
 | IG unreachable at boot (we restarted into an outage) | login fails with a retryable error | **retry every 30s under the login gate, for the same 10-min budget**, then exit 1; any other exception at boot fails loud at once (exit 1 with its trace) | the outage | "boot attempt N" lines, then FATAL | heal |
 | IG enforces a smaller REST budget than it publishes (demo keys: 10/min, not 30) | `GET /operations/application` after login | start at 10/min, then apply min(`allowanceAccountOverall`, `allowanceApplicationOverall`) minus 5 headroom (≥1); an unlisted key or a failed read keeps the start | nothing — the pacer paces every REST caller | `PACER_DISCOVERED{account, application, published, used, headroom}`, or an `IG_API_ERROR` naming the read plus a "keeping the conservative start" line | — |
 | Postgres blips while we write an **event/gap/status** row | `PersistenceException` from the observability store | **count and continue** — the belt and the pump never die for a breadcrumb | the breadcrumbs written during the blip | `obsFailures=` / `eventWriteFailures=` / `statusFailures=` in the heartbeat | coverage truth is recomputed from `bars_1m` |
-| Postgres blips while we write a **tick or bar** | a `PersistenceException` the taxonomy calls **retryable** (SQLSTATE 08 / 57 / 53 / 40, or the pool's timeout) | **hold**: bars stay queued, the store keeps its tick batch; back off 5s → 60s; `recover()` re-acquires a pooled connection and re-binds the held ticks; resume. No time budget — the queues bound the hold (ticks shed-oldest at 100 000 ≈ 18 h; bars unbounded) and the moment shedding starts is announced | nothing while the hold is lossless; ticks once the queue sheds | `sinkFailures=` in the heartbeat, the log's narration, `SINK_FAILURE{cause, outageMs, attempts, ticksShed, queuedAtRecovery}` on recovery; the dead-man alarm (stale `capture_status`) fires meanwhile, correctly | — (nothing to heal while lossless) |
+| Postgres blips while we write a **tick or bar** | a `PersistenceException` the taxonomy calls **retryable** (SQLSTATE 08 / 57 / 53 / 40, or the pool's timeout) | **hold**: bars stay queued, the store keeps its tick batch; back off 5s → 60s; `recover()` re-acquires a pooled connection and re-binds the held ticks; resume. No time budget — the queues bound the hold (ticks shed-oldest at 100 000 ≈ 18 h; bars unbounded) and the moment shedding starts is announced | nothing while the hold is lossless; ticks once the queue sheds | `sinkFailures=` in the heartbeat, the log's narration, `SINK_FAILURE{cause, outageMs, attempts, ticksShed, queuedAtRecovery}` once the episode is proven over — the recovery landing the held batch, or the first write after it; the dead-man alarm (stale `capture_status`) fires meanwhile, correctly | — (nothing to heal while lossless) |
 | Postgres rejects a tick/bar write for a reason that is **not weather** (integrity, schema, authorisation, data, an unknown or missing state) | `PersistenceException.retryable() == false` | **stop at once**: the pump dies, a best-effort `DB_ERROR{cause, queued}` is written, `onDeath` logs the cause, `exit(1)` now — not a heartbeat later | whatever was held | `DB_ERROR` + a FATAL line with the cause, exit 1 | human |
 | The pump or the supervisor thread dies for any other reason | `Main`'s heartbeat: `!thread.isAlive()` | exit 1 | until restart | FATAL line | heal |
 
@@ -216,8 +216,9 @@ well in memory. The landed answer is **hold and retry**, and it has **no time bu
 deliberately. The data is already safe while we hold: bars stay queued (ack-after-apply) and
 `PostgresStore` keeps its own copy of the pending tick batch, added before anything about a write
 can fail and acknowledged only once `executeBatch` returns, so a connection that dies mid-batch
-loses nothing; `recover()` re-acquires a pooled connection, re-prepares, re-binds the held ticks,
-and only then discards the dead objects — a recovery that fails changes nothing. Until `recover()`
+loses nothing; `recover()` re-acquires a pooled connection, re-prepares, re-binds the held ticks and
+executes the batch — recovered means a write landed (E1-T10 #6) — and only then discards the dead
+objects; a recovery that fails changes nothing. Until `recover()`
 runs, the store **refuses** every write and flush: the driver drops its batch on a failed
 `executeBatch`, so a retry on the same statement would send nothing and acknowledge everything (the
 ticket's review found exactly that path in the shutdown tail drain). A restart would
@@ -265,7 +266,7 @@ a FATAL line and `System.exit(1)`.
 What the operator sees, in order: `WATCHDOG_STALE` / `STUCK_SUBSTATE_ESCALATED` /
 `CONNECTION_DEAD` / `SUBSCRIPTION_REJECTED` reason events as rebuilds happen; `RECONNECT` with `replayed` saying
 whether a heal is owed; `FEED_DEAD{reason}`; the exit code; the heartbeat line's counters
-(`dropped`, `malformed`, `obsFailures`, `eventWriteFailures`, `statusFailures`) every minute until then. Two alarms
+(`dropped`, `malformed`, `sinkFailures`, `obsFailures`, `eventsQueued`, `eventWriteFailures`, `statusFailures`) every minute until then. Two alarms
 are distinct and must stay so (the probe writes them — step 4; reading them is E9's): **box down** — `capture_status.updated_at`
 stale, nothing is running; **feed dead** — the process is up and heartbeating but
 `last_tick_at` is stale **while `market_state` says the market is open** (a `CLOSED` market is

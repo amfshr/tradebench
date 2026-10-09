@@ -203,8 +203,9 @@ public final class Pump implements Runnable {
                 current.lossy = true;
                 log.accept("the hold is now lossy — the tick queue has begun shedding");
             }
+            boolean landedHeld;
             try {
-                sink.recover();
+                landedHeld = sink.recover();
             } catch (PersistenceException e) {
                 if (!e.retryable()) {
                     throw e;
@@ -212,15 +213,25 @@ public final class Pump implements Runnable {
                 log.accept("sink still unavailable after attempt " + current.attempts + ": " + e);
                 continue;
             }
-            current.recovered = true;
-            current.ticksWrittenSinceRecovery = 0;
-            current.shed = queues.droppedTicks() - current.droppedBefore;
-            current.queuedAtRecovery = queues.pendingWrites();
-            log.accept("sink recovered after " + Duration.ofNanos(clock.monotonicNanos() - current.since).toSeconds()
-                    + "s and " + current.attempts + " attempt(s); " + current.queuedAtRecovery
-                    + " queued writes to drain"
-                    + (current.shed > 0 ? "; " + current.shed + " ticks shed during the hold" : ""));
+            recovered(current, landedHeld);
             return;
+        }
+    }
+
+    /** A recovery returned: the episode is over if the recovery itself landed held writes, else
+     * provisional until one lands. */
+    private void recovered(Episode current, boolean landedHeld) {
+        current.recovered = true;
+        current.ticksWrittenSinceRecovery = 0;
+        current.shed = queues.droppedTicks() - current.droppedBefore;
+        current.queuedAtRecovery = queues.pendingWrites();
+        log.accept("sink recovered after " + Duration.ofNanos(clock.monotonicNanos() - current.since).toSeconds()
+                + "s and " + current.attempts + " attempt(s); " + current.queuedAtRecovery
+                + " queued writes to drain"
+                + (current.shed > 0 ? "; " + current.shed + " ticks shed during the hold" : "")
+                + (landedHeld ? "; the held batch landed" : ""));
+        if (landedHeld) {
+            landed();
         }
     }
 
@@ -314,7 +325,14 @@ public final class Pump implements Runnable {
                 return;
             }
             try {
-                sink.recover();
+                Episode current = episode;
+                if (current == null) { // broken by this very drain: an episode of one attempt
+                    current = new Episode(e, clock.monotonicNanos(), clock.wallInstant(), queues.droppedTicks());
+                    episode = current;
+                    sinkFailures.incrementAndGet();
+                }
+                current.attempts++;
+                recovered(current, sink.recover());
                 drainAll();
             } catch (RuntimeException again) {
                 failure = again;

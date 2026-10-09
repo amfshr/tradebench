@@ -95,9 +95,10 @@ bury the original cause — masking the first error is the sin. It then writes a
 and `Main` exits the process at once with `FATAL: capture pump died` — not a
 heartbeat later; the heartbeat's liveness check is the backstop — fail closed, fail loud (P9).
 
-**Shutdown is a tail drain.** `stop()` just flips `running`; `run()` then performs one
-final `drainOnce()` + `flush()` so the day's last minute survives a Ctrl-C
-(`PumpTest.stoppedRunStillDrainsTheTail`). Main's shutdown hook orders the funeral:
+**Shutdown is a tail drain.** `stop()` just flips `running`; `run()` then drains every queued
+batch and flushes — making one no-wait recovery attempt if the sink is broken at that moment
+(E1-T10 #20) — so the day's last minute, and a backlog, survive a Ctrl-C
+(`PumpTest.stoppedRunStillDrainsTheTail`, the harness's stop scenarios). Main's shutdown hook orders the funeral:
 close the stream (stop the faucet), `pump.stop()`, join with a 5-second budget, and only
 then close the sink — never close a sink a pump might still be writing to. A hold notices
 `stop()` within a 250ms slice, and a stop never fires `onDeath`: an exit from inside the

@@ -133,10 +133,11 @@ public final class PostgresStore implements CaptureStore {
     }
 
     @Override
-    public void recover() {
-        Connection fresh = null;
-        PreparedStatement freshTicks = null;
-        PreparedStatement freshBars = null;
+    public boolean recover() {
+        boolean landsHeld = !pending.isEmpty();
+        @Nullable Connection fresh = null;
+        @Nullable PreparedStatement freshTicks = null;
+        @Nullable PreparedStatement freshBars = null;
         try {
             fresh = dataSource.getConnection();
             freshTicks = fresh.prepareStatement(INSERT_TICK);
@@ -145,8 +146,8 @@ public final class PostgresStore implements CaptureStore {
                 bind(freshTicks, fresh, held);
                 freshTicks.addBatch();
             }
-            freshTicks.executeBatch(); // recovered means a write landed — a database that answers
-            pending.clear(); // but refuses writes fails here, not at the next flush (E1-T10 #6)
+            freshTicks.executeBatch(); // the round trip: a database that refuses writes fails here (E1-T10 #6)
+            pending.clear();
         } catch (SQLException e) {
             closeQuietly(freshTicks, freshBars, fresh);
             throw new PersistenceException("sink recovery failed — still unavailable", e);
@@ -157,6 +158,7 @@ public final class PostgresStore implements CaptureStore {
         tickInsert = freshTicks;
         barUpsert = freshBars;
         brokenBy = null;
+        return landsHeld;
     }
 
     private void refuseIfBroken() {

@@ -71,7 +71,9 @@ The write methods split by criticality, mirroring the queues:
   itself** — a `List<Tick> pending`, added before anything about the write can fail and
   cleared only once `executeBatch` returns — so a connection that dies mid-batch loses
   nothing: `recover()` re-acquires a pooled connection, re-prepares, re-binds every held
-  tick, and only then discards the dead objects
+  tick and **executes the batch** — recovered means a write landed, so a database that answers
+  connections but refuses writes fails to recover (E1-T10 #6) — and only then discards the dead
+  objects
   (`PostgresStoreTest.aKilledConnectionIsRetryableAndRecoverLandsEveryHeldTick`). The dedupe
   constraint makes a re-sent batch idempotent.
 

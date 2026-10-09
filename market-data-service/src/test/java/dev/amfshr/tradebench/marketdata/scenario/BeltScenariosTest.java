@@ -25,7 +25,6 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import java.time.Duration;
 import java.util.List;
 
-import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 
 import dev.amfshr.tradebench.marketdata.events.EventType;
@@ -566,6 +565,7 @@ class BeltScenariosTest {
         assertEquals(o.ticksDelivered, o.landed.size(), "nothing forfeited that the database would have taken");
         assertEquals(0, o.ticksHeldAtEnd);
         assertTrue(o.log.stream().noneMatch(line -> line.contains("pump failure at shutdown")));
+        assertEquals(1, o.events(EventType.SINK_FAILURE).size(), "the episode the tail ended is recorded like any other");
     }
 
     @Test

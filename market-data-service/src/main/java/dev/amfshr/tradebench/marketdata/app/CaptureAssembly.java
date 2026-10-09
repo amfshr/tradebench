@@ -127,7 +127,7 @@ public final class CaptureAssembly {
         if (!joinWriter.getAsBoolean()) {
             log.accept("event writer did not stop within 5s — draining its queue anyway");
         }
-        events.drainOnce();
+        events.drainRemainder();
         log.accept("queued writes at shutdown: " + queues.pendingWrites());
         if (pump.failure() != null) {
             log.accept("pump failure at shutdown: " + pump.failure() + " — " + queues.pendingWrites()

@@ -51,6 +51,22 @@ public final class QueuedEventLog implements EventLog, Runnable {
         return handedOn;
     }
 
+    /** The shutdown's drain: hands on until one is refused, then counts the rest as dropped — a
+     * dead database must not hold the exit for five seconds an event. */
+    public int drainRemainder() {
+        int handedOn = 0;
+        ServiceEvent event;
+        while ((event = queue.poll()) != null) {
+            if (!deliver(event)) {
+                writeFailures.addAndGet(queue.size());
+                queue.clear();
+                return handedOn;
+            }
+            handedOn++;
+        }
+        return handedOn;
+    }
+
     @Override
     public void run() {
         try {
@@ -80,11 +96,13 @@ public final class QueuedEventLog implements EventLog, Runnable {
         return writeFailures.get();
     }
 
-    private void deliver(ServiceEvent event) {
+    private boolean deliver(ServiceEvent event) {
         try {
             delegate.write(event);
+            return true;
         } catch (RuntimeException e) {
             writeFailures.incrementAndGet();
+            return false;
         }
     }
 }
