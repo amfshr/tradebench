@@ -473,7 +473,7 @@ Results, this run:
 real stack. `written=` lagging `ticks=` + `bars=` by one on two later heartbeats is a snapshot artefact (a
 tick sitting in the queue at the instant the line is printed), not a loss.
 
-## T10 — Resilience belt hardening: the PR #14 review 🔶 (ticketed 2026-10-05; started 2026-10-08 — A1 ✅ PR #15, merged 2026-10-08; A2 ✅ PR #17, merged 2026-10-09; B 🔶 started 2026-10-09 on `e1-t10-b-sink-and-database-edge`, increment 1 of 4 built; C next — both as scenarios on the E1-T11 harness, one PR per slice)
+## T10 — Resilience belt hardening: the PR #14 review 🔶 (ticketed 2026-10-05; started 2026-10-08 — A1 ✅ PR #15, merged 2026-10-08; A2 ✅ PR #17, merged 2026-10-09; B 🔶 built on `e1-t10-b-sink-and-database-edge` — all four increments + the doctrine review's fixes committed 2026-10-09/10, awaiting Alex's word to push and open the PR; then C, the last slice — both as scenarios on the E1-T11 harness, one PR per slice)
 
 **Type** build · **Branch** `e1-t10-b-sink-and-database-edge` (slice B, from main `034a9ea`; A1 merged from `e1-t10-belt-hardening`, PR #15; A2 merged from `e1-t10-a2-detectors-verdicts`, PR #17) · **Started** 2026-10-08 · **Blocked by** —
 
@@ -564,7 +564,7 @@ below) → E1-T6):**
   `start()` catches `RuntimeException` like `rebuild()`; **#30** `@Nullable` on `PostgresStore.brokenBy`;
   **#24** the shutdown hook registered before `control.start()` and chapter 10's join-fence sentence corrected;
   **#12** Tier-2 writes via the bounded queue + writer (D29 (3)). **Started 2026-10-09 on `e1-t10-b-sink-and-database-edge`; the
-  record in "B — in progress", below.**
+  record in "B — built", below.**
 - **C — loudness, reuse, docs.** **#9** a log consumer for the Supervisor (lines on Retry,
   `SUBSCRIPTION_REJECTED`, `MARKET_QUARANTINED`, `IG_API_ERROR`); **#10** shared JDBC helpers (`InstrumentIds`
   + a `Jdbc` holder) instead of the copies in `PostgresObservabilityStore`; **#22** `HealthProbe.publish()` one
@@ -656,8 +656,9 @@ entry (tagged E1-T10); T5 § residual 3 is closed, final. **Next:** slice B as s
 `@Disabled`; with #7, #12, #15/#16, #17, #24, #30) → C, one PR per slice — the next build work → E1-T12 → the belt's single cloud
 re-review once every T10 finding is resolved (the close-out ruling below) → E1-T6.
 
-**B — in progress (started 2026-10-09).** **Started 2026-10-09** on `e1-t10-b-sink-and-database-edge` (branched from main at
-`034a9ea`); design nod posted and accepted by Alex 2026-10-09 ("pls proceed with your recommendations"). **Four increments, one PR
+**B — built; doctrine review done; awaiting Alex's word to push and open the PR (started 2026-10-09, built 2026-10-09/10).** **Started
+2026-10-09** on `e1-t10-b-sink-and-database-edge` (branched from main at `034a9ea`; not yet pushed, no PR yet — Alex decides); design
+nod posted and accepted by Alex 2026-10-09 ("pls proceed with your recommendations"). **Four increments, one PR
 for the slice:** **1 the store and the pool** (#30; #6a — recovery lands the held batch; #7 — `socketTimeout` + `tcpKeepAlive`
 with a container-pause test) · **2 the pump** (#6b — the episode survives a provisional recovery until a write lands,
 `SINK_FAILURE` once per episode; #20 — the shutdown tail drains everything, one recovery attempt at stop, the pending count
@@ -670,7 +671,7 @@ before boot and chapter 10's join sentence aligned with the 5s-bounded wait; cha
 dropped and counted (D29 (3)), not retried; an episode ends only when a write lands after a recovery, attempts counting every
 retry; #24 aligns the chapter text rather than changing the hook; the socket timeout is injectable (production 30s per D29 (2),
 the pause test 2s); the hook registration order in `Main` has no test seam and is verified by inspection.
-**Increment 1 — the store and the pool, built 2026-10-09 (staged, awaiting Alex's commit — no hash yet)** (`Database`,
+**Increment 1 — the store and the pool, `54d6ab2` (2026-10-09)** (`Database`,
 `PostgresStore`, `DatabaseTest`, `PostgresStoreTest`): `Database` carries `socketTimeout` 30s and `tcpKeepAlive` on the pool and
 the lock's dedicated connection (`SOCKET_TIMEOUT`; an injectable overload for tests) (#7, D29 (2)); `PostgresStore.recover()`
 executes the held batch inside recovery, so a database that answers connections but refuses writes fails to recover (#6a);
@@ -679,7 +680,54 @@ then land once the trigger is gone; a paused container surfaces as a retryable f
 unpause), `DatabaseTest` +1 (every connection carries the timeout and keep-alive, pooled and dedicated). market-data-service 215
 tests (3 skipped — B's scenarios), 0 failures. Three mutations red and restored byte-identical (recovery only reconnects; the
 pool without the timeout — the pause test times out; the dedicated connection without it). **Remaining `@Disabled` after
-increment 1:** #6, #20 ×2 (increment 2). **Next:** increments 2–4 → doctrine review → one PR for the slice; Alex merges.
+increment 1:** #6, #20 ×2 (increment 2).
+**Increment 2 — the pump, `cb7ec46` (2026-10-09):** **#6b** the pump half — a hold is an episode that survives a provisional recovery
+until a write lands: a bar is its own round trip, a flush counts only if ticks were batched since the recovery, an empty flush proves
+nothing; `SINK_FAILURE` once per episode, when it is proven over. **#20** the tail drains every batch, makes one no-wait recovery
+attempt if the sink is broken at stop, and logs the queued count unconditionally. The fake store recovers with a round trip, as the
+real one does (T11's review note closed). The last three `@Disabled` scenarios switched on — #6
+`aDatabaseThatRefusesWritesIsOneEpisodeClimbingTheLadder`, #20 `aStopWithABacklogDrainsAllOfItIntoAHealthySink` +
+`aStopDuringAHoldAfterPostgresReturnedRecoversOnceAndLandsEverything` — so all 23 scenarios are green and none remain `@Disabled`.
+Four mutations red and restored byte-identical; one equivalent mutant recorded (the fake store's round trip — pinned by the real
+store's own test).
+**Increment 3 — the stream control, `1d3d351` (2026-10-09)** (`IgStreamControl`, `IgStreamControlTest`, `FakeStreamTransport`):
+**#15** legs are forgotten one by one as their own unsubscribe succeeds, a refused one kept; **#16** a pair is subscribed into
+locals, the PRICE leg rolled back if CHART throws — a pair is both legs or neither; **#17** `connect()` subscribes every market
+before publishing the stream, closes a half-built connection after bumping its generation, and `start()` catches
+`RuntimeException` and fails loud. `FakeStreamTransport` gained `refuseUnsubscribeOf` / `failSubscribeOf`; four new
+`IgStreamControlTest` tests. Five mutations red and restored byte-identical.
+**Increment 4 — the Tier-2 writer and the hook, `58fff49` (2026-10-09)** (`QueuedEventLog`, `CaptureAssembly`, `Main`, their
+tests, chapters 08/10): **#12** `QueuedEventLog` — the Supervisor's events go onto a bounded queue
+(`CaptureAssembly.EVENT_QUEUE_CAPACITY` = 1,000) drained by one writer thread `capture-events`; a full queue refuses and the sweep
+counts the drop; a refused write is counted and dropped, never retried (D29 (3)); the shutdown stops the writer last and drains the
+rest; `CaptureAssemblyTest` pins the wiring; the harness gives the writer its turn in the hook. **#24** the shutdown hook registered
+before boot in `Main` (the hook's registration moved before boot as the nod planned; what the nod declined was changing the join's behaviour, aligning the chapter text to the 5s bound instead — and the review's finding 1 showed the moved hook needed a guard to survive that window). Chapters 08/10 —
+five threads, the bounded join, the Tier-2 row — and chapter 10's known-deviations note removed: nothing in it remains true (the
+reviewer agreed slice C's findings are not deviations from chapter 10's promises). Four mutations red and restored byte-identical.
+**Doctrine review 2026-10-09/10 — pass-with-findings; seven findings, all fixed on the branch in `d5b4ef9` except (6), which is this
+board pass:** (1) **medium** — `Main.join` used the JDK's timed join, which throws on a thread never started, so the hook moved
+before boot would have died before closing anything in exactly #24's window; guarded (`Thread.State.NEW` returns at once), `join`
+made package-private and pinned by `MainTest` (two tests) — #24 now delivered; (2) low — a hold ended by the tail's own recovery
+was never recorded: the tail now marks its recovery as `hold()` does (an episode of one attempt if the drain itself broke the sink),
+and the stop-at-38 scenario asserts the `SINK_FAILURE` row; (3) low — a provisional episode across a quiet market merged a later
+blip into it: `CaptureStore.recover()` now returns whether it landed held writes, and an episode so proven closes at once
+(`PumpTest.aRecoveryThatLandedTheHeldBatchClosesTheEpisodeAtOnce`) — the reviewer offered this as a `Decision: (TBD)`; the build
+session took the mechanism option, as it is information the store already has and keeps the nod's rule — **flagged for Alex
+(below)**; (4) low — stale docs: chapter 04 (the tail), chapters 05 and 10 (recovery executes the batch; `SINK_FAILURE` once the
+episode is proven over), chapter 10's heartbeat counters gained `eventsQueued`; (5) low — the hook's Tier-2 drain was unbounded
+while Postgres is down: `QueuedEventLog.drainRemainder()` stops at the first refused write and counts the rest as dropped, with a
+test; (6) the board record stopped at increment 1 — this pass (the board + this plan, uncommitted, riding the branch); (7) nits —
+an unused import, a test message, import order, a comment. Four mutations red and restored byte-identical.
+**Totals at the branch head (`d5b4ef9`, 2026-10-10):** all eight B findings fixed with their exposing tests (#6, #7, #12, #15/#16,
+#17, #20, #24, #30); three scenarios switched on, none `@Disabled` remain — `BeltScenariosTest` 23 green; chapter 10's
+known-deviations note gone. Mutations: **20 red and restored byte-identical** — 3 + 4 + 5 + 4 across the increments, 4 on the review's fixes;
+one equivalent mutant recorded at increment 2 (the fake store's round trip, pinned by the real store's own test). Tests: market-data-service 230 (0 skipped) · ig-client 99 (both
+read from the Gradle reports in the working tree, timed at the head commit) · docs site 63 (as reported) · 0 failures;
+`./gradlew build` and the docs build green as CI runs them before the review's fixes — the re-run pending at the PR. **Not yet
+pushed; no PR opened — Alex decides.** **Open for Alex:** whether the `boolean recover()` mechanism (review finding 3) stands as
+taken — noted, not a blocker. **Next:** Alex's word → push → PR → CI → merge → close-out (the Done history entry tagged E1-T10;
+this section's "B — merged"); then **slice C — the last slice of T10** (#9, #10, #22, #25, #26, #28, #31, #32; #27 done at T11)
+→ E1-T12 → the belt's single cloud re-review once every T10 finding is resolved (the close-out ruling below) → E1-T6.
 
 **The A2/B backlog on the harness (E1-T11 — merged 2026-10-08, PR #16; written 2026-10-08, the tenth, #4's window-lapse arm, added at T11's
 doctrine review; each verified red for its finding's reason):** the ten `@Disabled` scenarios in `BeltScenariosTest` —
