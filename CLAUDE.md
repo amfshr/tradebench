@@ -15,8 +15,8 @@ design session 2026-09-27); the AI operating framework (E0) is in place. Epic 1 
 collection service) is the active build epic — T1–T5, T9, T10 A1 and T11 merged (foundations, IG
 client, streaming, Postgres persistence, the resilience belt and its two high fixes, a sink that
 holds through database blips, the belt's scenario harness with the first captured replay; live data
-flowing locally); next: T10 A2/B/C as harness scenarios → T12 replay acceptance → T6 daily heal
-(board).
+flowing locally; T10's slices A2 and B merged too); next: T10 slice C, the last → T12 replay
+acceptance → the belt's single cloud re-review → T6 daily heal (board).
 
 ## Read-first order
 

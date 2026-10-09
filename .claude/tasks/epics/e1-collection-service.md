@@ -369,8 +369,8 @@ episodes; today a database that accepts connections but rejects writes "recovers
 climbs), **7** (JDBC `socketTimeout` 30s + `tcpKeepAlive` on the pool and `dedicatedConnection()` — D29 (2); a
 half-open connection otherwise parks `executeBatch` forever with no `PersistenceException` for the hold to see)
 and **20** (the shutdown tail drains everything, makes one `recover()` attempt if the sink is broken at stop, logs
-`pendingWrites()` unconditionally) refine this ticket's hold. They land on T10 slice B, as scenarios on the E1-T11
-harness (its eighth and ninth scenarios, plus its container-pause scenario for the socket timeout).
+`pendingWrites()` unconditionally) refine this ticket's hold. They landed on T10 slice B, as scenarios on the E1-T11
+harness (its eighth and ninth scenarios, plus its container-pause scenario for the socket timeout) — PR #19, merged 2026-10-10.
 
 **DoD anchor (amended 2026-10-04 to D28) — met 2026-10-05 (the tests at merge + the outage drill below):** any outage while the tick queue is not shedding loses zero
 bars and zero ticks; the heartbeat shows the failure count; a `SINK_FAILURE` event records the episode
@@ -473,9 +473,9 @@ Results, this run:
 real stack. `written=` lagging `ticks=` + `bars=` by one on two later heartbeats is a snapshot artefact (a
 tick sitting in the queue at the instant the line is printed), not a loss.
 
-## T10 — Resilience belt hardening: the PR #14 review 🔶 (ticketed 2026-10-05; started 2026-10-08 — A1 ✅ PR #15, merged 2026-10-08; A2 ✅ PR #17, merged 2026-10-09; B 🔶 built on `e1-t10-b-sink-and-database-edge` — all four increments + the doctrine review's fixes committed 2026-10-09/10, awaiting Alex's word to push and open the PR; then C, the last slice — both as scenarios on the E1-T11 harness, one PR per slice)
+## T10 — Resilience belt hardening: the PR #14 review 🔶 (ticketed 2026-10-05; started 2026-10-08 — A1 ✅ PR #15, merged 2026-10-08; A2 ✅ PR #17, merged 2026-10-09; B ✅ PR #19, merged 2026-10-10; C next — the last slice, one PR; T10 closes with it)
 
-**Type** build · **Branch** `e1-t10-b-sink-and-database-edge` (slice B, from main `034a9ea`; A1 merged from `e1-t10-belt-hardening`, PR #15; A2 merged from `e1-t10-a2-detectors-verdicts`, PR #17) · **Started** 2026-10-08 · **Blocked by** —
+**Type** build · **Branch** — (slice C's branch not yet cut; A1 merged from `e1-t10-belt-hardening`, PR #15; A2 merged from `e1-t10-a2-detectors-verdicts`, PR #17; B merged from `e1-t10-b-sink-and-database-edge`, PR #19) · **Started** 2026-10-08 · **Blocked by** —
 
 **Goal:** the belt's 32 review findings fixed or answered, each fix carrying the test that would have caught
 it — so chapter 10's promises hold on the code, not only in prose.
@@ -502,9 +502,9 @@ sweep thread via a bounded queue drained by one writer thread, drops counted in 
 (finding 29).
 
 **Slices (Alex's sequencing, 2026-10-08, standing: A1 first with targeted tests — ✅ PR #15 → E1-T11 the harness — ✅ PR #16,
-merged 2026-10-08 → A2 as scenarios on it — ✅ PR #17, merged 2026-10-09 → B/C as scenarios, one PR per slice →
-E1-T12 replay acceptance → the belt's single cloud re-review, once every T10 finding is resolved (the close-out ruling,
-below) → E1-T6):**
+merged 2026-10-08 → A2 as scenarios on it — ✅ PR #17, merged 2026-10-09 → B as scenarios — ✅ PR #19, merged 2026-10-10 → C,
+the last slice, one PR → E1-T12 replay acceptance → the belt's single cloud re-review, once every T10 finding is resolved
+(the close-out ruling, below) → E1-T6):**
 
 - **A1 — the two highs, targeted tests, first.** **#1** a quarantined market's twin-leg rejection re-admits it:
   gate `SubscriptionError`s for epics in `quarantinedMarkets` in `Supervisor.sweep()`;
@@ -563,8 +563,8 @@ below) → E1-T6):**
   the SDK's throw-on-inactive contract); **#17** `connect()` publishes `stream` only after subscribing and
   `start()` catches `RuntimeException` like `rebuild()`; **#30** `@Nullable` on `PostgresStore.brokenBy`;
   **#24** the shutdown hook registered before `control.start()` and chapter 10's join-fence sentence corrected;
-  **#12** Tier-2 writes via the bounded queue + writer (D29 (3)). **Started 2026-10-09 on `e1-t10-b-sink-and-database-edge`; the
-  record in "B — built", below.**
+  **#12** Tier-2 writes via the bounded queue + writer (D29 (3)). **Started 2026-10-09, merged 2026-10-10 — PR #19; the
+  record in "B — merged", below.**
 - **C — loudness, reuse, docs.** **#9** a log consumer for the Supervisor (lines on Retry,
   `SUBSCRIPTION_REJECTED`, `MARKET_QUARANTINED`, `IG_API_ERROR`); **#10** shared JDBC helpers (`InstrumentIds`
   + a `Jdbc` holder) instead of the copies in `PostgresObservabilityStore`; **#22** `HealthProbe.publish()` one
@@ -656,9 +656,8 @@ entry (tagged E1-T10); T5 § residual 3 is closed, final. **Next:** slice B as s
 `@Disabled`; with #7, #12, #15/#16, #17, #24, #30) → C, one PR per slice — the next build work → E1-T12 → the belt's single cloud
 re-review once every T10 finding is resolved (the close-out ruling below) → E1-T6.
 
-**B — built; doctrine review done; awaiting Alex's word to push and open the PR (started 2026-10-09, built 2026-10-09/10).** **Started
-2026-10-09** on `e1-t10-b-sink-and-database-edge` (branched from main at `034a9ea`; not yet pushed, no PR yet — Alex decides); design
-nod posted and accepted by Alex 2026-10-09 ("pls proceed with your recommendations"). **Four increments, one PR
+**B — merged (PR #19, 2026-10-10).** **Started 2026-10-09** on `e1-t10-b-sink-and-database-edge` (branched from main at `034a9ea`);
+design nod posted and accepted by Alex 2026-10-09 ("pls proceed with your recommendations"). **Four increments, one PR
 for the slice:** **1 the store and the pool** (#30; #6a — recovery lands the held batch; #7 — `socketTimeout` + `tcpKeepAlive`
 with a container-pause test) · **2 the pump** (#6b — the episode survives a provisional recovery until a write lands,
 `SINK_FAILURE` once per episode; #20 — the shutdown tail drains everything, one recovery attempt at stop, the pending count
@@ -704,8 +703,8 @@ rest; `CaptureAssemblyTest` pins the wiring; the harness gives the writer its tu
 before boot in `Main` (the hook's registration moved before boot as the nod planned; what the nod declined was changing the join's behaviour, aligning the chapter text to the 5s bound instead — and the review's finding 1 showed the moved hook needed a guard to survive that window). Chapters 08/10 —
 five threads, the bounded join, the Tier-2 row — and chapter 10's known-deviations note removed: nothing in it remains true (the
 reviewer agreed slice C's findings are not deviations from chapter 10's promises). Four mutations red and restored byte-identical.
-**Doctrine review 2026-10-09/10 — pass-with-findings; seven findings, all fixed on the branch in `d5b4ef9` except (6), which is this
-board pass:** (1) **medium** — `Main.join` used the JDK's timed join, which throws on a thread never started, so the hook moved
+**Doctrine review 2026-10-09/10 — pass-with-findings; seven findings, all fixed on the branch in `d5b4ef9` except (6), the board
+record, committed as `381d06a`:** (1) **medium** — `Main.join` used the JDK's timed join, which throws on a thread never started, so the hook moved
 before boot would have died before closing anything in exactly #24's window; guarded (`Thread.State.NEW` returns at once), `join`
 made package-private and pinned by `MainTest` (two tests) — #24 now delivered; (2) low — a hold ended by the tail's own recovery
 was never recorded: the tail now marks its recovery as `hold()` does (an episode of one attempt if the drain itself broke the sink),
@@ -716,18 +715,20 @@ session took the mechanism option, as it is information the store already has an
 (below)**; (4) low — stale docs: chapter 04 (the tail), chapters 05 and 10 (recovery executes the batch; `SINK_FAILURE` once the
 episode is proven over), chapter 10's heartbeat counters gained `eventsQueued`; (5) low — the hook's Tier-2 drain was unbounded
 while Postgres is down: `QueuedEventLog.drainRemainder()` stops at the first refused write and counts the rest as dropped, with a
-test; (6) the board record stopped at increment 1 — this pass (the board + this plan, uncommitted, riding the branch); (7) nits —
+test; (6) the board record stopped at increment 1 — the board + this plan brought up to the branch head (`381d06a`, on the branch); (7) nits —
 an unused import, a test message, import order, a comment. Four mutations red and restored byte-identical.
-**Totals at the branch head (`d5b4ef9`, 2026-10-10):** all eight B findings fixed with their exposing tests (#6, #7, #12, #15/#16,
-#17, #20, #24, #30); three scenarios switched on, none `@Disabled` remain — `BeltScenariosTest` 23 green; chapter 10's
-known-deviations note gone. Mutations: **20 red and restored byte-identical** — 3 + 4 + 5 + 4 across the increments, 4 on the review's fixes;
-one equivalent mutant recorded at increment 2 (the fake store's round trip, pinned by the real store's own test). Tests: market-data-service 230 (0 skipped) · ig-client 99 (both
-read from the Gradle reports in the working tree, timed at the head commit) · docs site 63 (as reported) · 0 failures;
-`./gradlew build` and the docs build green as CI runs them before the review's fixes — the re-run pending at the PR. **Not yet
-pushed; no PR opened — Alex decides.** **Open for Alex:** whether the `boolean recover()` mechanism (review finding 3) stands as
-taken — noted, not a blocker. **Next:** Alex's word → push → PR → CI → merge → close-out (the Done history entry tagged E1-T10;
-this section's "B — merged"); then **slice C — the last slice of T10** (#9, #10, #22, #25, #26, #28, #31, #32; #27 done at T11)
-→ E1-T12 → the belt's single cloud re-review once every T10 finding is resolved (the close-out ruling below) → E1-T6.
+**Totals at the PR:** all eight B findings fixed with their exposing tests (#6, #7, #12, #15/#16, #17, #20, #24, #30); three
+scenarios switched on, none `@Disabled` remain — `BeltScenariosTest` 23 green; chapter 10's known-deviations note gone. Mutations:
+**20 red and restored byte-identical** — 3 + 4 + 5 + 4 across the increments, 4 on the review's fixes; one equivalent mutant
+recorded at increment 2 (the fake store's round trip, pinned by the real store's own test). Tests at merge: market-data-service 230
+(0 skipped) · ig-client 99 · docs site 63 · 0 failures; `./gradlew build` and the docs build green as CI runs them. **PR #19**
+(https://github.com/amfshr/tradebench/pull/19), **merged by Alex 2026-10-10 into `main`, merge commit `8324c74`** (GitHub stamps the
+merge 2026-10-09T23:31Z); CI green on the merged head (`build` 48s, GitGuardian pass); the local branch deleted. Commits as merged:
+`54d6ab2` (1/4) · `cb7ec46` (2/4) · `1d3d351` (3/4) · `58fff49` (4/4) · `d5b4ef9` (the review fixes) · `381d06a` (board). The
+board's Done history carries the entry (tagged E1-T10). **Open for Alex:** whether the `boolean recover()` mechanism (review
+finding 3) stands as taken — noted, not a blocker. **Next:** **slice C — the last slice of T10, one PR; T10 closes with it** (#9,
+#10, #22, #25, #26, #28, #31, #32; #27 done at T11) → E1-T12 → the belt's single cloud re-review once every T10 finding is
+resolved (the close-out ruling below) → E1-T6.
 
 **The A2/B backlog on the harness (E1-T11 — merged 2026-10-08, PR #16; written 2026-10-08, the tenth, #4's window-lapse arm, added at T11's
 doctrine review; each verified red for its finding's reason):** the ten `@Disabled` scenarios in `BeltScenariosTest` —
@@ -756,7 +757,8 @@ additions are built (`aHostThatWakesWithTheClientStuckIsRebuiltInAwakeTime`, reo
 precedes the suspend; `aLidCloseIsAnnotatedNotTreatedAsAnOutage` → `aHostSuspendIsAnnotatedNotTreatedAsAnOutage`); a
 throwing `Supervisor.sweep()` now dies loud (#19 landed). Only slice B's three remain `@Disabled` — #6
 `aDatabaseThatRefusesWritesIsOneEpisodeClimbingTheLadder`, #20 `aStopWithABacklogDrainsAllOfItIntoAHealthySink` +
-`aStopDuringAHoldAfterPostgresReturnedRecoversOnceAndLandsEverything` (the suite at 212, 3 skipped, 0 failures).
+`aStopDuringAHoldAfterPostgresReturnedRecoversOnceAndLandsEverything` (the suite at 212, 3 skipped, 0 failures). **Update 2026-10-10 (B merged — PR #19, `8324c74`):** the last three switched on at B's
+increment 2 (`cb7ec46`) — #6 and both #20 arms; none remain `@Disabled` (the suite at 230, 0 skipped, 0 failures).
 
 **Tests to doctrine (G5):** each fix carries the exposing test the review names, mutation-verified (apply the
 exact break → red); A2 and B land as scenarios on the E1-T11 harness with chapter 10's numbers as the expected
@@ -765,8 +767,9 @@ offsets; the pure-core unit tests stay.
 **Not in scope:** new policy beyond D29; the belt's detectors' numbers (chapter 10's table stays as ruled).
 
 **Workflow:** the standard one — design nod → increments → mutation evidence → doctrine review → PR; Alex
-merges. Alex may have the cloud review session re-verify afterwards. Chapter 10 carries a "Known deviations"
-note (added 2026-10-05) naming what the findings make untrue today; it comes out as the deviations go.
+merges. Alex may have the cloud review session re-verify afterwards. Chapter 10 carried a "Known deviations"
+note (added 2026-10-05) naming what the findings made untrue; it came out as the deviations went — removed at B (increment 4,
+`58fff49`; merged PR #19, 2026-10-10).
 
 **DoD:** every finding fixed or recorded why not, each fix carrying the exposing test the review names
 (mutation-verified per G5); the A2/B findings' scenarios green on the E1-T11 harness; chapter 10's "known
@@ -980,9 +983,8 @@ language — the belt's scenarios, test names, comments and docs frame a **suspe
 
 **Sequencing (Alex, 2026-10-08, standing):** E1-T10 slice A1 is on main (PR #15, merged 2026-10-08); this harness
 is on main (PR #16, merged 2026-10-08); **T10 A2 is on main (PR #17, merged 2026-10-09)** — its seven scenarios switched on
-(#3 · #4 ×2 · #5 ×2 · #8 · #33), the host-suspend-then-stuck variant and the ruling-3 rename built. Next: T10's B/C land as
-scenarios here, one PR per slice — the three remaining `@Disabled` scenarios are B's backlog (#6 · #20 ×2; the list by test
-name is in T10 §) → **E1-T12** replay acceptance (unblocked by this merge) → the belt's single cloud re-review, once every
+(#3 · #4 ×2 · #5 ×2 · #8 · #33), the host-suspend-then-stuck variant and the ruling-3 rename built; **T10 B is on main (PR #19, merged 2026-10-10)** — its three
+scenarios switched on here (#6 · #20 ×2), none `@Disabled` remain. Next: T10's C, the last slice, one PR → **E1-T12** replay acceptance (unblocked by this merge) → the belt's single cloud re-review, once every
 T10 finding is resolved (T10 § close-out ruling; Alex's 2026-10-09 clarification named only T10 — whether T12 still precedes
 it awaits his word) → E1-T6 (a re-review pass gates it).
 
@@ -1051,7 +1053,7 @@ field-manual note on the replay library (where it lives, how a new outage become
 **Estimate:** ≈ two sessions.
 
 **Sequencing (Alex, 2026-10-08, standing):** T11 (✅ PR #16, merged 2026-10-08) → T10 A2 as scenarios (✅ PR #17,
-merged 2026-10-09) → T10 B/C as scenarios → **T12** → the belt's single cloud re-review, once every T10 finding is resolved
+merged 2026-10-09) → T10 B as scenarios (✅ PR #19, merged 2026-10-10) → T10 C → **T12** → the belt's single cloud re-review, once every T10 finding is resolved
 (T10 § close-out ruling; Alex's 2026-10-09 clarification named only T10 — whether T12 still precedes it awaits his word)
 → T6 (a re-review pass gates T6).
 
