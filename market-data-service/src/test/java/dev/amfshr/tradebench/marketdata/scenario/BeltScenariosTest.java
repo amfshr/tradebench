@@ -312,7 +312,6 @@ class BeltScenariosTest {
     }
 
     @Test
-    @Disabled("E1-T10 A2 — finding #33: one stray per-market resubscribe the sweep before the session verdict (found by this replay)")
     void theScarsTwoDeadMarketsEarnOneSessionVerdictAtNinetySeconds() throws Exception {
         // Chapter 10: ≥2 markets stale together → rebuild at once. NASDAQ's last tick is 584ms after
         // DAX's (360.584 vs 360.000). The session verdict does come at 451, the second market's 90s
@@ -324,12 +323,12 @@ class BeltScenariosTest {
         Observed o = ScenarioRunner.run(scar);
 
         assertEquals(List.of(0L, 451L), o.secondsOf("connect"), "one session rebuild when the second market is 90s silent");
-        assertTrue(o.events(EventType.WATCHDOG_STALE).stream().noneMatch(e -> "resubscribe".equals(e.detail().path("action").asText())),
+        assertTrue(o.events(EventType.WATCHDOG_STALE).stream()
+                .noneMatch(e -> e.detail() != null && "resubscribe".equals(e.detail().path("action").asText())),
                 "no market surgery — the two died together");
     }
 
     @Test
-    @Disabled("E1-T10 A2 — finding #5: the watchdog's 90s verdict pre-empts the 300s replay patience")
     void tryingRecoveryIsGivenItsThreeHundredSecondsBeforeAnyRebuild() throws Exception {
         // Chapter 10 / 08: in TRYING-RECOVERY the server may still complete a lossless replay, so
         // the escalator waits 300s. Two open markets go silent with it; the watchdog must stand
@@ -351,7 +350,6 @@ class BeltScenariosTest {
     }
 
     @Test
-    @Disabled("E1-T10 A2 — finding #5: the watchdog fires on a connection that is not streaming")
     void aDeadSocketIsTheEscalatorsToRebuildAtOneHundredAndTwentySeconds() throws Exception {
         // ⑥ The socket dies; the SDK says WILL-RETRY and hangs. The escalator rebuilds at +120
         // (180). The watchdog must not resubscribe at +90 (150) on a connection with no session —
@@ -446,12 +444,11 @@ class BeltScenariosTest {
     }
 
     @Test
-    @Disabled("E1-T10 A2 — finding #3: the CLOSED stand-down is unbounded (bounded by D29)")
     void aWeekendZombieBehindAClosedFlagIsFoundByTheTwelveHourTeachingResubscribe() throws Exception {
         // D29 (1): the watchdog stands down on a market's last DLG_FLAG; a market that has read
         // CLOSED for twelve hours gets one teaching resubscribe, whose snapshot re-teaches the flag.
-        // Here the item is dead server-side: nothing arrives, the flag is cleared, the ordinary
-        // ladder runs, and the session is rebuilt — within 12h + 450s of the last CLOSED update.
+        // Here the item is dead server-side: nothing answers, the shell forgets the old flag, and
+        // the ordinary ladder runs from the fresh subscription — +90, +210, then the session at +450.
         Scenario zombie = Scenario.named("weekend zombie").markets(DAX)
                 .at(s(0), streaming()).at(s(0), subscribed(DAX))
                 .at(s(1), tick(DAX, "CLOSED"))
@@ -459,13 +456,12 @@ class BeltScenariosTest {
 
         Observed o = ScenarioRunner.run(zombie);
 
-        long twelveHours = Duration.ofHours(12).toSeconds();
-        assertTrue(o.remedies.stream().filter(r -> r.at().toSeconds() > 0).allMatch(r -> r.at().toSeconds() >= twelveHours),
-                "stood down through the night — no remedy before the twelve hours");
-        assertTrue(o.secondsOf("unsubscribe").stream().anyMatch(t -> t >= twelveHours && t <= twelveHours + 2),
-                "the teaching resubscribe");
-        assertTrue(o.secondsOf("connect").stream().anyMatch(t -> t > twelveHours && t <= twelveHours + 450 + 2),
-                "the zombie is found and the session rebuilt");
+        // The flag landed at the sweep at 1, so the twelve hours end at 43201.
+        assertEquals(List.of(43_201L, 43_201L, 43_291L, 43_291L, 43_411L, 43_411L), o.secondsOf("unsubscribe"),
+                "stood down through the night; the teaching resubscribe at 12h; then +90 and +210 from it");
+        assertEquals(List.of(0L, 43_651L), o.secondsOf("connect"), "the zombie is found: the session at +450");
+        assertEquals("STAND_DOWN_TEACHING", o.events(EventType.WATCHDOG_STALE).get(0).detail().get("signal").asText());
+        assertEquals(4, o.events(EventType.WATCHDOG_STALE).size(), "the teach, two resubscribes, the rebuild");
     }
 
     @Test

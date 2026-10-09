@@ -528,6 +528,25 @@ class SupervisorTest {
     }
 
 
+    @Test
+    void aFlagLearntBeforeAResubscribeIsNotFedBackAfterIt() {
+        // D29 (1): the remembered CLOSED belongs to the old subscription. Once the pair is re-asked
+        // for, only a fresh tick's flag counts — so a market that answers nothing is open-unknown
+        // and silent, and the watchdog acts instead of standing down forever.
+        supervisor.watch(DAX);
+        freshness.tick.put(DAX, clock.monotonicNanos());
+        freshness.flag.put(DAX, "CLOSED");
+        supervisor.sweep(); // stood down on the flag
+        supervisor.onSubscriptionError(DAX, 40, "rejected"); // strike 1 → a surgical retry re-asks the pair
+        supervisor.sweep();
+        assertEquals(List.of(DAX), stream.resubscribed);
+
+        advanceAndSweep(Duration.ofSeconds(95)); // nothing answers; freshness still reports the old CLOSED
+
+        assertEquals(List.of(DAX, DAX), stream.resubscribed, "the stale flag is not fed back — the watchdog acts at 90s");
+        assertEquals(1, count(EventType.WATCHDOG_STALE));
+    }
+
     // --- helpers + fakes --------------------------------------------------------------------
 
     /** jitter = 1.0 → deterministic backoff; Sleeper/interval unused (tests drive sweep() directly). */

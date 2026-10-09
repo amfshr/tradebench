@@ -69,6 +69,9 @@ public final class Supervisor implements StreamObserver, BeltView, Runnable {
     private final Set<String> watched = new HashSet<>();
     private final Map<String, Long> lastFedTick = new HashMap<>();
     private final Map<String, Long> lastFedBar = new HashMap<>();
+    // When each market's pair was last re-asked for: a remembered flag older than that is the old
+    // subscription's and is not fed back (D29 (1)).
+    private final Map<String, Long> flagClearedMono = new HashMap<>();
     private int consecutiveFailures;
     private long lastRebuildMono = Long.MIN_VALUE;
     private long firstFailureMono = Long.MIN_VALUE;
@@ -92,7 +95,7 @@ public final class Supervisor implements StreamObserver, BeltView, Runnable {
         this.giveUpAfterNanos = tuning.giveUpAfter().toNanos();
         this.reconnects = new ReconnectClassifier(tuning);
         this.stuck = new StuckSubstateEscalator(tuning);
-        this.watchdog = new StalenessWatchdog(tuning);
+        this.watchdog = new StalenessWatchdog(tuning, sweepInterval);
         this.witness = new WitnessQuarantine(tuning);
         this.backoff = new BackoffPolicy(tuning, jitter);
     }
@@ -230,8 +233,9 @@ public final class Supervisor implements StreamObserver, BeltView, Runnable {
                 lastFedBar.put(epic, bar);
             }
             String flag = freshness.dealFlag(epic);
-            if (flag != null) {
-                watchdog.onDealFlag(epic, flag);
+            Long cleared = flagClearedMono.get(epic);
+            if (flag != null && (cleared == null || tick > cleared)) {
+                watchdog.onDealFlag(epic, flag, now); // the flag rides the tick: only a tick after the re-ask is fresh
             }
         }
         for (StalenessWatchdog.Remedy remedy : watchdog.evaluate(now, wallMillis)) {
@@ -245,10 +249,17 @@ public final class Supervisor implements StreamObserver, BeltView, Runnable {
                     .withDetail(MAPPER.createObjectNode()
                             .put("action", "resubscribe")
                             .put("signal", remedy.signal().name())));
+            reasking(remedy.epic());
             stream.resubscribe(remedy.epic());
         } else {
             rebuild(EventType.WATCHDOG_STALE, occurredAt); // backoff-paced session rebuild
         }
+    }
+
+    /** A market's pair is being re-asked for: its remembered flag belongs to the old subscription. */
+    private void reasking(String epic) {
+        watchdog.clearDealFlag(epic);
+        flagClearedMono.put(epic, clock.monotonicNanos());
     }
 
     /** Execute a subscription-failure {@link WitnessQuarantine.Judgment} — the §3.5 blast-radius
@@ -259,6 +270,7 @@ public final class Supervisor implements StreamObserver, BeltView, Runnable {
         switch (judgment) {
             case WitnessQuarantine.Judgment.Retry(String epic) -> {
                 witness.onSubscribeStarted(epic, clock.monotonicNanos());
+                reasking(epic);
                 stream.resubscribe(epic); // surgical re-attempt of the failing pair
             }
             case WitnessQuarantine.Judgment.Wait() -> {
@@ -313,6 +325,7 @@ public final class Supervisor implements StreamObserver, BeltView, Runnable {
         }
         stuck.onStatus(status.status(), status.monotonicNanos());
         streaming = ReconnectClassifier.isStreaming(status.status());
+        watchdog.onConnection(streaming, status.monotonicNanos()); // down: no verdicts; up: fresh windows
         if (streaming) {
             rebuilding = false;
         }
@@ -363,6 +376,7 @@ public final class Supervisor implements StreamObserver, BeltView, Runnable {
         record(reasonEvent);
         reconnects.rebuilding(now, occurredAt.toEpochMilli()); // the outage is open from here, farewell or not
         rebuilding = true; // the view reads RECONNECTING until the new connection streams
+        watchdog.onConnection(false, now); // and the watchdog waits for it
         if (!stream.rebuild()) {
             giveUp("fatal_config", occurredAt); // never climb a ladder against a lockout
             return true;
@@ -373,6 +387,7 @@ public final class Supervisor implements StreamObserver, BeltView, Runnable {
         witness.onSessionRebuilt(); // strikes reset; quarantine persists (exit is restart-only)
         for (String survivor : watched) {
             witness.onSubscribeStarted(survivor, resubscribed); // the survivors re-subscribe now
+            reasking(survivor);
         }
         return true;
     }

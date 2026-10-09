@@ -464,9 +464,9 @@ Results, this run:
 real stack. `written=` lagging `ticks=` + `bars=` by one on two later heartbeats is a snapshot artefact (a
 tick sitting in the queue at the instant the line is printed), not a loss.
 
-## T10 — Resilience belt hardening: the PR #14 review 🔶 (ticketed 2026-10-05; started 2026-10-08 — A1 ✅ PR #15; A2/B/C next as scenarios on the merged E1-T11 harness, PR #16)
+## T10 — Resilience belt hardening: the PR #14 review 🔶 (ticketed 2026-10-05; started 2026-10-08 — A1 ✅ PR #15; A2 🔶 started 2026-10-09 as scenarios on the merged E1-T11 harness, PR #16 — increment 1 of 4 built; B/C next)
 
-**Type** build · **Branch** `e1-t10-belt-hardening` · **Started** 2026-10-08 · **Blocked by** —
+**Type** build · **Branch** `e1-t10-a2-detectors-verdicts` (A2, from main `c2d46e8`; A1 merged from `e1-t10-belt-hardening`, PR #15) · **Started** 2026-10-08 · **Blocked by** —
 
 **Goal:** the belt's 32 review findings fixed or answered, each fix carrying the test that would have caught
 it — so chapter 10's promises hold on the code, not only in prose.
@@ -540,7 +540,7 @@ the re-review → E1-T6):**
   `ReconnectClassifier`'s javadoc, `ReconnectClassifierTest` and `StalenessWatchdogTest`. Field Manual chapters 07, 08
   and 10 reworded 2026-10-08 direct to main (docs-only, the build session). On this plan and the board, "lid close"
   describing our scenario reads "host suspend"; the prototype's captured `host_slept` outages keep the fact with "the
-  prototype ran on a laptop" (T12 §).
+  prototype ran on a laptop" (T12 §). **Started 2026-10-09 — progress in "A2 — in progress", below.**
 - **B — the sink and the database edge.** **#6** `recover()` makes a round trip — executes the held batch inside
   recovery, so "recovered" means a write landed — and carries attempt/since across consecutive episodes; **#7**
   `socketTimeout` 30s + `tcpKeepAlive` (D29 (2)) on the pool and `dedicatedConnection()`, with a Testcontainers
@@ -566,6 +566,35 @@ the re-review → E1-T6):**
   `core.md:15`, `:28`).
 - **#23** (no combined-detector test) *is* the harness — **E1-T11**.
 
+**A2 — in progress.** **Started 2026-10-09** on `e1-t10-a2-detectors-verdicts` (branched from main at `c2d46e8`); design nod
+posted and accepted by Alex 2026-10-09 ("I accept your recommendations"). **Four increments, one PR for the slice:** **1 the
+watchdog** (#5, #33, #3) · **2 the witness** (#8, #4, #14) · **3 the session** (#18, #11, #13, #19, #21, #29) · **4
+housekeeping** (the host-suspend-then-stuck scenario — T5 residual 3's rebuild half; the ruling-3 rename of
+`aLidCloseIsAnnotatedNotTreatedAsAnOutage` and the lid/laptop comment purge; chapter 10's known-deviations note removed and
+its "together" clause added). **In-ticket decisions accepted at the nod:** `StreamControl.rebuild()` returns an outcome
+(CONNECTED / FAILED / FATAL) — a failed connect is re-asked next sweep and only connected rebuilds count toward the ceiling
+(#18); observations carry the connection generation and are applied only when current (#11); the teaching resubscribe
+reuses the watchdog's resubscribe remedy with a new signal `STAND_DOWN_TEACHING`, recorded as `WATCHDOG_STALE`, the twelve
+hours as `Tuning.standDownTeach` (#3); the one-sweep hold window is the sweep interval passed to the watchdog, not a
+tunable (#33); the leg kind rides on the rejection (#8); `Supervisor.die(cause)` mirrors the pump's (#19).
+**Increment 1 — built 2026-10-09, staged, awaiting Alex's commit** (`StalenessWatchdog`, `Supervisor`, `Tuning`, their
+tests, and `BeltScenariosTest`): `StalenessWatchdog` renders no verdict while the connection is not streaming and starts
+every stopwatch afresh on resume (`onConnection`); the one-sweep hold (`anotherWithinASweep`); the bounded stand-down —
+`onDealFlag` now stamps when a closing flag began, `clearDealFlag` forgets it on a re-ask, and a market closed for
+`standDownTeach` (12h, D29 (1)) gets one `RESUBSCRIBE` with signal `STAND_DOWN_TEACHING` per period, its silence counted
+from the fresh subscription. `Supervisor` feeds a remembered flag only when a tick newer than the market's last re-ask
+carries it (`reasking` on retry, watchdog resubscribe and rebuild) and tells the watchdog the connection's state. Four
+scenarios switched on: `tryingRecoveryIsGivenItsThreeHundredSecondsBeforeAnyRebuild` and
+`aDeadSocketIsTheEscalatorsToRebuildAtOneHundredAndTwentySeconds` (#5),
+`theScarsTwoDeadMarketsEarnOneSessionVerdictAtNinetySeconds` (#33),
+`aWeekendZombieBehindAClosedFlagIsFoundByTheTwelveHourTeachingResubscribe` (#3 — tightened to exact offsets: the teach at
+43201, resubscribes at 43291 and 43411, the session rebuild at 43651). Five new `StalenessWatchdogTest` tests, one new
+`SupervisorTest` test, `TuningTest` pins the 12h. Tests: market-data-service 199 (6 skipped), 0 failures. Eight mutations
+red and restored byte-identical (judging a down connection; no fresh window on resume; no hold; the teaching period
+doubled; teaching every sweep; the teach not restarting the silence; the stale flag fed back; the shell never telling the
+watchdog the connection's state). **Remaining `@Disabled` after increment 1:** #4 ×2, #8 (increment 2); #6, #20 ×2 (slice
+B). **Next:** increments 2–4 → doctrine review → the PR.
+
 **The A2/B backlog on the harness (E1-T11 — merged 2026-10-08, PR #16; written 2026-10-08, the tenth, #4's window-lapse arm, added at T11's
 doctrine review; each verified red for its finding's reason):** the ten `@Disabled` scenarios in `BeltScenariosTest` —
 A2: #3 `aWeekendZombieBehindAClosedFlagIsFoundByTheTwelveHourTeachingResubscribe`,
@@ -586,7 +615,9 @@ suspend in front of the hang, the rebuild 120s after the wake in awake time) —
 the test and code comments (the A2 bullet above). **Noted for the slices (T11's doctrine review, 2026-10-08):** the fake store's `recover()`
 deliberately models the unfixed #6 — slice B must give it a round trip with the production fix; the #3 scenario's window
 assertions tighten to exact offsets when A2 enables it; a `Supervisor.sweep()` exception is modelled as a harness error
-(a test error) until #19 lands.
+(a test error) until #19 lands. **Update 2026-10-09 (A2 increment 1, staged):** #3, #5 ×2 and #33 are switched on (the #3
+window assertions tightened to exact offsets as noted; the suite at 199, 0 failures); six remain `@Disabled` — #4 ×2 and #8
+(A2 increment 2), #6 and #20 ×2 (slice B).
 
 **Tests to doctrine (G5):** each fix carries the exposing test the review names, mutation-verified (apply the
 exact break → red); A2 and B land as scenarios on the E1-T11 harness with chapter 10's numbers as the expected
