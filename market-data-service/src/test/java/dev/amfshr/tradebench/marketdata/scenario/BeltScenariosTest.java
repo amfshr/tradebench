@@ -203,14 +203,14 @@ class BeltScenariosTest {
 
     @Test
     void aHostThatWakesWithTheClientStuckIsRebuiltInAwakeTime() throws Exception {
-        // T5 residual 3's other half: the host is suspended sixteen minutes; on resume the client
-        // reports WILL-RETRY and hangs. The escalator's 120s run in awake time from that report —
-        // the rebuild at 180, not at once because the wall clock says it has waited long enough —
-        // and the watchdog, stood down on a dead wire, raises nothing.
+        // T5 residual 3's other half: the client reports WILL-RETRY as the socket dies, then the
+        // host is suspended sixteen minutes. On resume the wall clock says the hang is already
+        // sixteen minutes old; the escalator's 120s run in awake time — the rebuild at 180, not at
+        // once — and the watchdog, stood down on a dead wire, raises nothing for the jump either.
         Scenario stuckOnWake = Scenario.named("stuck after a suspend").markets(DAX)
                 .at(s(0), streaming()).at(s(0), subscribed(DAX))
                 .every(s(1), s(1), s(60), t -> tick(DAX))
-                .at(s(60), hostSleep(Duration.ofMinutes(16)), status(WILL_RETRY))
+                .at(s(60), status(WILL_RETRY), hostSleep(Duration.ofMinutes(16)))
                 .at(s(181), streaming()).at(s(181), subscribed(DAX))
                 .every(s(1), s(182), s(240), t -> tick(DAX))
                 .until(s(240)).build();
@@ -220,7 +220,9 @@ class BeltScenariosTest {
         assertEquals(List.of(0L, 180L), o.secondsOf("connect"), "120s of awake time after the hang was reported");
         assertEquals(1, o.events(EventType.STUCK_SUBSTATE_ESCALATED).size());
         assertTrue(o.events(EventType.WATCHDOG_STALE).isEmpty(), "no alarm on a dead wire, no alarm for the jump");
-        assertFalse(o.events(EventType.RECONNECT).get(0).detail().get("replayed").asBoolean(), "a rebuild owes a heal");
+        Observed.Seen resume = o.events(EventType.RECONNECT).get(0);
+        assertFalse(resume.detail().get("replayed").asBoolean(), "a rebuild owes a heal");
+        assertTrue(resume.detail().get("hostSlept").asBoolean(), "sixteen minutes of wall inside two of awake");
         assertEquals(o.ticksDelivered, o.landed.size());
         assertTrue(o.exits.isEmpty());
     }

@@ -78,8 +78,11 @@ public final class WitnessQuarantine {
             return new Judgment.Ignored(epic); // the twin leg's rejection arrives after the verdict
         }
         Market failing = markets.computeIfAbsent(epic, e -> new Market());
-        if (monotonicNanos < failing.subscribeStartedMono) {
-            return new Judgment.Ignored(epic); // a leg of a pair already replaced
+        if (failing.strikes > 0 && monotonicNanos < failing.subscribeStartedMono) {
+            // a leg of the pair a retry replaced — only a retry can leave one: after a rebuild the
+            // gate has dropped the old session's, and the shell stamps the new attempt only after
+            // its subscribes went out, so a first rejection stamped earlier is still the first
+            return new Judgment.Ignored(epic);
         }
         if (failing.strikes > 0 && failing.struckAttempt == failing.subscribeStartedMono) {
             return new Judgment.Ignored(epic); // this attempt has struck — the pair's other leg

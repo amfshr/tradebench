@@ -91,7 +91,7 @@ public final class CaptureAssembly {
     }
 
     /**
-     * Shutdown, in order: hush the farewell DISCONNECTED (§3.6), stop the sweep and wait for it
+     * Shutdown, in order: stop the sweep and wait for it
      * (the sweep thread owns the stream's handles), close the stream, stop the pump and wait for
      * it, and only then close the sink — never a sink a pump might still be writing to. The two
      * waits are the caller's joins (a real thread's, or a harness running the pump's tail inline).

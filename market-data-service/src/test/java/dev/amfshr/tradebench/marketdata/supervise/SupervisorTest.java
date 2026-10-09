@@ -2,6 +2,7 @@ package dev.amfshr.tradebench.marketdata.supervise;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.time.Duration;
@@ -687,7 +688,8 @@ class SupervisorTest {
         supervisor.watch(DAX);
         supervisor.onSubscriptionError(stream.generation, DAX, WitnessQuarantine.Kind.PRICE, 40, "rejected");
 
-        supervisor.run(); // the unit's own loop: the retry's resubscribe throws inside sweep()
+        assertThrows(IllegalStateException.class, supervisor::run,
+                "the unit's own loop: the retry's resubscribe throws inside sweep() — and the trace still escapes");
 
         assertTrue(exhausted.get(), "the runner is told at once");
         ServiceEvent dead = single(EventType.FEED_DEAD);

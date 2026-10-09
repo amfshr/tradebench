@@ -85,6 +85,18 @@ class WitnessQuarantineTest {
     }
 
     @Test
+    void aRebuiltPairsFirstRejectionCountsEvenWhenStampedBeforeTheShellReadItsClock() {
+        // The shell stamps a rebuilt session's attempts after the subscribes went out (a paced
+        // re-login blocks first); a rejection landing in that gap is the attempt's first, not a
+        // straggler — the old session's legs are gated out before the new one exists.
+        healthyWitness(NDX);
+        quarantine.onSessionRebuilt();
+        quarantine.onSubscribeStarted(NDX, 10 * S);
+        quarantine.onSubscribeStarted(DAX, 10 * S);
+        assertEquals(new Judgment.Retry(DAX), quarantine.onSubscriptionError(DAX, 10 * S - 1), "counted: strike one");
+    }
+
+    @Test
     void aWouldBeWitnessInsideItsConfirmWindowMeansWait() {
         quarantine.onSubscribeStarted(NDX, 0);   // subscribing, unconfirmed
         quarantine.onSubscribeStarted(DAX, 0);

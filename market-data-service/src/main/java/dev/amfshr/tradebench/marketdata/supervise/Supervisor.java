@@ -5,6 +5,7 @@ import java.time.Instant;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Queue;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
@@ -156,6 +157,7 @@ public final class Supervisor implements StreamObserver, BeltView, Runnable {
         watchdog.forget(epic);
         lastFedTick.remove(epic);
         lastFedBar.remove(epic);
+        flagClearedMono.remove(epic);
     }
 
     // --- capture-supervisor thread ----------------------------------------------------------
@@ -171,6 +173,7 @@ public final class Supervisor implements StreamObserver, BeltView, Runnable {
             Thread.currentThread().interrupt();
         } catch (RuntimeException e) {
             die(e); // never a silent death: FEED_DEAD says why and the runner acts at once (#19)
+            throw e; // and the thread's default handler still prints where
         }
     }
 
@@ -208,7 +211,9 @@ public final class Supervisor implements StreamObserver, BeltView, Runnable {
             return; // ended inside the drain: nothing after it may act (#13)
         }
         for (WitnessQuarantine.Judgment verdict : witness.rejudge(clock.monotonicNanos())) {
-            applyJudgment(verdict, heldVerdicts.remove(epicOf(verdict))); // a witness confirmed, or its window lapsed
+            String epic = epicOf(verdict);
+            applyJudgment(verdict, Objects.requireNonNull(heldVerdicts.remove(epic),
+                    () -> "no held rejection for " + epic)); // a witness confirmed, or its window lapsed
         }
         if (gaveUp) {
             return;

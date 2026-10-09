@@ -70,12 +70,23 @@ data freshness is truth, connection status is hearsay. Per market, two signals:
   When both are silent, tick-silence wins (`staleSignal` checks it first) — a dead feed
   must not be misread as a dead chart.
 
-Around the signals, four pieces of judgment, each visible in the code:
+Around the signals, seven pieces of judgment, each visible in the code:
 
 - *Stand-down by the market's own flag*: `DLG_FLAG` values `CLOSED`/`SUSPEND` suppress
   (`SUPPRESSING_FLAGS`) — weekends need no calendar and no hours config. Unknown flags
   deliberately do **not** suppress: a spurious resubscribe on a closed market is
   harmless, and its snapshot teaches us the real flag.
+- *The stand-down is bounded* (`standDownTeach`, 12h — D29 (1), E1-T10 #3): a closing flag is
+  dated when it arrives (`onDealFlag`); a market that has read it for the whole period gets one
+  teaching resubscribe per period (`STAND_DOWN_TEACHING`), its silence counted from the fresh
+  subscription. A live item re-teaches its flag within a tick; a dead one is then judged like any
+  open, silent market. The shell forgets a market's remembered flag whenever its pair is re-asked
+  for (`clearDealFlag`) and feeds a flag back only when a newer tick carries it — so a server-side
+  zombie cannot hide behind a weekend.
+- *No verdict while the connection is down* (`onConnection`, E1-T10 #5): a retry substate, the
+  handshake, a rebuild in flight — that silence is the connection's, the escalator's domain; when
+  streaming resumes every stopwatch and episode starts afresh, so the new session gets its full
+  window and the watchdog never fires into a recovery.
 - *Episodes with doubling grace* (`remedyFor`): first remedy at the threshold (90s tick-silent);
   the grace then doubles **before** each wait — 120s, 240s, 480s … capped at 30min (the 60s base
   is the seed, never itself waited) — so the second resubscribe lands at T+210s and the
@@ -84,7 +95,10 @@ Around the signals, four pieces of judgment, each visible in the code:
   storm. Healing (`healIf`) is **same-signal-kind only**: flowing ticks must never reset
   a dead-CHART episode, or the failure mode this signal exists for becomes undetectable.
 - *Session-shaped verdict*: ≥2 markets stale together is never market noise — one
-  `REBUILD`, not N remedies. It carries its own doubling grace
+  `REBUILD`, not N remedies. "Together" means within one sweep of each other
+  (`anotherWithinASweep`, E1-T10 #33): a lone stale market whose neighbour is one sweep from its
+  own threshold waits a round, so two feeds dying 584ms apart earn one verdict, not a stray
+  resubscribe the sweep before it. It carries its own doubling grace
   (`lastSessionVerdict`/`sessionGraceNanos`), added after the test harness caught the
   verdict re-firing every round.
 - *Clock-anomaly immunity*: chapter 7's discriminator; anomalous rounds re-baseline every
@@ -106,7 +120,8 @@ stateDiagram-v2
     }
     Episode --> Healthy: same-signal-kind data arrives (fresh budget)
     Healthy --> StoodDown: DLG_FLAG CLOSED / SUSPEND
-    StoodDown --> Healthy: flag clears
+    StoodDown --> StoodDown: 12h stood down → one teaching resubscribe, flag forgotten
+    StoodDown --> Healthy: flag clears, or forgotten at a re-ask
 ```
 
 **`StuckSubstateEscalator`** — the 2h56m scar (§3.3): the SDK hung in

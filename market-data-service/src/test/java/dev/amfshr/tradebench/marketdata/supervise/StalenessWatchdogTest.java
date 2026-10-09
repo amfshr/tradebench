@@ -249,4 +249,26 @@ class StalenessWatchdogTest {
         runTo(201);
         assertEquals(201, fired.get(0).second(), "the old subscription's flag no longer excuses the silence");
     }
+
+    @Test
+    void theHoldsBoundaryIsExactlyOneSweepBeforeTheNeighboursThreshold() {
+        // NASDAQ's last tick one full second after DAX's: at 90 it is 89.0s silent — within one sweep
+        // of its own 90 — so the round holds, and 91 renders the one session verdict.
+        dog.track(NDX, 0);
+        dog.onTick(NDX, 1 * S);
+        runTo(90);
+        assertTrue(fired.isEmpty(), "exactly one sweep short: held");
+        runTo(91);
+        assertEquals(List.of(91L), fired.stream().map(Fired::second).toList());
+        assertEquals(Action.REBUILD, fired.get(0).remedy().action());
+    }
+
+    @Test
+    void aNeighbourOneNanosecondOutsideTheSweepDoesNotHoldTheRound() {
+        dog.track(NDX, 0);
+        dog.onTick(NDX, 1 * S + 1);
+        runTo(90);
+        assertEquals(List.of(new Fired(90, new Remedy(DAX, Action.RESUBSCRIBE, Signal.TICK_SILENT))), fired,
+                "not within a sweep: DAX gets its own remedy");
+    }
 }
