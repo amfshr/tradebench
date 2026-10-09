@@ -238,7 +238,7 @@ public final class IgStreamControl implements StreamControl, AutoCloseable {
         if (pair == null) {
             return;
         }
-        @Nullable RuntimeException refused = null;
+        RuntimeException refused = null;
         if (pair.price != null) {
             try {
                 live.unsubscribe(pair.price);

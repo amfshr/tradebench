@@ -147,22 +147,27 @@ replayed, no gap, nothing owed.
 
 ## Threads and hand-offs
 
-Four threads touch the belt. Knowing which owns what is most of what there is to know.
+Five threads touch the belt. Knowing which owns what is most of what there is to know.
 
 | Thread | Owns | Allowed to do |
 |---|---|---|
 | Lightstreamer callback threads | nothing of ours | stamp a clock, enqueue — and that is all |
 | `capture-supervisor` (the sweep) | the cores, `watched`, `IgStreamControl`'s handles | everything decided and executed |
 | `capture-pump` | the sink, the gap detector | write market data; derive gaps and state events; hold and retry through a sink outage (E1-T9) |
-| main (heartbeat) | the health probe | watch the other two live; exit 1 if one dies; publish `capture_status` through the shared pool — a Postgres outage holds it at most 5s per market (`Database.CONNECTION_TIMEOUT`); a dead pump is reported by `onDeath` at once, so this check is the backstop |
+| `capture-events` (the Tier-2 writer) | the event queue | hand the sweep's queued service events to Postgres, off the sweep thread (D29 (3)); a refused write is counted and dropped, never retried, never blocking a sweep |
+| main (heartbeat) | the health probe | watch the sweep and the pump live; exit 1 if one dies; publish `capture_status` through the shared pool — a Postgres outage holds it at most 5s per market (`Database.CONNECTION_TIMEOUT`); a dead pump is reported by `onDeath` at once, so this check is the backstop |
 
 Three fences make the hand-offs safe. **Queue** — what a callback wrote before `add()` is visible
 to the sweep after `poll()`; the pump has the same contract with `Buffers`. **`Thread.start()`**
 — everything `start()` and `watch()` wrote before the supervisor thread was started is visible
 to it, so boot needs no locks. **`join()`** — on shutdown the hook stops the sweep thread and
-*waits for it* before closing the stream, exactly as it stops, joins and only then closes the
-pump's sink; closing underneath a thread that is mid-rebuild would be two threads in one
-`HashMap` (the step-6 review's F3).
+*waits for it* — up to five seconds — before closing the stream, exactly as it stops, joins and
+only then closes the pump's sink; closing underneath a thread that is mid-rebuild would be two
+threads in one `HashMap` (the step-6 review's F3). Past the five seconds it closes anyway: the
+interrupt has broken the login gate and the HTTP waits by then, so the bound is a backstop, not a
+race. The hook is registered before boot, so a SIGTERM during a slow start still closes the
+stream and the sink (E1-T10 #24). The event writer is stopped last and its queue drained by the
+hook, so the sweep's last words land.
 
 **The one race that no fence covers — and the gate that closes it.** A rebuild tears one
 Lightstreamer client down and starts another. Each is an independent state machine on its own
@@ -202,7 +207,7 @@ Three kinds of write, three answers — decided by *what the write protects*:
 | Tier | Writes | Policy | Why |
 |---|---|---|---|
 | 1 — the product | ticks, bars (`PostgresStore`, pump thread, one pooled connection kept for the store's life — swapped by `recover()` after a blip) | **fail closed, by holding**: a retryable failure keeps bars queued and the tick batch held, backs off 5s → 60s, recovers the connection, resumes — no time budget; anything not known-transient stops the pump and the process exits 1 at once | irreplaceable data must never be silently dropped — and a restart would drop exactly what the hold protects; a broken sink must never be written into, so only a *recovered* one is |
-| 2 — observability | events, gaps, status (observability store, a pooled connection per write) | **best-effort, counted, continue** | breadcrumbs; the store self-heals on the next write; coverage truth is recomputed from `bars_1m` |
+| 2 — observability | events (queued; one writer thread hands them on — D29 (3)), gaps, status (observability store, a pooled connection per write) | **best-effort, counted, continue** | breadcrumbs; the store self-heals on the next write; coverage truth is recomputed from `bars_1m` |
 | 3 — decisions | none | never touch the DB | principle 1 |
 
 **The Tier-1 ruling (2026-10-04, E1-T9).** Stop-and-restart was *a* fail-closed answer but a
@@ -326,12 +331,6 @@ in-ticket record.
   `BackoffPolicy` reused for the sink; one `SINK_FAILURE` on recovery; `onDeath` → immediate
   `exit(1)` (never on a stop); the pool's `connectionTimeout` 5s. Logged as **D28**.
 - **Pending:** the T7 restart-policy contract; B1 multi-job.
-- **Known deviations (the 2026-10-05 independent review of the whole belt — the detectors and
-  verdicts fixed by E1-T10 slice A2; the policy above is unchanged):** a database that accepts
-  connections but refuses writes restarts the hold's ladder every 5s instead of climbing it (#6);
-  the shutdown tail drains one batch and makes no recovery attempt (#20) — slice B, each pinned by
-  a `@Disabled` scenario in `BeltScenariosTest` that its fix enables. The record:
-  `.claude/reviews/2026-10-05-pr14-resilience-belt.md`.
 
 ## Where this chapter is tested
 

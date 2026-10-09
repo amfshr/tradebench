@@ -33,7 +33,7 @@ import dev.amfshr.tradebench.marketdata.testutil.ScriptedCaptureStore;
  * it would on a real thread, until it has nothing left to drain. Each time the clock moves, the
  * same hook gives the other threads their turn in one deterministic order: the events now due go
  * onto the fake wire (enqueue-on-the-callback-thread), then every sweep that fell due (apply-on-
- * the-next-sweep), then every heartbeat. An exit the shell asks for — recovery exhausted, the pump
+ * the-next-sweep), then the event writer's turn, then every heartbeat. An exit the shell asks for — recovery exhausted, the pump
  * dead — runs the shutdown order exactly as the JVM's exit hook would, once the step that asked
  * for it has returned.
  */
@@ -145,6 +145,9 @@ public final class ScenarioRunner {
                 nextSweep = nextSweep.plus(CaptureAssembly.SWEEP_INTERVAL);
                 exitIfAsked();
             }
+            if (!stopped) {
+                capture.events.drainOnce(); // the writer thread's turn — after a shutdown, the hook's drain was its last
+            }
             while (!stopped && now().compareTo(nextHeartbeat) >= 0) {
                 capture.probe.publish();
                 for (String epic : scenario.epics) {
@@ -243,7 +246,7 @@ public final class ScenarioRunner {
                 capture.pump.drainTail();
             }
             return true;
-        });
+        }, () -> true);
         observeWire();
         observed.exits.add(new Observed.Exit(now(), how));
         stopped = true;
@@ -285,6 +288,9 @@ public final class ScenarioRunner {
 
     private Observed finish() {
         observeWire();
+        if (!stopped) {
+            capture.events.drainOnce(); // a run that ended by the clock: the writer catches up
+        }
         for (ServiceEvent event : events.written) {
             observed.events.add(new Observed.Seen(Duration.between(start, event.eventTimeUtc()),
                     event.type(), event.epic(), event.detail()));

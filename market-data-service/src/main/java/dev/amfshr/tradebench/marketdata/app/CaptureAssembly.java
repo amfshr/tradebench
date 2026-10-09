@@ -17,6 +17,7 @@ import dev.amfshr.tradebench.marketdata.ingest.Pump;
 import dev.amfshr.tradebench.marketdata.store.CaptureStore;
 import dev.amfshr.tradebench.marketdata.store.EventLog;
 import dev.amfshr.tradebench.marketdata.store.GapStore;
+import dev.amfshr.tradebench.marketdata.store.QueuedEventLog;
 import dev.amfshr.tradebench.marketdata.store.StatusStore;
 import dev.amfshr.tradebench.marketdata.supervise.BackoffPolicy;
 import dev.amfshr.tradebench.marketdata.supervise.HealthProbe;
@@ -42,6 +43,8 @@ public final class CaptureAssembly {
     /** Between boot attempts while IG is merely unreachable — the login gate paces the logins
      * themselves; this keeps a restart during an outage from spinning. */
     public static final Duration BOOT_RETRY = Duration.ofSeconds(30);
+    /** The Tier-2 event queue's bound (D29 (3)) — hours of normal traffic; past it, drops are counted. */
+    public static final int EVENT_QUEUE_CAPACITY = 1_000;
 
     /** Everything the pipeline is composed from — the application supplies the real ones, a test
      * the fakes; nothing here is machine-specific. */
@@ -57,6 +60,8 @@ public final class CaptureAssembly {
     public final IgStreamControl control;
     public final Supervisor supervisor;
     public final HealthProbe probe;
+    /** The supervisor's events, queued for one writer thread — never written on the sweep thread. */
+    public final QueuedEventLog events;
 
     private final List<String> epics;
     private final CaptureStore sink;
@@ -75,7 +80,8 @@ public final class CaptureAssembly {
                 p.clock(), new BackoffPolicy(p.tuning(), p.jitter()), p.log(), p.onPumpDeath());
         control = new IgStreamControl(p.sessions(), new IgStreamClient(p.transport()), queues, epics,
                 p.log(), p.sleeper(), BOOT_RETRY, p.clock()::monotonicNanos, p.tuning().giveUpAfter());
-        supervisor = new Supervisor(p.clock(), p.tuning(), p.jitter(), p.events(), control, queues,
+        events = new QueuedEventLog(p.events(), EVENT_QUEUE_CAPACITY);
+        supervisor = new Supervisor(p.clock(), p.tuning(), p.jitter(), events, control, queues,
                 p.onExhausted(), p.sleeper(), SWEEP_INTERVAL);
         control.bind(supervisor); // the one back-edge of the control loop, tied off here
         probe = new HealthProbe(p.instance(), epics, queues, supervisor, p.clock(), p.status());
@@ -95,9 +101,11 @@ public final class CaptureAssembly {
      * (the sweep thread owns the stream's handles), close the stream, stop the pump and wait for
      * it, and only then close the sink — never a sink a pump might still be writing to. The two
      * waits are the caller's joins (a real thread's, or a harness running the pump's tail inline).
-     * Returns whether the pump stopped in time, so the caller knows what else it may close.
+     * Last, the event writer: stopped, waited for, and its queue drained here — the sweep's last
+     * words (a {@code FEED_DEAD} among them) must land. Returns whether the pump stopped in time, so
+     * the caller knows what else it may close.
      */
-    public boolean shutdown(BooleanSupplier joinSweep, BooleanSupplier joinPump) {
+    public boolean shutdown(BooleanSupplier joinSweep, BooleanSupplier joinPump, BooleanSupplier joinWriter) {
         supervisor.stop();
         if (!joinSweep.getAsBoolean()) {
             log.accept("supervisor did not stop within 5s — closing the stream anyway");
@@ -115,6 +123,11 @@ public final class CaptureAssembly {
             log.accept("pump did not stop within 5s — leaving sink open to avoid a close/write"
                     + " race; file may miss its tail");
         }
+        events.stop(); // the sweep has stopped: what is queued is the last word — FEED_DEAD among them
+        if (!joinWriter.getAsBoolean()) {
+            log.accept("event writer did not stop within 5s — draining its queue anyway");
+        }
+        events.drainOnce();
         log.accept("queued writes at shutdown: " + queues.pendingWrites());
         if (pump.failure() != null) {
             log.accept("pump failure at shutdown: " + pump.failure() + " — " + queues.pendingWrites()
@@ -130,7 +143,8 @@ public final class CaptureAssembly {
                 + " dropped=" + queues.droppedTicks() + " malformed=" + queues.malformedUpdates()
                 + " sinkFailures=" + pump.sinkFailures()
                 + " obsFailures=" + pump.observabilityFailures()
-                + " eventWriteFailures=" + supervisor.eventWriteFailures()
+                + " eventsQueued=" + events.queued()
+                + " eventWriteFailures=" + (supervisor.eventWriteFailures() + events.writeFailures())
                 + " statusFailures=" + probe.statusFailures();
     }
 }

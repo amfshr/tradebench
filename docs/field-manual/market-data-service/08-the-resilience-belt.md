@@ -235,10 +235,12 @@ this outage was `giveUpAfter` ago and streaming never resumed, give up — check
 the drain (a queued resume resets it first) and before any detector, so it never depends on
 how often a detector re-fires. Third, the detectors — a latched death first (asked again every sweep until the pacing lets the
 rebuild run, so a refusal that recurs inside the floor still climbs the ladder), then the
-escalator if a rebuild is due, then `checkStaleness()`. Nothing blocks; the pass is microseconds of CPU. Event writes
-are **best-effort here as in the pump**: a failing write is counted (`eventWriteFailures`,
-surfaced by the heartbeat), never allowed to kill the sweep thread — observability is
-downstream of the decision. **Every event named here is a `ServiceEvent` written through the
+escalator if a rebuild is due, then `checkStaleness()`. Nothing in the pass waits on the database:
+event writes go onto a bounded queue that one writer thread drains (`QueuedEventLog`, D29 (3),
+E1-T10 #12) — a full queue refuses the event and the sweep counts the drop, a write Postgres refuses
+is counted by the writer and dropped (`eventWriteFailures`, surfaced by the heartbeat), never
+retried and never allowed to kill a thread; only a rebuild's re-login blocks, and that is the
+sweep's own remedy. Observability is downstream of the decision. **Every event named here is a `ServiceEvent` written through the
 `EventLog` seam into
 `service_events`** — slice B (merged, PR #11) gave the belt its durable voice, so the reason
 a 3am rebuild happened is a row, not a lost log line; the catalogue is D25's `EventType`, the

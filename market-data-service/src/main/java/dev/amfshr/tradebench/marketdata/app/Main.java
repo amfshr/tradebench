@@ -125,14 +125,11 @@ public final class Main {
                 cause -> exitLoud(instance, "FATAL: capture pump died — capture is void from here;"
                         + " cause: " + cause),
                 Buffers.DEFAULT_TICK_CAPACITY));
-        capture.boot();
         Thread pumpThread = new Thread(capture.pump, "capture-pump");
         Thread supervisorThread = new Thread(capture.supervisor, "capture-supervisor");
-        pumpThread.start();
-        supervisorThread.start();
-        new PacerDiscovery(rest::applicationAllowance, pacer::setPerMinute, eventLog,
-                message -> log(instance, message), clock).discover(sessions.current());
-
+        Thread eventsThread = new Thread(capture.events, "capture-events");
+        // Registered before boot: a SIGTERM during a slow start still closes the stream and the sink;
+        // a thread never started joins at once (E1-T10 #24).
         Runtime.getRuntime().addShutdownHook(new Thread(() -> {
             log(instance, "shutting down");
             boolean pumpStopped = capture.shutdown(
@@ -140,13 +137,21 @@ public final class Main {
                         supervisorThread.interrupt();
                         return join(supervisorThread);
                     },
-                    () -> join(pumpThread));
+                    () -> join(pumpThread),
+                    () -> join(eventsThread));
             if (pumpStopped) {
                 closeQuietly(instance, instanceLock);
                 closeQuietly(instance, db);
             }
             log(instance, capture.summary());
         }, "capture-shutdown"));
+
+        capture.boot();
+        pumpThread.start();
+        supervisorThread.start();
+        eventsThread.start();
+        new PacerDiscovery(rest::applicationAllowance, pacer::setPerMinute, eventLog,
+                message -> log(instance, message), clock).discover(sessions.current());
 
         while (true) {
             Sleeper.SYSTEM.sleep(CaptureAssembly.HEARTBEAT);
