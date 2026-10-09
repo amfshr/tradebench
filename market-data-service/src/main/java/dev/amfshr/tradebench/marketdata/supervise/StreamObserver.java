@@ -1,18 +1,17 @@
 package dev.amfshr.tradebench.marketdata.supervise;
 
-import dev.amfshr.tradebench.ig.stream.StreamTransport;
+/** What a connection reports to the Supervisor, each report naming the connection generation
+ * that made it — so a superseded connection's last words, enqueued before its gate closed, are
+ * never applied to the session that replaced it (E1-T10 #11). */
+public interface StreamObserver {
 
-/**
- * What the stream reports back to the resilience belt: connection status and server errors
- * (the transport's own listener) plus each market leg's subscription outcome. The
- * {@link Supervisor} implements it; {@link IgStreamControl} is bound to it so every (re)connect
- * and (re)subscribe reports to the same observer — the one back-edge of the control loop.
- */
-public interface StreamObserver extends StreamTransport.ConnectionListener {
+    void onStatusChange(int generation, String status);
+
+    void onServerError(int generation, int code, String message);
 
     /** A market's PRICE or CHART leg confirmed subscribed. */
-    void onSubscribed(String epic, WitnessQuarantine.Kind kind);
+    void onSubscribed(int generation, String epic, WitnessQuarantine.Kind kind);
 
     /** A market's PRICE or CHART leg was rejected. */
-    void onSubscriptionError(String epic, WitnessQuarantine.Kind kind, int code, String message);
+    void onSubscriptionError(int generation, String epic, WitnessQuarantine.Kind kind, int code, String message);
 }

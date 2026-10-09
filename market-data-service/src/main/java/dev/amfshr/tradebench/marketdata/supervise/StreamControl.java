@@ -10,12 +10,20 @@ package dev.amfshr.tradebench.marketdata.supervise;
  */
 public interface StreamControl {
 
+    /** How a rebuild ended: a connection is up (and will report its own statuses); no connection
+     * came up (the sweep asks again, paced); or the broker rejected the configuration (give up). */
+    enum Outcome { CONNECTED, FAILED, FATAL }
+
+    /** The live connection's generation — bumped as each connection is superseded, so an
+     * observation can be told from a dead connection's last words (E1-T10 #11). */
+    int generation();
+
     /** The session-shaped remedy: close the stream, re-establish the session, reconnect, and
      * resubscribe the (non-quarantined) markets. Returns {@code false} only when recovery is
      * pointless — the broker rejected the configuration itself (credentials, account) — so the
-     * ladder stops at once rather than hammering a lockout; a merely failed attempt is
-     * {@code true} and the ladder continues. */
-    boolean rebuild();
+     * ladder stops at once rather than hammering a lockout; a merely failed attempt leaves the
+     * stream down and the ladder continues. */
+    Outcome rebuild();
 
     /** The market-shaped remedy: re-subscribe one market's pair in place, leaving the others
      * (and the connection) untouched — surgical recovery via the increment-1 handles (§3.5). */

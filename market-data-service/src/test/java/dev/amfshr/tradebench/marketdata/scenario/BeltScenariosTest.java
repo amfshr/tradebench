@@ -9,6 +9,7 @@ import static dev.amfshr.tradebench.marketdata.scenario.Events.dbDown;
 import static dev.amfshr.tradebench.marketdata.scenario.Events.dbWritesRefused;
 import static dev.amfshr.tradebench.marketdata.scenario.Events.dbUp;
 import static dev.amfshr.tradebench.marketdata.scenario.Events.hostSleep;
+import static dev.amfshr.tradebench.marketdata.scenario.Events.igDown;
 import static dev.amfshr.tradebench.marketdata.scenario.Events.reject;
 import static dev.amfshr.tradebench.marketdata.scenario.Events.serverError;
 import static dev.amfshr.tradebench.marketdata.scenario.Events.status;
@@ -150,6 +151,29 @@ class BeltScenariosTest {
         assertEquals(45L, o.events(EventType.RECONNECT).get(0).at().toSeconds());
         assertEquals(o.ticksDelivered, o.landed.size(), "capture resumed on the rebuilt pair");
         assertTrue(o.exits.isEmpty());
+    }
+
+    @Test
+    void aFeedThatCannotBeRebuiltDiesByTheBudgetNotTheCeiling() throws Exception {
+        // Chapter 10: the budget is a clock, not a count. IG becomes unreachable and the client hangs
+        // in WILL-RETRY; the escalator asks for a rebuild at 180, no attempt connects, and the belt
+        // keeps asking — paced 5,5,5,8,16,32 then 60s: fifteen attempts by 731 — until ten minutes
+        // from the first, FEED_DEAD{budget} at 780. Never the ten-rebuild ceiling: that counts
+        // rebuilds that connected.
+        Scenario unreachable = Scenario.named("IG unreachable for good").markets(DAX)
+                .at(s(0), streaming()).at(s(0), subscribed(DAX))
+                .every(s(1), s(1), s(60), t -> tick(DAX))
+                .at(s(60), igDown(), status(WILL_RETRY))
+                .until(s(900)).build();
+
+        Observed o = ScenarioRunner.run(unreachable);
+
+        assertEquals(List.of("FEED_DEAD → exit(1)"), o.exits.stream().map(Observed.Exit::how).toList());
+        assertEquals(780L, o.exits.get(0).at().toSeconds());
+        assertEquals("budget", o.events(EventType.FEED_DEAD).get(0).detail().get("reason").asText());
+        assertEquals(15, o.events(EventType.STUCK_SUBSTATE_ESCALATED).size(), "one reason row per attempt");
+        assertEquals(List.of(0L), o.secondsOf("connect"), "nothing ever came up");
+        assertTrue(o.events(EventType.WATCHDOG_STALE).isEmpty(), "stood down on a dead wire");
     }
 
     @Test

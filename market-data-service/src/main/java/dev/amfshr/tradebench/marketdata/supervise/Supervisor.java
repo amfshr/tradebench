@@ -83,6 +83,15 @@ public final class Supervisor implements StreamObserver, BeltView, Runnable {
     private @Nullable Instant deadAt;
     private @Nullable ObjectNode deadDetail;
     private volatile boolean running = true;
+    // The connection generation the sweep listens to: a superseded connection's word, enqueued
+    // before its gate closed, is applied to nothing (E1-T10 #11).
+    private int expectedGeneration;
+    // A rebuild whose connect failed leaves no connection to report anything: the sweep asks
+    // again, paced, until one connects — and only connected rebuilds count toward the ceiling, so
+    // an unreachable broker ends by the budget, the clock, not the count (E1-T10 #18).
+    private boolean streamDown;
+    private @Nullable EventType downReason;
+    private int rebuildsConnected;
 
     public Supervisor(Clock clock, Tuning tuning, DoubleSupplier jitter, EventLog events,
             StreamControl stream, MarketFreshness freshness, Runnable onExhausted, Sleeper sleeper,
@@ -100,37 +109,34 @@ public final class Supervisor implements StreamObserver, BeltView, Runnable {
         this.watchdog = new StalenessWatchdog(tuning, sweepInterval);
         this.witness = new WitnessQuarantine(tuning);
         this.backoff = new BackoffPolicy(tuning, jitter);
+        this.expectedGeneration = stream.generation();
     }
 
     // --- Lightstreamer callback thread: cheap capture + enqueue only -------------------------
 
     @Override
-    public void onStatusChange(String status) {
-        observations.add(new Observation.Status(status, clock.monotonicNanos(),
+    public void onStatusChange(int generation, String status) {
+        observations.add(new Observation.Status(generation, status, clock.monotonicNanos(),
                 clock.wallInstant().toEpochMilli()));
     }
 
     @Override
-    public void onServerError(int code, String message) {
-        observations.add(new Observation.ServerError(code, message, clock.wallInstant()));
+    public void onServerError(int generation, int code, String message) {
+        observations.add(new Observation.ServerError(generation, code, message, clock.wallInstant()));
     }
 
     /** A market's PRICE or CHART leg confirmed subscribed (LS callback thread; §3.5 witness). */
     @Override
-    public void onSubscribed(String epic, WitnessQuarantine.Kind kind) {
-        observations.add(new Observation.Subscribed(epic, kind));
+    public void onSubscribed(int generation, String epic, WitnessQuarantine.Kind kind) {
+        observations.add(new Observation.Subscribed(generation, epic, kind));
     }
 
     /** A market's subscription was rejected (LS callback thread; §3.5 strike). */
     @Override
-    public void onSubscriptionError(String epic, WitnessQuarantine.Kind kind, int code, String message) {
-        observations.add(new Observation.SubscriptionError(epic, kind, code, message,
+    public void onSubscriptionError(int generation, String epic, WitnessQuarantine.Kind kind, int code,
+            String message) {
+        observations.add(new Observation.SubscriptionError(generation, epic, kind, code, message,
                 clock.monotonicNanos(), clock.wallInstant()));
-    }
-
-    /** Hush the farewell DISCONNECTED before an intentional close (§3.6). */
-    public void closing() {
-        reconnects.closing();
     }
 
     /** Begin watching a market's freshness — called once per market at startup, before the sweep
@@ -156,14 +162,15 @@ public final class Supervisor implements StreamObserver, BeltView, Runnable {
 
     @Override
     public void run() {
-        while (running) {
-            sweep();
-            try {
+        try {
+            while (running) {
+                sweep();
                 sleeper.sleep(sweepInterval);
-            } catch (InterruptedException e) {
-                Thread.currentThread().interrupt();
-                return;
             }
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        } catch (RuntimeException e) {
+            die(e); // never a silent death: FEED_DEAD says why and the runner acts at once (#19)
         }
     }
 
@@ -179,23 +186,32 @@ public final class Supervisor implements StreamObserver, BeltView, Runnable {
             return; // recovery has ended — the runner is taking over
         }
         Observation observation;
-        while ((observation = observations.poll()) != null) {
+        while (!gaveUp && (observation = observations.poll()) != null) {
+            if (observation.generation() != expectedGeneration) {
+                continue; // a superseded connection's word, enqueued before its gate closed (#11)
+            }
             if (observation instanceof Observation.Status status) {
                 applyStatus(status);
-            } else if (observation instanceof Observation.ServerError(int code, String message, Instant at)) {
-                record(ServiceEvent.of(EventType.IG_API_ERROR, at)
-                        .withDetail(MAPPER.createObjectNode()
-                                .put("code", code)
-                                .put("message", message)));
-                latchDeath(at, MAPPER.createObjectNode().put("code", code).put("message", message));
-            } else if (observation instanceof Observation.Subscribed(String epic, WitnessQuarantine.Kind kind)) {
-                witness.onSubscribed(epic, kind);
+            } else if (observation instanceof Observation.ServerError error) {
+                ObjectNode detail = MAPPER.createObjectNode()
+                        .put("code", error.code())
+                        .put("message", error.message());
+                record(ServiceEvent.of(EventType.IG_API_ERROR, error.at()).withDetail(detail));
+                latchDeath(error.at(), detail.deepCopy());
+            } else if (observation instanceof Observation.Subscribed subscribed) {
+                witness.onSubscribed(subscribed.epic(), subscribed.kind());
             } else if (observation instanceof Observation.SubscriptionError error) {
                 applyJudgment(witness.onSubscriptionError(error.epic(), error.monotonicNanos()), error);
             }
         }
+        if (gaveUp) {
+            return; // ended inside the drain: nothing after it may act (#13)
+        }
         for (WitnessQuarantine.Judgment verdict : witness.rejudge(clock.monotonicNanos())) {
             applyJudgment(verdict, heldVerdicts.remove(epicOf(verdict))); // a witness confirmed, or its window lapsed
+        }
+        if (gaveUp) {
+            return;
         }
         if (consecutiveFailures > 0
                 && clock.monotonicNanos() - firstFailureMono >= giveUpAfterNanos) {
@@ -206,8 +222,14 @@ public final class Supervisor implements StreamObserver, BeltView, Runnable {
             deadAt = null; // cleared only by a rebuild that ran — a paced-out one is asked again next sweep
             deadDetail = null;
         }
+        if (streamDown && downReason != null) {
+            rebuild(downReason, clock.wallInstant()); // the last attempt left no connection: ask again, paced
+        }
         if (stuck.rebuildDue(clock.monotonicNanos())) {
             rebuild(EventType.STUCK_SUBSTATE_ESCALATED, clock.wallInstant());
+        }
+        if (gaveUp) {
+            return;
         }
         checkStaleness();
     }
@@ -323,13 +345,15 @@ public final class Supervisor implements StreamObserver, BeltView, Runnable {
             record(ServiceEvent.of(EventType.TRANSPORT_DOWNGRADED,
                     Instant.ofEpochMilli(status.wallMillis())));
         }
-        // A GRACEFUL_CLOSE note is intentionally silent — that is the hush (§3.6).
         ReconnectClassifier.Reconnect reconnect =
                 reconnects.onStatus(status.status(), status.monotonicNanos(), status.wallMillis());
         if (reconnect != null) {
             reconnectsTotal.incrementAndGet();
             consecutiveFailures = 0; // streaming resumed — the ladder resets; the next outage's
             lastRebuildMono = Long.MIN_VALUE; // first rebuild restarts the budget clock
+            rebuildsConnected = 0;
+            streamDown = false;
+            downReason = null;
             record(new ServiceEvent(EventType.RECONNECT,
                     reconnect.replayed() ? Severity.INFO : Severity.WARN, null,
                     Instant.ofEpochMilli(status.wallMillis()), null,
@@ -373,8 +397,8 @@ public final class Supervisor implements StreamObserver, BeltView, Runnable {
                 && now - lastRebuildMono < backoff.delayFor(consecutiveFailures).toNanos()) {
             return false; // not yet — space rebuilds so a re-login storm never trips IG's throttles (§3.2)
         }
-        if (backoff.exhausted(consecutiveFailures)) {
-            giveUp("ceiling", occurredAt);
+        if (backoff.exhausted(rebuildsConnected)) {
+            giveUp("ceiling", occurredAt); // ten connected and none streamed — the cap behind the budget
             return true;
         }
         if (consecutiveFailures == 0) {
@@ -393,15 +417,30 @@ public final class Supervisor implements StreamObserver, BeltView, Runnable {
         reconnects.rebuilding(now, clock.wallInstant().toEpochMilli()); // the outage opens now, on both clocks (#21)
         rebuilding = true; // the view reads RECONNECTING until the new connection streams
         watchdog.onConnection(false, now); // and the watchdog waits for it
-        if (!stream.rebuild()) {
-            giveUp("fatal_config", occurredAt); // never climb a ladder against a lockout
-            return true;
+        StreamControl.Outcome outcome = stream.rebuild();
+        stuck.reset(); // the old connection's substate died with it; a new one reports its own (#18)
+        expectedGeneration = stream.generation(); // whatever the old one still says is nobody's (#11)
+        witness.onSessionRebuilt(); // strikes and held verdicts reset; quarantine persists (exit is restart-only)
+        heldVerdicts.clear();
+        switch (outcome) {
+            case FATAL -> {
+                giveUp("fatal_config", occurredAt); // never climb a ladder against a lockout
+                return true;
+            }
+            case FAILED -> {
+                streamDown = true; // no connection to report anything: the sweep asks again, paced (#18)
+                downReason = reason;
+                return true;
+            }
+            case CONNECTED -> {
+                streamDown = false;
+                downReason = null;
+                rebuildsConnected++;
+            }
         }
         // Re-read the clock: a paced re-login blocks ~61s, and the §3.5 confirm window must start
         // when the new session's subscribes begin, not when the rebuild was decided.
         long resubscribed = clock.monotonicNanos();
-        witness.onSessionRebuilt(); // strikes and held verdicts reset; quarantine persists (exit is restart-only)
-        heldVerdicts.clear();
         for (String survivor : watched) {
             witness.onSubscribeStarted(survivor, resubscribed); // the survivors re-subscribe now
             reasking(survivor);
@@ -412,11 +451,28 @@ public final class Supervisor implements StreamObserver, BeltView, Runnable {
     /** End recovery loud, exactly once: {@code FEED_DEAD} says why, sweeping stops, and the
      * runner takes over (in {@code Main}, an orderly exit for the process supervisor to restart). */
     private void giveUp(String reason, Instant occurredAt) {
+        giveUp(reason, occurredAt, null);
+    }
+
+    private void giveUp(String reason, Instant occurredAt, @Nullable String cause) {
+        if (gaveUp) {
+            return; // once — a second signal of the same end changes nothing (#13)
+        }
         gaveUp = true;
         running = false;
-        record(ServiceEvent.of(EventType.FEED_DEAD, occurredAt)
-                .withDetail(MAPPER.createObjectNode().put("reason", reason)));
+        ObjectNode detail = MAPPER.createObjectNode().put("reason", reason);
+        if (cause != null) {
+            detail.put("cause", cause);
+        }
+        record(ServiceEvent.of(EventType.FEED_DEAD, occurredAt).withDetail(detail));
         onExhausted.run();
+    }
+
+    /** A sweep that threw: recovery ends loud — {@code FEED_DEAD{reason: fatal, cause}} and the
+     * runner acts at once — never a silent dead thread found a heartbeat later (#19). {@link #run()}
+     * does this on the sweep thread; the scenario harness calls it in run()'s place. */
+    public void die(RuntimeException cause) {
+        giveUp("fatal", clock.wallInstant(), String.valueOf(cause));
     }
 
     /** Event writes that failed and were swallowed — the belt never dies for a breadcrumb (the
@@ -451,17 +507,19 @@ public final class Supervisor implements StreamObserver, BeltView, Runnable {
     }
 
     private sealed interface Observation {
-        record Status(String status, long monotonicNanos, long wallMillis) implements Observation {
+        int generation();
+
+        record Status(int generation, String status, long monotonicNanos, long wallMillis) implements Observation {
         }
 
-        record ServerError(int code, String message, Instant at) implements Observation {
+        record ServerError(int generation, int code, String message, Instant at) implements Observation {
         }
 
-        record Subscribed(String epic, WitnessQuarantine.Kind kind) implements Observation {
+        record Subscribed(int generation, String epic, WitnessQuarantine.Kind kind) implements Observation {
         }
 
-        record SubscriptionError(String epic, WitnessQuarantine.Kind kind, int code, String message,
-                long monotonicNanos, Instant at) implements Observation {
+        record SubscriptionError(int generation, String epic, WitnessQuarantine.Kind kind, int code,
+                String message, long monotonicNanos, Instant at) implements Observation {
         }
     }
 }

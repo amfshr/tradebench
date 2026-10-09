@@ -98,7 +98,6 @@ public final class CaptureAssembly {
      * Returns whether the pump stopped in time, so the caller knows what else it may close.
      */
     public boolean shutdown(BooleanSupplier joinSweep, BooleanSupplier joinPump) {
-        supervisor.closing();
         supervisor.stop();
         if (!joinSweep.getAsBoolean()) {
             log.accept("supervisor did not stop within 5s — closing the stream anyway");

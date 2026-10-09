@@ -39,6 +39,7 @@ class SupervisorTest {
     private FakeStream stream;
     private FakeFreshness freshness;
     private AtomicBoolean exhausted;
+    private int giveUps;
     private Supervisor supervisor;
 
     @BeforeEach
@@ -48,14 +49,15 @@ class SupervisorTest {
         stream = new FakeStream();
         freshness = new FakeFreshness();
         exhausted = new AtomicBoolean();
+        giveUps = 0;
         supervisor = supervisorWith(Tuning.playbook());
     }
 
     @Test
     void replayedReconnectIsInfoAndResolvesNoGap() {
-        supervisor.onStatusChange(TRYING_RECOVERY);
+        supervisor.onStatusChange(stream.generation, TRYING_RECOVERY);
         clock.advance(Duration.ofSeconds(30));
-        supervisor.onStatusChange(STREAMING);
+        supervisor.onStatusChange(stream.generation, STREAMING);
         supervisor.sweep();
 
         ServiceEvent reconnect = single(EventType.RECONNECT);
@@ -66,9 +68,9 @@ class SupervisorTest {
 
     @Test
     void reconnectAfterWillRetryIsWarnAndFlagsAGap() {
-        supervisor.onStatusChange(WILL_RETRY);
+        supervisor.onStatusChange(stream.generation, WILL_RETRY);
         clock.advance(Duration.ofSeconds(30));
-        supervisor.onStatusChange(STREAMING);
+        supervisor.onStatusChange(stream.generation, STREAMING);
         supervisor.sweep();
 
         ServiceEvent reconnect = single(EventType.RECONNECT);
@@ -78,7 +80,7 @@ class SupervisorTest {
 
     @Test
     void stuckSubstateForcesARebuildOnlyPastTheThreshold() {
-        supervisor.onStatusChange(WILL_RETRY);
+        supervisor.onStatusChange(stream.generation, WILL_RETRY);
         supervisor.sweep();
         assertEquals(0, stream.rebuilds); // not yet — inside the 120s will-retry window
 
@@ -94,12 +96,13 @@ class SupervisorTest {
         // The rung ceiling in isolation: a one-day budget keeps the time budget out of the way.
         supervisor = supervisorWith(Tuning.playbook().withGiveUpAfter(Duration.ofDays(1)));
         int ceiling = Tuning.playbook().maxConsecutiveFailures();
-        supervisor.onStatusChange(WILL_RETRY);
+        supervisor.onStatusChange(stream.generation, WILL_RETRY);
         supervisor.sweep(); // records the stuck substate
 
         for (int attempt = 0; attempt < ceiling; attempt++) {
             clock.advance(Duration.ofSeconds(120)); // clears both the threshold and any backoff spacing
             supervisor.sweep();
+            supervisor.onStatusChange(stream.generation, WILL_RETRY); // the rebuilt connection hangs too
         }
         assertEquals(ceiling, stream.rebuilds);
         assertFalse(exhausted.get());
@@ -115,7 +118,7 @@ class SupervisorTest {
     @Test
     void recoveryGivesUpOnTheTimeBudgetExactlyAtTheBoundary() {
         Duration budget = Tuning.playbook().giveUpAfter();
-        supervisor.onStatusChange(WILL_RETRY);
+        supervisor.onStatusChange(stream.generation, WILL_RETRY);
         supervisor.sweep();
         clock.advance(Duration.ofSeconds(120));
         supervisor.sweep(); // the first rebuild of this outage starts the budget clock
@@ -142,17 +145,17 @@ class SupervisorTest {
     @Test
     void aResumeRestartsTheRecoveryBudget() {
         Duration budget = Tuning.playbook().giveUpAfter();
-        supervisor.onStatusChange(WILL_RETRY);
+        supervisor.onStatusChange(stream.generation, WILL_RETRY);
         supervisor.sweep();
         clock.advance(Duration.ofSeconds(120));
         supervisor.sweep(); // outage 1: its first rebuild starts a budget clock
         assertEquals(1, stream.rebuilds);
 
         clock.advance(Duration.ofSeconds(300));
-        supervisor.onStatusChange(STREAMING); // recovery succeeded — the ladder and budget reset
+        supervisor.onStatusChange(stream.generation, STREAMING); // recovery succeeded — the ladder and budget reset
         supervisor.sweep();
 
-        supervisor.onStatusChange(WILL_RETRY); // outage 2: a fresh ladder
+        supervisor.onStatusChange(stream.generation, WILL_RETRY); // outage 2: a fresh ladder
         clock.advance(Duration.ofSeconds(120));
         supervisor.sweep();
         assertEquals(2, stream.rebuilds);
@@ -168,7 +171,7 @@ class SupervisorTest {
     @Test
     void aRejectedConfigurationEndsRecoveryAtOnce() {
         stream.fatal = true; // the broker rejects the credentials/account on rebuild
-        supervisor.onStatusChange(WILL_RETRY);
+        supervisor.onStatusChange(stream.generation, WILL_RETRY);
         supervisor.sweep();
         clock.advance(Duration.ofSeconds(120));
         supervisor.sweep();
@@ -185,7 +188,7 @@ class SupervisorTest {
     @Test
     void aFailingEventWriteNeverStopsTheBelt() {
         events.failWrites = true; // Postgres is down — the breadcrumb cannot be written
-        supervisor.onStatusChange(WILL_RETRY);
+        supervisor.onStatusChange(stream.generation, WILL_RETRY);
         supervisor.sweep();
         clock.advance(Duration.ofSeconds(120));
         supervisor.sweep(); // must not throw — the sweep thread must survive
@@ -198,7 +201,7 @@ class SupervisorTest {
     void aFailingEventWriteOnGiveUpStillHandsOverToTheRunner() {
         events.failWrites = true;
         stream.fatal = true;
-        supervisor.onStatusChange(WILL_RETRY);
+        supervisor.onStatusChange(stream.generation, WILL_RETRY);
         supervisor.sweep();
         clock.advance(Duration.ofSeconds(120));
         supervisor.sweep();
@@ -214,7 +217,7 @@ class SupervisorTest {
         advanceAndSweep(Duration.ofSeconds(460)); // status STREAMING throughout — silent while connected
         assertEquals(1, stream.rebuilds);
 
-        supervisor.onStatusChange(STREAMING); // the NEW connection comes up; the old farewell never arrives
+        supervisor.onStatusChange(stream.generation, STREAMING); // the NEW connection comes up; the old farewell never arrives
         supervisor.sweep();
 
         ServiceEvent reconnect = single(EventType.RECONNECT);
@@ -237,18 +240,18 @@ class SupervisorTest {
         supervisor.watch(NASDAQ);
         assertEquals(StreamState.RECONNECTING, supervisor.stateOf(DAX), "nothing has streamed yet");
 
-        supervisor.onStatusChange(STREAMING);
+        supervisor.onStatusChange(stream.generation, STREAMING);
         supervisor.sweep();
         assertEquals(StreamState.CONNECTED_STREAMING, supervisor.stateOf(DAX));
 
-        supervisor.onStatusChange(WILL_RETRY);
+        supervisor.onStatusChange(stream.generation, WILL_RETRY);
         supervisor.sweep();
         assertEquals(StreamState.RECONNECTING, supervisor.stateOf(DAX), "a drop is not streaming");
 
-        supervisor.onStatusChange(STREAMING);
+        supervisor.onStatusChange(stream.generation, STREAMING);
         supervisor.sweep();
-        supervisor.onSubscribed(NASDAQ, WitnessQuarantine.Kind.PRICE);
-        supervisor.onSubscribed(NASDAQ, WitnessQuarantine.Kind.CHART);
+        supervisor.onSubscribed(stream.generation, NASDAQ, WitnessQuarantine.Kind.PRICE);
+        supervisor.onSubscribed(stream.generation, NASDAQ, WitnessQuarantine.Kind.CHART);
         failToTheStrikeCeiling(DAX);
         supervisor.sweep();
         assertEquals(StreamState.QUARANTINED, supervisor.stateOf(DAX));
@@ -258,11 +261,11 @@ class SupervisorTest {
 
     @Test
     void aConnectionStuckInStreamSensingDoesNotReadAsStreaming() {
-        supervisor.onStatusChange("CONNECTED:STREAM-SENSING");
+        supervisor.onStatusChange(stream.generation, "CONNECTED:STREAM-SENSING");
         supervisor.sweep();
         assertEquals(StreamState.RECONNECTING, supervisor.stateOf(DAX), "the handshake is not data");
 
-        supervisor.onStatusChange("CONNECTED:HTTP-POLLING");
+        supervisor.onStatusChange(stream.generation, "CONNECTED:HTTP-POLLING");
         supervisor.sweep();
         assertEquals(StreamState.CONNECTED_STREAMING, supervisor.stateOf(DAX),
                 "a polling fallback still delivers data");
@@ -272,15 +275,15 @@ class SupervisorTest {
     void aQuarantinedMarketStaysQuarantinedThroughAnOutage() {
         supervisor.watch(DAX);
         supervisor.watch(NASDAQ);
-        supervisor.onStatusChange(STREAMING);
+        supervisor.onStatusChange(stream.generation, STREAMING);
         supervisor.sweep();
-        supervisor.onSubscribed(NASDAQ, WitnessQuarantine.Kind.PRICE);
-        supervisor.onSubscribed(NASDAQ, WitnessQuarantine.Kind.CHART);
+        supervisor.onSubscribed(stream.generation, NASDAQ, WitnessQuarantine.Kind.PRICE);
+        supervisor.onSubscribed(stream.generation, NASDAQ, WitnessQuarantine.Kind.CHART);
         failToTheStrikeCeiling(DAX);
         supervisor.sweep();
         assertEquals(StreamState.QUARANTINED, supervisor.stateOf(DAX));
 
-        supervisor.onStatusChange(WILL_RETRY);
+        supervisor.onStatusChange(stream.generation, WILL_RETRY);
         supervisor.sweep();
         assertEquals(StreamState.QUARANTINED, supervisor.stateOf(DAX), "quarantine outranks the connection state");
         assertEquals(StreamState.RECONNECTING, supervisor.stateOf(NASDAQ));
@@ -288,7 +291,7 @@ class SupervisorTest {
 
     @Test
     void aRebuildReadsAsReconnectingUntilTheNewConnectionStreams() {
-        supervisor.onStatusChange(STREAMING);
+        supervisor.onStatusChange(stream.generation, STREAMING);
         supervisor.sweep();
         supervisor.watch(DAX);
         freshness.flag.put(DAX, "DEAL");
@@ -298,7 +301,7 @@ class SupervisorTest {
         assertEquals(StreamState.RECONNECTING, supervisor.stateOf(DAX),
                 "mid-rebuild the old STREAMING is history, whatever the status says");
 
-        supervisor.onStatusChange(STREAMING); // the new connection comes up
+        supervisor.onStatusChange(stream.generation, STREAMING); // the new connection comes up
         supervisor.sweep();
         assertEquals(StreamState.CONNECTED_STREAMING, supervisor.stateOf(DAX));
     }
@@ -306,9 +309,9 @@ class SupervisorTest {
     @Test
     void reconnectsAreCounted() {
         assertEquals(0, supervisor.reconnectsTotal());
-        supervisor.onStatusChange(WILL_RETRY);
+        supervisor.onStatusChange(stream.generation, WILL_RETRY);
         clock.advance(Duration.ofSeconds(30));
-        supervisor.onStatusChange(STREAMING);
+        supervisor.onStatusChange(stream.generation, STREAMING);
         supervisor.sweep();
 
         assertEquals(1, supervisor.reconnectsTotal());
@@ -316,13 +319,13 @@ class SupervisorTest {
 
     @Test
     void aResumeOntoAPollingFallbackResetsTheLadder() {
-        supervisor.onStatusChange(WILL_RETRY);
+        supervisor.onStatusChange(stream.generation, WILL_RETRY);
         supervisor.sweep();
         clock.advance(Duration.ofSeconds(120));
         supervisor.sweep(); // the first rebuild of this outage starts the budget clock
         assertEquals(1, stream.rebuilds);
 
-        supervisor.onStatusChange("CONNECTED:HTTP-POLLING"); // WebSocket blocked at the host; data still flows
+        supervisor.onStatusChange(stream.generation, "CONNECTED:HTTP-POLLING"); // WebSocket blocked at the host; data still flows
         supervisor.sweep();
 
         assertEquals(1, count(EventType.RECONNECT), "a polling resume is a resume");
@@ -334,17 +337,6 @@ class SupervisorTest {
                 "the view and the classifier agree on what resumed means");
     }
 
-    @Test
-    void gracefulCloseHushesTheFarewellDisconnect() {
-        supervisor.closing();
-        supervisor.onStatusChange(WILL_RETRY);
-        clock.advance(Duration.ofSeconds(30));
-        supervisor.onStatusChange(STREAMING); // a resume that WOULD emit a reconnect, were it not hushed
-        supervisor.sweep();
-
-        assertTrue(ofType(EventType.RECONNECT).isEmpty()); // hushed: closing() meant no outage was opened
-        assertEquals(0, stream.rebuilds);
-    }
 
 
 
@@ -406,8 +398,8 @@ class SupervisorTest {
         stream.quarantineRefused = true;
         supervisor.watch(DAX);
         supervisor.watch(NASDAQ);
-        supervisor.onSubscribed(NASDAQ, WitnessQuarantine.Kind.PRICE);
-        supervisor.onSubscribed(NASDAQ, WitnessQuarantine.Kind.CHART);
+        supervisor.onSubscribed(stream.generation, NASDAQ, WitnessQuarantine.Kind.PRICE);
+        supervisor.onSubscribed(stream.generation, NASDAQ, WitnessQuarantine.Kind.CHART);
         failToTheStrikeCeiling(DAX);
         supervisor.sweep();
 
@@ -425,7 +417,7 @@ class SupervisorTest {
         stream.resubscribed.clear();
 
         clock.advance(Duration.ofSeconds(10)); // past the 5s floor — pacing is not what decides here
-        supervisor.onSubscriptionError(DAX, WitnessQuarantine.Kind.PRICE, 40, "rejected"); // the NEW session's first rejection
+        supervisor.onSubscriptionError(stream.generation, DAX, WitnessQuarantine.Kind.PRICE, 40, "rejected"); // the NEW session's first rejection
         supervisor.sweep();
 
         assertEquals(1, stream.rebuilds, "one strike in a fresh session is a retry, not a verdict");
@@ -441,8 +433,8 @@ class SupervisorTest {
         supervisor.sweep(); // no witness → rebuild #1
         assertEquals(1, stream.rebuilds);
 
-        supervisor.onSubscribed(NASDAQ, WitnessQuarantine.Kind.PRICE); // the new session confirms NASDAQ
-        supervisor.onSubscribed(NASDAQ, WitnessQuarantine.Kind.CHART);
+        supervisor.onSubscribed(stream.generation, NASDAQ, WitnessQuarantine.Kind.PRICE); // the new session confirms NASDAQ
+        supervisor.onSubscribed(stream.generation, NASDAQ, WitnessQuarantine.Kind.CHART);
         clock.advance(Duration.ofSeconds(10));
         failToTheStrikeCeiling(DAX);
         supervisor.sweep();
@@ -455,8 +447,8 @@ class SupervisorTest {
     void aQuarantinedMarketIsForgottenNotNursedByTheWatchdog() {
         supervisor.watch(DAX);
         supervisor.watch(NASDAQ);
-        supervisor.onSubscribed(NASDAQ, WitnessQuarantine.Kind.PRICE);
-        supervisor.onSubscribed(NASDAQ, WitnessQuarantine.Kind.CHART);
+        supervisor.onSubscribed(stream.generation, NASDAQ, WitnessQuarantine.Kind.PRICE);
+        supervisor.onSubscribed(stream.generation, NASDAQ, WitnessQuarantine.Kind.CHART);
         failToTheStrikeCeiling(DAX);
         supervisor.sweep();
         assertEquals(List.of(DAX), stream.quarantined);
@@ -494,10 +486,10 @@ class SupervisorTest {
     void aQuarantinedMarketsTwinLegRejectionDoesNotReadmitIt() {
         supervisor.watch(DAX);
         supervisor.watch(NASDAQ);
-        supervisor.onSubscribed(NASDAQ, WitnessQuarantine.Kind.PRICE);
-        supervisor.onSubscribed(NASDAQ, WitnessQuarantine.Kind.CHART);
+        supervisor.onSubscribed(stream.generation, NASDAQ, WitnessQuarantine.Kind.PRICE);
+        supervisor.onSubscribed(stream.generation, NASDAQ, WitnessQuarantine.Kind.CHART);
         failToTheStrikeCeiling(DAX);
-        supervisor.onSubscriptionError(DAX, WitnessQuarantine.Kind.PRICE, 40, "rejected"); // the pair's other leg — queued before the verdict
+        supervisor.onSubscriptionError(stream.generation, DAX, WitnessQuarantine.Kind.PRICE, 40, "rejected"); // the pair's other leg — queued before the verdict
         supervisor.sweep();
 
         assertEquals(List.of(DAX), stream.quarantined, "quarantined exactly once");
@@ -518,7 +510,7 @@ class SupervisorTest {
 
     @Test
     void aServerErrorAloneIsADeathToo() {
-        supervisor.onServerError(2, "Requested Adapter Set not available"); // §3.1: the first is a death
+        supervisor.onServerError(stream.generation, 2, "Requested Adapter Set not available"); // §3.1: the first is a death
 
         supervisor.sweep();
 
@@ -537,7 +529,7 @@ class SupervisorTest {
         freshness.tick.put(DAX, clock.monotonicNanos());
         freshness.flag.put(DAX, "CLOSED");
         supervisor.sweep(); // stood down on the flag
-        supervisor.onSubscriptionError(DAX, WitnessQuarantine.Kind.PRICE, 40, "rejected"); // strike 1 → a surgical retry re-asks the pair
+        supervisor.onSubscriptionError(stream.generation, DAX, WitnessQuarantine.Kind.PRICE, 40, "rejected"); // strike 1 → a surgical retry re-asks the pair
         supervisor.sweep();
         assertEquals(List.of(DAX), stream.resubscribed);
 
@@ -551,12 +543,12 @@ class SupervisorTest {
     void aWatchdogResubscribeOpensAFreshConfirmWindow() {
         // E1-T10 #14: a market whose pair the watchdog just replaced is unconfirmed, inside a fresh
         // window — it cannot serve as the witness that quarantines its neighbour on stale evidence.
-        supervisor.onStatusChange(STREAMING);
+        supervisor.onStatusChange(stream.generation, STREAMING);
         supervisor.watch(DAX);
         supervisor.watch(NASDAQ);
         for (String epic : List.of(DAX, NASDAQ)) {
-            supervisor.onSubscribed(epic, WitnessQuarantine.Kind.PRICE);
-            supervisor.onSubscribed(epic, WitnessQuarantine.Kind.CHART);
+            supervisor.onSubscribed(stream.generation, epic, WitnessQuarantine.Kind.PRICE);
+            supervisor.onSubscribed(stream.generation, epic, WitnessQuarantine.Kind.CHART);
             freshness.flag.put(epic, "DEAL");
         }
         supervisor.sweep();
@@ -585,22 +577,22 @@ class SupervisorTest {
         // E1-T10 #21: a rejection while streaming opens no outage until its sweep rebuilds; the
         // rejection's own wall stamp predates that sweep by the queue's latency, and opening the
         // outage with it against the sweep's monotonic stamp read as a host suspend.
-        supervisor.onStatusChange(STREAMING);
+        supervisor.onStatusChange(stream.generation, STREAMING);
         supervisor.watch(DAX); // the only market: no witness, so the third strike is session-shaped
         supervisor.sweep();
         for (int strike = 0; strike < 2; strike++) {
             clock.advance(Duration.ofMillis(1));
-            supervisor.onSubscriptionError(DAX, WitnessQuarantine.Kind.PRICE, 40, "rejected");
+            supervisor.onSubscriptionError(stream.generation, DAX, WitnessQuarantine.Kind.PRICE, 40, "rejected");
             supervisor.sweep();
         }
         clock.advance(Duration.ofMillis(1));
-        supervisor.onSubscriptionError(DAX, WitnessQuarantine.Kind.PRICE, 40, "rejected");
+        supervisor.onSubscriptionError(stream.generation, DAX, WitnessQuarantine.Kind.PRICE, 40, "rejected");
         clock.advance(Duration.ofSeconds(20)); // the queue drains late — the database was slow
         supervisor.sweep();
         assertEquals(1, stream.rebuilds);
 
         clock.advance(Duration.ofSeconds(5));
-        supervisor.onStatusChange(STREAMING);
+        supervisor.onStatusChange(stream.generation, STREAMING);
         supervisor.sweep();
 
         ServiceEvent resume = single(EventType.RECONNECT);
@@ -608,12 +600,110 @@ class SupervisorTest {
         assertFalse(resume.detail().get("hostSlept").asBoolean(), "queue latency is not a suspend");
     }
 
+    @Test
+    void aFeedThatCannotBeRebuiltDiesByTheBudgetNotTheCeiling() {
+        // E1-T10 #18: every rebuild fails to connect. The sweep keeps asking, paced 5,5,5,8,16,32,
+        // 60…, and only rebuilds that connected count toward the ceiling — so the outage ends when
+        // the ten-minute clock says so, with far more than ten attempts behind it.
+        stream.failed = true;
+        supervisor.onStatusChange(stream.generation, WILL_RETRY);
+        supervisor.sweep();
+        clock.advance(Duration.ofSeconds(120));
+        supervisor.sweep(); // the escalator's rebuild — no connection comes up
+        assertEquals(1, stream.rebuilds);
+
+        Duration budget = Tuning.playbook().giveUpAfter();
+        for (long elapsed = 5; elapsed < budget.toSeconds(); elapsed += 5) {
+            clock.advance(Duration.ofSeconds(5));
+            supervisor.sweep();
+        }
+        assertFalse(exhausted.get(), "five seconds inside the budget: still asking");
+        assertTrue(stream.rebuilds > Tuning.playbook().maxConsecutiveFailures(),
+                "the ceiling counts connected rebuilds, not failed attempts");
+
+        clock.advance(Duration.ofSeconds(5));
+        supervisor.sweep();
+        assertTrue(exhausted.get());
+        assertEquals("budget", single(EventType.FEED_DEAD).detail().get("reason").asText(), "the clock, not the count");
+    }
+
+    @Test
+    void aSupersededConnectionsLastWordsAreAppliedToNothing() {
+        // E1-T10 #11: the old connection's recovery completed and enqueued STREAMING just before the
+        // rebuild bumped the generation. Applying it would close an outage that is still open.
+        supervisor.onStatusChange(stream.generation, WILL_RETRY);
+        supervisor.sweep();
+        clock.advance(Duration.ofSeconds(120));
+        supervisor.sweep(); // rebuild: generation 1 is the one that matters now
+        assertEquals(1, stream.rebuilds);
+        supervisor.onStatusChange(0, STREAMING); // the dead connection's greeting, stamped before the bump
+        supervisor.sweep();
+
+        assertTrue(ofType(EventType.RECONNECT).isEmpty(), "no phantom resume");
+        assertEquals(StreamState.RECONNECTING, supervisor.stateOf(DAX));
+        supervisor.onStatusChange(1, STREAMING); // the live connection's own
+        supervisor.sweep();
+        assertEquals(1, count(EventType.RECONNECT));
+        assertEquals(StreamState.CONNECTED_STREAMING, supervisor.stateOf(DAX));
+    }
+
+    @Test
+    void aGiveUpInsideTheDrainEndsTheSweep() {
+        // E1-T10 #13: recovery ends on the first observation of the drain — the ceiling, reached
+        // without a rebuild running — and the second must not be acted on: no retry against a
+        // stream the runner is already tearing down, and one FEED_DEAD.
+        supervisor = supervisorWith(Tuning.playbook().withGiveUpAfter(Duration.ofDays(1)));
+        int ceiling = Tuning.playbook().maxConsecutiveFailures();
+        supervisor.watch(DAX);
+        supervisor.onStatusChange(stream.generation, WILL_RETRY);
+        supervisor.sweep();
+        for (int attempt = 0; attempt < ceiling; attempt++) { // ten rebuilds connect and hang: one ask from the ceiling
+            clock.advance(Duration.ofSeconds(120));
+            supervisor.sweep();
+            supervisor.onStatusChange(stream.generation, WILL_RETRY);
+        }
+        assertEquals(ceiling, stream.rebuilds);
+        clock.advance(Duration.ofSeconds(61)); // past the pacing, inside the escalator's 120s
+        for (int strike = 0; strike < 2; strike++) {
+            clock.advance(Duration.ofMillis(1));
+            supervisor.onSubscriptionError(stream.generation, DAX, WitnessQuarantine.Kind.PRICE, 40, "rejected");
+            supervisor.sweep();
+        }
+        clock.advance(Duration.ofMillis(1));
+        supervisor.onSubscriptionError(stream.generation, DAX, WitnessQuarantine.Kind.PRICE, 40, "rejected"); // strike 3: no witness → rebuild → the ceiling
+        supervisor.onSubscriptionError(stream.generation, NASDAQ, WitnessQuarantine.Kind.PRICE, 40, "rejected"); // queued behind it
+        supervisor.sweep();
+
+        assertTrue(exhausted.get());
+        assertEquals("ceiling", single(EventType.FEED_DEAD).detail().get("reason").asText());
+        assertEquals(List.of(DAX, DAX), stream.resubscribed, "NASDAQ's retry never happened — the sweep ended");
+        assertEquals(1, giveUps);
+    }
+
+    @Test
+    void anExceptionEscapingASweepDiesLoud() {
+        // E1-T10 #19: the sweep thread must never die silently for a heartbeat to find a minute later.
+        stream.resubscribeThrows = true;
+        supervisor.watch(DAX);
+        supervisor.onSubscriptionError(stream.generation, DAX, WitnessQuarantine.Kind.PRICE, 40, "rejected");
+
+        supervisor.run(); // the unit's own loop: the retry's resubscribe throws inside sweep()
+
+        assertTrue(exhausted.get(), "the runner is told at once");
+        ServiceEvent dead = single(EventType.FEED_DEAD);
+        assertEquals("fatal", dead.detail().get("reason").asText());
+        assertTrue(dead.detail().get("cause").asText().contains("subscribe exploded"), "and told why");
+    }
+
     // --- helpers + fakes --------------------------------------------------------------------
 
     /** jitter = 1.0 → deterministic backoff; Sleeper/interval unused (tests drive sweep() directly). */
     private Supervisor supervisorWith(Tuning tuning) {
         return new Supervisor(clock, tuning, () -> 1.0, events, stream, freshness,
-                () -> exhausted.set(true), Sleeper.SYSTEM, Duration.ofSeconds(1));
+                () -> {
+                    exhausted.set(true);
+                    giveUps++;
+                }, Sleeper.SYSTEM, Duration.ofSeconds(1));
     }
 
     /** Reject a market's pair attempt after attempt up to the strike ceiling — each rejection
@@ -622,7 +712,7 @@ class SupervisorTest {
     private void failToTheStrikeCeiling(String epic) {
         for (int strike = 0; strike < Tuning.playbook().subscriptionStrikes(); strike++) {
             clock.advance(Duration.ofMillis(1));
-            supervisor.onSubscriptionError(epic, WitnessQuarantine.Kind.PRICE, 40, "rejected");
+            supervisor.onSubscriptionError(stream.generation, epic, WitnessQuarantine.Kind.PRICE, 40, "rejected");
             supervisor.sweep();
         }
     }
@@ -660,6 +750,9 @@ class SupervisorTest {
 
     private static final class FakeStream implements StreamControl {
         int rebuilds;
+        int generation; // bumped by every rebuild, as the real control supersedes a connection
+        boolean failed; // when true, rebuild() reports that no connection came up
+        boolean resubscribeThrows; // when true, resubscribe() throws — a sweep that dies
         final List<String> resubscribed = new ArrayList<>();
         final List<String> quarantined = new ArrayList<>();
         boolean quarantineRefused; // when true, quarantine() reports a refused unsubscribe
@@ -667,14 +760,23 @@ class SupervisorTest {
         Runnable duringRebuild = () -> { }; // what the blocking rebuild does to the clock
 
         @Override
-        public boolean rebuild() {
+        public Outcome rebuild() {
             rebuilds++;
             duringRebuild.run();
-            return !fatal;
+            generation++;
+            return fatal ? Outcome.FATAL : failed ? Outcome.FAILED : Outcome.CONNECTED;
+        }
+
+        @Override
+        public int generation() {
+            return generation;
         }
 
         @Override
         public void resubscribe(String epic) {
+            if (resubscribeThrows) {
+                throw new IllegalStateException("subscribe exploded");
+            }
             resubscribed.add(epic);
         }
 

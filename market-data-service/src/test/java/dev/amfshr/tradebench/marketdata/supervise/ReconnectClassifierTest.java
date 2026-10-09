@@ -57,13 +57,6 @@ class ReconnectClassifierTest {
         assertNull(classifier.noteFor("CONNECTED:WS-STREAMING"));
     }
 
-    @Test
-    void gracefulCloseIsHushed() {
-        classifier.closing();
-        assertEquals(Note.GRACEFUL_CLOSE, classifier.noteFor("DISCONNECTED"));
-        assertNull(classifier.onStatus("DISCONNECTED", 5 * S, 5_000),
-                "a scheduled stop must not write scare-lines into the warnings stream");
-    }
 
     @Test
     void aRebuildOpensTheOutageSoTheResumeCountsAndIsAReplacement() {

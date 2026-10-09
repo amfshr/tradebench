@@ -135,11 +135,13 @@ we lose data?* Lightstreamer's contract makes it answerable: if the outage conta
 `WILL-RETRY` sighting, the server discarded its replay buffer → **replaced**, data is
 gone, a heal is owed; no sighting → **replayed**, no gap. The returned `Reconnect` value
 carries `wallOutage`, `awakeOutage`, and `hostSleptDuring` (the 16-minute host suspend that
-once logged as "0.4s offline"). Two more notes from `noteFor`: `CONNECTED:HTTP-POLLING`
-is flagged — a silent WebSocket→polling downgrade degrades latency and often precedes a
-drop — and an intentional `close()` sets `closing` so the farewell `DISCONNECTED` is
-hushed. That last one guards a principle, not a log line: **quiet must stay meaningful**
-(P9's inverse — if routine shutdowns print scare-lines, real ones stop being read). And one
+once logged as "0.4s offline"). One more note from `noteFor`: `CONNECTED:HTTP-POLLING` is
+flagged — a silent WebSocket→polling downgrade degrades latency and often precedes a drop. A
+torn-down connection's farewell `DISCONNECTED` never reaches the classifier at all:
+`IgStreamControl` bumps its generation before closing, and the gate drops everything the dying
+connection says from then on — the §3.6 hush, with no flag to set and no race to lose (D29 (4),
+E1-T10 #29). The principle it guards stands: **quiet must stay meaningful** (P9's inverse — if
+routine shutdowns print scare-lines, real ones stop being read). And one
 static rule beside `isStreaming`: `isTerminal` — a bare `DISCONNECTED`, the client having given up
 for good (playbook §3.1), never the two retry substates the escalator paces. The Supervisor rebuilds
 on it at once, backoff-paced, because nothing else can: no substate will escalate it, and the
