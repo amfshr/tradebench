@@ -985,8 +985,8 @@ language — the belt's scenarios, test names, comments and docs frame a **suspe
 is on main (PR #16, merged 2026-10-08); **T10 A2 is on main (PR #17, merged 2026-10-09)** — its seven scenarios switched on
 (#3 · #4 ×2 · #5 ×2 · #8 · #33), the host-suspend-then-stuck variant and the ruling-3 rename built; **T10 B is on main (PR #19, merged 2026-10-10)** — its three
 scenarios switched on here (#6 · #20 ×2), none `@Disabled` remain. Next: T10's C, the last slice, one PR → **E1-T12** replay acceptance (unblocked by this merge) → the belt's single cloud re-review, once every
-T10 finding is resolved (T10 § close-out ruling; Alex's 2026-10-09 clarification named only T10 — whether T12 still precedes
-T12 before the re-review was confirmed by Alex on 2026-10-10 ("part C, then T12, then review").
+T10 finding is resolved (T10 § close-out ruling; Alex's 2026-10-09 clarification named only T10; T12 before the re-review
+confirmed by Alex 2026-10-10 — "part C, then T12, then review") → E1-T6 (a re-review pass gates it).
 
 **DoD (met at the merge, 2026-10-08; residual 3 closed in its rebaseline half here and in its rebuild half at T10 A2, PR #17,
 2026-10-09 — ruled 2026-10-08, see "Closed" above; residual 3 final; wording kept as written):** the nine policy scenarios run deterministically with no real waiting, the scar replay as scenario ten
