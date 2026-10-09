@@ -72,6 +72,8 @@ public final class Supervisor implements StreamObserver, BeltView, Runnable {
     // When each market's pair was last re-asked for: a remembered flag older than that is the old
     // subscription's and is not fed back (D29 (1)).
     private final Map<String, Long> flagClearedMono = new HashMap<>();
+    // Rejections whose verdict waits for a witness (§3.5), kept for the verdict's record.
+    private final Map<String, Observation.SubscriptionError> heldVerdicts = new HashMap<>();
     private int consecutiveFailures;
     private long lastRebuildMono = Long.MIN_VALUE;
     private long firstFailureMono = Long.MIN_VALUE;
@@ -121,8 +123,8 @@ public final class Supervisor implements StreamObserver, BeltView, Runnable {
 
     /** A market's subscription was rejected (LS callback thread; §3.5 strike). */
     @Override
-    public void onSubscriptionError(String epic, int code, String message) {
-        observations.add(new Observation.SubscriptionError(epic, code, message,
+    public void onSubscriptionError(String epic, WitnessQuarantine.Kind kind, int code, String message) {
+        observations.add(new Observation.SubscriptionError(epic, kind, code, message,
                 clock.monotonicNanos(), clock.wallInstant()));
     }
 
@@ -192,6 +194,9 @@ public final class Supervisor implements StreamObserver, BeltView, Runnable {
                 applyJudgment(witness.onSubscriptionError(error.epic(), error.monotonicNanos()), error);
             }
         }
+        for (WitnessQuarantine.Judgment verdict : witness.rejudge(clock.monotonicNanos())) {
+            applyJudgment(verdict, heldVerdicts.remove(epicOf(verdict))); // a witness confirmed, or its window lapsed
+        }
         if (consecutiveFailures > 0
                 && clock.monotonicNanos() - firstFailureMono >= giveUpAfterNanos) {
             giveUp("budget", clock.wallInstant());
@@ -250,6 +255,7 @@ public final class Supervisor implements StreamObserver, BeltView, Runnable {
                             .put("action", "resubscribe")
                             .put("signal", remedy.signal().name())));
             reasking(remedy.epic());
+            witness.onSubscribeStarted(remedy.epic(), clock.monotonicNanos()); // a fresh pair, a fresh confirm window
             stream.resubscribe(remedy.epic());
         } else {
             rebuild(EventType.WATCHDOG_STALE, occurredAt); // backoff-paced session rebuild
@@ -263,9 +269,10 @@ public final class Supervisor implements StreamObserver, BeltView, Runnable {
     }
 
     /** Execute a subscription-failure {@link WitnessQuarantine.Judgment} — the §3.5 blast-radius
-     * decision. Retry re-attempts the failing pair in place; Wait holds for a confirming witness;
-     * Quarantine isolates one market; Rebuild treats the failure as session-shaped; Ignored is a
-     * quarantined market's later rejection. */
+     * decision. Retry re-attempts the failing pair in place; Wait holds the rejection until its
+     * witness confirms or its window lapses, and the sweep re-asks every round; Quarantine isolates
+     * one market; Rebuild treats the failure as session-shaped; Ignored is a rejection with nothing
+     * left to judge. A verdict is dated when it is rendered; its record names the rejection. */
     private void applyJudgment(WitnessQuarantine.Judgment judgment, Observation.SubscriptionError error) {
         switch (judgment) {
             case WitnessQuarantine.Judgment.Retry(String epic) -> {
@@ -273,28 +280,37 @@ public final class Supervisor implements StreamObserver, BeltView, Runnable {
                 reasking(epic);
                 stream.resubscribe(epic); // surgical re-attempt of the failing pair
             }
-            case WitnessQuarantine.Judgment.Wait() -> {
-                // a would-be witness is still inside its confirm window — hold, never race a fast
-                // rejection into a whole-session rebuild (§3.5)
-            }
+            case WitnessQuarantine.Judgment.Wait() -> heldVerdicts.put(error.epic(), error);
             case WitnessQuarantine.Judgment.Ignored _ -> {
-                // already quarantined — its pair's other leg was rejected too; nothing to do
+                // quarantined, or a leg of an attempt already struck or replaced; nothing to do
             }
             case WitnessQuarantine.Judgment.Quarantine(String epic) -> quarantineMarket(epic, error);
-            case WitnessQuarantine.Judgment.Rebuild() -> rebuild(EventType.SUBSCRIPTION_REJECTED,
-                    error.at(), error.epic(), MAPPER.createObjectNode()
-                            .put("code", error.code())
-                            .put("message", error.message()));
+            case WitnessQuarantine.Judgment.Rebuild(String epic) -> rebuild(EventType.SUBSCRIPTION_REJECTED,
+                    clock.wallInstant(), epic, rejection(error));
         }
+    }
+
+    private static String epicOf(WitnessQuarantine.Judgment verdict) {
+        return switch (verdict) {
+            case WitnessQuarantine.Judgment.Quarantine(String epic) -> epic;
+            case WitnessQuarantine.Judgment.Rebuild(String epic) -> epic;
+            default -> throw new IllegalStateException("not a rendered verdict: " + verdict);
+        };
+    }
+
+    private static ObjectNode rejection(Observation.SubscriptionError error) {
+        return MAPPER.createObjectNode()
+                .put("code", error.code())
+                .put("message", error.message())
+                .put("leg", error.kind().name())
+                .put("rejectedAt", error.at().toString());
     }
 
     /** Isolate one provably market-shaped failure: record it, stop watching it, and unsubscribe its
      * pair. A refused unsubscribe double-delivers, so it escalates to a session rebuild (§3.5). */
     private void quarantineMarket(String epic, Observation.SubscriptionError error) {
-        record(ServiceEvent.of(EventType.MARKET_QUARANTINED, error.at()).forEpic(epic)
-                .withDetail(MAPPER.createObjectNode()
-                        .put("code", error.code())
-                        .put("message", error.message())));
+        record(ServiceEvent.of(EventType.MARKET_QUARANTINED, clock.wallInstant()).forEpic(epic)
+                .withDetail(rejection(error)));
         forget(epic);
         quarantinedMarkets.add(epic);
         if (!stream.quarantine(epic)) {
@@ -374,7 +390,7 @@ public final class Supervisor implements StreamObserver, BeltView, Runnable {
             reasonEvent = reasonEvent.withDetail(detail);
         }
         record(reasonEvent);
-        reconnects.rebuilding(now, occurredAt.toEpochMilli()); // the outage is open from here, farewell or not
+        reconnects.rebuilding(now, clock.wallInstant().toEpochMilli()); // the outage opens now, on both clocks (#21)
         rebuilding = true; // the view reads RECONNECTING until the new connection streams
         watchdog.onConnection(false, now); // and the watchdog waits for it
         if (!stream.rebuild()) {
@@ -384,7 +400,8 @@ public final class Supervisor implements StreamObserver, BeltView, Runnable {
         // Re-read the clock: a paced re-login blocks ~61s, and the §3.5 confirm window must start
         // when the new session's subscribes begin, not when the rebuild was decided.
         long resubscribed = clock.monotonicNanos();
-        witness.onSessionRebuilt(); // strikes reset; quarantine persists (exit is restart-only)
+        witness.onSessionRebuilt(); // strikes and held verdicts reset; quarantine persists (exit is restart-only)
+        heldVerdicts.clear();
         for (String survivor : watched) {
             witness.onSubscribeStarted(survivor, resubscribed); // the survivors re-subscribe now
             reasking(survivor);
@@ -443,8 +460,8 @@ public final class Supervisor implements StreamObserver, BeltView, Runnable {
         record Subscribed(String epic, WitnessQuarantine.Kind kind) implements Observation {
         }
 
-        record SubscriptionError(String epic, int code, String message, long monotonicNanos,
-                Instant at) implements Observation {
+        record SubscriptionError(String epic, WitnessQuarantine.Kind kind, int code, String message,
+                long monotonicNanos, Instant at) implements Observation {
         }
     }
 }

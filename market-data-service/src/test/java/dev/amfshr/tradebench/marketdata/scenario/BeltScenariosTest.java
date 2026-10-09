@@ -372,7 +372,6 @@ class BeltScenariosTest {
     }
 
     @Test
-    @Disabled("E1-T10 A2 — finding #4: Judgment.Wait is never re-armed")
     void aRejectionHeldForAnUnconfirmedWitnessIsJudgedWhenTheWitnessConfirms() throws Exception {
         // §3.5: DAX strikes out at 3 while NASDAQ is still inside its confirm window — wait, never
         // race a fast rejection into a session verdict. When NASDAQ confirms at 20 the held verdict
@@ -398,7 +397,6 @@ class BeltScenariosTest {
     }
 
     @Test
-    @Disabled("E1-T10 A2 — finding #4: Judgment.Wait is never re-armed (the window-lapse arm)")
     void aVerdictHeldForAWitnessThatNeverConfirmsIsSessionShapedWhenTheWindowLapses() throws Exception {
         // §3.5's other arm: NASDAQ never confirms. When its 30s window lapses nothing proves the
         // session innocent, so the held verdict is session-shaped — a rebuild at 30, the rejected
@@ -420,7 +418,6 @@ class BeltScenariosTest {
     }
 
     @Test
-    @Disabled("E1-T10 A2 — finding #8: strikes are counted per leg rejection, not per attempt")
     void aMarketWhoseBothLegsAreRejectedGetsItsTwoSurgicalRetries() throws Exception {
         // §3.5: initial subscribe + two surgical retries, a fresh pair each time. The server refuses
         // DAX outright, so both legs are rejected per attempt; that is one strike, not two. Each

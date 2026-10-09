@@ -14,5 +14,5 @@ public interface StreamObserver extends StreamTransport.ConnectionListener {
     void onSubscribed(String epic, WitnessQuarantine.Kind kind);
 
     /** A market's PRICE or CHART leg was rejected. */
-    void onSubscriptionError(String epic, int code, String message);
+    void onSubscriptionError(String epic, WitnessQuarantine.Kind kind, int code, String message);
 }

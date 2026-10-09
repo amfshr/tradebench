@@ -425,7 +425,7 @@ class SupervisorTest {
         stream.resubscribed.clear();
 
         clock.advance(Duration.ofSeconds(10)); // past the 5s floor — pacing is not what decides here
-        supervisor.onSubscriptionError(DAX, 40, "rejected"); // the NEW session's first rejection
+        supervisor.onSubscriptionError(DAX, WitnessQuarantine.Kind.PRICE, 40, "rejected"); // the NEW session's first rejection
         supervisor.sweep();
 
         assertEquals(1, stream.rebuilds, "one strike in a fresh session is a retry, not a verdict");
@@ -497,7 +497,7 @@ class SupervisorTest {
         supervisor.onSubscribed(NASDAQ, WitnessQuarantine.Kind.PRICE);
         supervisor.onSubscribed(NASDAQ, WitnessQuarantine.Kind.CHART);
         failToTheStrikeCeiling(DAX);
-        supervisor.onSubscriptionError(DAX, 40, "rejected"); // the pair's other leg — queued before the verdict
+        supervisor.onSubscriptionError(DAX, WitnessQuarantine.Kind.PRICE, 40, "rejected"); // the pair's other leg — queued before the verdict
         supervisor.sweep();
 
         assertEquals(List.of(DAX), stream.quarantined, "quarantined exactly once");
@@ -537,7 +537,7 @@ class SupervisorTest {
         freshness.tick.put(DAX, clock.monotonicNanos());
         freshness.flag.put(DAX, "CLOSED");
         supervisor.sweep(); // stood down on the flag
-        supervisor.onSubscriptionError(DAX, 40, "rejected"); // strike 1 → a surgical retry re-asks the pair
+        supervisor.onSubscriptionError(DAX, WitnessQuarantine.Kind.PRICE, 40, "rejected"); // strike 1 → a surgical retry re-asks the pair
         supervisor.sweep();
         assertEquals(List.of(DAX), stream.resubscribed);
 
@@ -545,6 +545,67 @@ class SupervisorTest {
 
         assertEquals(List.of(DAX, DAX), stream.resubscribed, "the stale flag is not fed back — the watchdog acts at 90s");
         assertEquals(1, count(EventType.WATCHDOG_STALE));
+    }
+
+    @Test
+    void aWatchdogResubscribeOpensAFreshConfirmWindow() {
+        // E1-T10 #14: a market whose pair the watchdog just replaced is unconfirmed, inside a fresh
+        // window — it cannot serve as the witness that quarantines its neighbour on stale evidence.
+        supervisor.onStatusChange(STREAMING);
+        supervisor.watch(DAX);
+        supervisor.watch(NASDAQ);
+        for (String epic : List.of(DAX, NASDAQ)) {
+            supervisor.onSubscribed(epic, WitnessQuarantine.Kind.PRICE);
+            supervisor.onSubscribed(epic, WitnessQuarantine.Kind.CHART);
+            freshness.flag.put(epic, "DEAL");
+        }
+        supervisor.sweep();
+        for (int step = 0; step < 19; step++) { // DAX falls silent; NASDAQ streams on
+            clock.advance(Duration.ofSeconds(5));
+            freshness.tick.put(NASDAQ, clock.monotonicNanos());
+            supervisor.sweep();
+        }
+        assertEquals(List.of(DAX), stream.resubscribed, "the watchdog replaced DAX's pair at 90s");
+
+        failToTheStrikeCeiling(NASDAQ); // and now the neighbour strikes out
+
+        assertTrue(stream.quarantined.isEmpty(), "DAX's old confirmation is not a witness");
+        assertEquals(0, stream.rebuilds, "held: DAX is inside its fresh confirm window");
+        for (int step = 0; step < 7; step++) { // the window lapses with DAX never confirming
+            clock.advance(Duration.ofSeconds(5));
+            freshness.tick.put(NASDAQ, clock.monotonicNanos());
+            supervisor.sweep();
+        }
+        assertEquals(1, stream.rebuilds, "no witness: session-shaped");
+        assertEquals(NASDAQ, single(EventType.SUBSCRIPTION_REJECTED).epic());
+    }
+
+    @Test
+    void aRebuildOpensTheOutageOnTheSweepsOwnClocks() {
+        // E1-T10 #21: a rejection while streaming opens no outage until its sweep rebuilds; the
+        // rejection's own wall stamp predates that sweep by the queue's latency, and opening the
+        // outage with it against the sweep's monotonic stamp read as a host suspend.
+        supervisor.onStatusChange(STREAMING);
+        supervisor.watch(DAX); // the only market: no witness, so the third strike is session-shaped
+        supervisor.sweep();
+        for (int strike = 0; strike < 2; strike++) {
+            clock.advance(Duration.ofMillis(1));
+            supervisor.onSubscriptionError(DAX, WitnessQuarantine.Kind.PRICE, 40, "rejected");
+            supervisor.sweep();
+        }
+        clock.advance(Duration.ofMillis(1));
+        supervisor.onSubscriptionError(DAX, WitnessQuarantine.Kind.PRICE, 40, "rejected");
+        clock.advance(Duration.ofSeconds(20)); // the queue drains late — the database was slow
+        supervisor.sweep();
+        assertEquals(1, stream.rebuilds);
+
+        clock.advance(Duration.ofSeconds(5));
+        supervisor.onStatusChange(STREAMING);
+        supervisor.sweep();
+
+        ServiceEvent resume = single(EventType.RECONNECT);
+        assertEquals(5_000, resume.detail().get("wallOutageMs").asLong(), "dated from the rebuild");
+        assertFalse(resume.detail().get("hostSlept").asBoolean(), "queue latency is not a suspend");
     }
 
     // --- helpers + fakes --------------------------------------------------------------------
@@ -555,11 +616,14 @@ class SupervisorTest {
                 () -> exhausted.set(true), Sleeper.SYSTEM, Duration.ofSeconds(1));
     }
 
-    /** Enqueue a market's subscription rejection up to the strike ceiling — the escalation point
-     * at which the witness rule renders its verdict. */
+    /** Reject a market's pair attempt after attempt up to the strike ceiling — each rejection
+     * stamped after the attempt it answers and applied by its own sweep, as on the wire — the
+     * escalation point at which the witness rule renders its verdict. */
     private void failToTheStrikeCeiling(String epic) {
         for (int strike = 0; strike < Tuning.playbook().subscriptionStrikes(); strike++) {
-            supervisor.onSubscriptionError(epic, 40, "rejected");
+            clock.advance(Duration.ofMillis(1));
+            supervisor.onSubscriptionError(epic, WitnessQuarantine.Kind.PRICE, 40, "rejected");
+            supervisor.sweep();
         }
     }
 

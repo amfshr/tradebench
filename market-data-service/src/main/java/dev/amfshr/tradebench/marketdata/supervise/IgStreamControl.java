@@ -233,7 +233,7 @@ public final class IgStreamControl implements StreamControl, AutoCloseable {
             @Override
             public void onSubscriptionError(int code, String message) {
                 if (live(gen)) {
-                    target.onSubscriptionError(epic, code, message);
+                    target.onSubscriptionError(epic, kind, code, message);
                 }
             }
         };

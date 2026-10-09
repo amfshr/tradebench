@@ -105,8 +105,8 @@ class IgStreamControlTest {
         }
 
         @Override
-        public void onSubscriptionError(String epic, int code, String message) {
-            rejected.add(epic + "/" + code + "/" + message);
+        public void onSubscriptionError(String epic, WitnessQuarantine.Kind kind, int code, String message) {
+            rejected.add(epic + "/" + kind + "/" + code + "/" + message);
         }
     }
 
@@ -246,7 +246,7 @@ class IgStreamControlTest {
         legs.get(3).onSubscriptionError(123, "nope");  // FTSE chart
 
         assertEquals(List.of(DAX + "/PRICE", DAX + "/CHART"), observer.subscribed);
-        assertEquals(List.of(FTSE + "/123/nope"), observer.rejected);
+        assertEquals(List.of(FTSE + "/CHART/123/nope"), observer.rejected);
     }
 
     @Test
