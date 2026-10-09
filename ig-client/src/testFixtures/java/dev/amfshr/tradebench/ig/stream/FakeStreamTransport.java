@@ -2,7 +2,9 @@ package dev.amfshr.tradebench.ig.stream;
 
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 import java.util.Map;
 
 import org.jspecify.annotations.Nullable;
@@ -26,6 +28,10 @@ public final class FakeStreamTransport implements StreamTransport {
     public boolean refuseConnects;
     /** When set, every {@link Connection#unsubscribe} throws — the LS refusal case (§3.5). */
     public boolean refuseUnsubscribe;
+    /** Items whose unsubscribe is refused — one leg of a pair, as the SDK can. */
+    public final Set<String> refuseUnsubscribeOf = new HashSet<>();
+    /** Items whose subscribe throws — a second leg failing synchronously. */
+    public final Set<String> failSubscribeOf = new HashSet<>();
 
     /** Identity, not value: two subscriptions to the same spec are two distinct handles, as on
      * the real transport — so dropping one never drops its twin. */
@@ -79,6 +85,9 @@ public final class FakeStreamTransport implements StreamTransport {
         @Override
         public SubscriptionHandle subscribe(SubscriptionSpec spec, UpdateListener updates,
                 StateListener state) {
+            if (failSubscribeOf.contains(spec.items().getFirst())) {
+                throw new IllegalStateException("subscribe refused: " + spec.items().getFirst());
+            }
             specs.add(spec);
             updateListeners.add(updates);
             stateListeners.add(state);
@@ -90,10 +99,10 @@ public final class FakeStreamTransport implements StreamTransport {
 
         @Override
         public void unsubscribe(SubscriptionHandle handle) {
-            if (refuseUnsubscribe) {
+            FakeHandle fake = (FakeHandle) handle;
+            if (refuseUnsubscribe || refuseUnsubscribeOf.contains(fake.spec.items().getFirst())) {
                 throw new IllegalStateException("unsubscribe refused");
             }
-            FakeHandle fake = (FakeHandle) handle;
             if (!fake.active) {
                 throw new IllegalStateException("Subscription is not active"); // the SDK's contract
             }

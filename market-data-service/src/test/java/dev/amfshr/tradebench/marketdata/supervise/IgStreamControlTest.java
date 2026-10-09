@@ -397,4 +397,68 @@ class IgStreamControlTest {
         assertEquals(List.of(DAX_PRICE, DAX_CHART), activeItems(fake.last()), "nothing re-subscribed");
         assertTrue(log.getLast().contains("refused"));
     }
+
+    @Test
+    void aRefusedLegIsRetriedAloneNextTimeNeverItsAlreadyDroppedTwin() throws Exception {
+        // E1-T10 #15: the SDK refuses one leg's unsubscribe. The leg that did go is forgotten; the
+        // refused one is kept for the next attempt, which never re-passes the gone twin (the SDK
+        // throws for an inactive subscription) and so completes.
+        boot();
+        fake.refuseUnsubscribeOf.add(DAX_CHART);
+        control.resubscribe(DAX);
+        assertEquals(List.of(DAX_CHART, FTSE_PRICE, FTSE_CHART), activeItems(fake.last()),
+                "the PRICE leg went, the CHART leg stayed — and nothing new was subscribed over it");
+        assertTrue(log.stream().anyMatch(line -> line.startsWith("resubscribe " + DAX + " failed")));
+
+        fake.refuseUnsubscribeOf.clear();
+        control.resubscribe(DAX);
+
+        assertEquals(List.of(FTSE_PRICE, FTSE_CHART, DAX_PRICE, DAX_CHART), activeItems(fake.last()),
+                "the held leg dropped, a fresh pair up — one of each");
+    }
+
+    @Test
+    void aFailedSecondLegRollsBackTheFirstSoNothingStreamsUnowned() throws Exception {
+        // E1-T10 #16: the CHART subscribe throws after PRICE went up. The PRICE leg is unsubscribed
+        // again, the market has no pair, and the next attempt starts clean — never a second PRICE
+        // delivering every tick twice.
+        boot();
+        fake.failSubscribeOf.add(DAX_CHART);
+        control.resubscribe(DAX);
+        assertEquals(List.of(FTSE_PRICE, FTSE_CHART), activeItems(fake.last()), "rolled back: no DAX leg streams");
+
+        fake.failSubscribeOf.clear();
+        control.resubscribe(DAX);
+
+        assertEquals(List.of(FTSE_PRICE, FTSE_CHART, DAX_PRICE, DAX_CHART), activeItems(fake.last()),
+                "exactly one pair");
+    }
+
+    @Test
+    void aSubscribeFailureAtBootFailsLoudAndLeavesNoHalfBuiltStream() {
+        // E1-T10 #17: a runtime failure while subscribing at boot is not retried like an outage —
+        // it fails loud, and the connection it half-built is closed rather than left streaming.
+        fake.failSubscribeOf.add(FTSE_CHART);
+        control.bind(observer);
+
+        assertThrows(IllegalStateException.class, control::start);
+
+        assertTrue(fake.last().closed, "the half-built connection is closed");
+        assertTrue(log.stream().anyMatch(line -> line.startsWith("FATAL: the stream could not be set up at boot")));
+    }
+
+    @Test
+    void aSubscribeFailureDuringRebuildLeavesTheStreamDownNotHalfBuilt() throws Exception {
+        boot();
+        fake.failSubscribeOf.add(DAX_CHART);
+
+        assertEquals(StreamControl.Outcome.FAILED, control.rebuild());
+
+        assertTrue(fake.last().closed, "the half-built connection is closed, not published");
+        control.resubscribe(DAX); // no live stream: skipped, never a half-built one subscribed into
+        assertTrue(log.stream().anyMatch(line -> line.contains("skipped — no live stream")));
+        fake.failSubscribeOf.clear();
+        assertEquals(StreamControl.Outcome.CONNECTED, control.rebuild());
+        assertEquals(List.of(DAX_PRICE, DAX_CHART, FTSE_PRICE, FTSE_CHART), activeItems(fake.last()));
+    }
 }
