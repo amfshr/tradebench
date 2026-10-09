@@ -782,7 +782,7 @@ captured outages), a review-only branch (base `ee35f9b`, head `main`, as PR #14 
 T10, T11 and T12 — for the cloud review session's re-review; a pass gates E1-T6. **Clarified (Alex, 2026-10-09):** the
 re-review runs **once, after all of T10 is complete** — slices B and C merged — in his words, "i only want to re do the
 review once all of t10 is complete then i will do the full review once with cloud claude"; no interim pass after A2. His
-clarification named only T10, so whether T12 still precedes the re-review as sequenced above awaits his word. A
+clarification named only T10, so T12 before the re-review confirmed by Alex 2026-10-10 ("part C, then T12, then review"). A
 review-only PR opened 2026-10-09 after A2 on a misreading of that intent (**PR #18**, base pinned at `ee35f9b`, head =
 main) was closed unmerged the same day and its two branches deleted; nothing of it stands.
 
@@ -1054,7 +1054,7 @@ field-manual note on the replay library (where it lives, how a new outage become
 
 **Sequencing (Alex, 2026-10-08, standing):** T11 (✅ PR #16, merged 2026-10-08) → T10 A2 as scenarios (✅ PR #17,
 merged 2026-10-09) → T10 B as scenarios (✅ PR #19, merged 2026-10-10) → T10 C → **T12** → the belt's single cloud re-review, once every T10 finding is resolved
-(T10 § close-out ruling; Alex's 2026-10-09 clarification named only T10 — whether T12 still precedes it awaits his word)
+(T10 § close-out ruling; Alex's 2026-10-09 clarification named only T10 — T12 before the re-review confirmed by Alex 2026-10-10)
 → T6 (a re-review pass gates T6).
 
 **Cross-references:** G1 (market data only — never strategy content) · P8 · E1-T6 (the heal consumes these
