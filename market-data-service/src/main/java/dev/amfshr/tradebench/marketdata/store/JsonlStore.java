@@ -89,7 +89,8 @@ public final class JsonlStore implements CaptureStore {
     /** A file has nothing to re-establish; its failures are {@code UncheckedIOException}s, which
      * are terminal, so the pump never reaches this in anger. */
     @Override
-    public void recover() {
+    public boolean recover() {
+        return false; // nothing is ever held here
     }
 
     @Override

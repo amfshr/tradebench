@@ -40,8 +40,16 @@ import dev.amfshr.tradebench.ig.time.Sleeper;
  */
 public final class IgStreamControl implements StreamControl, AutoCloseable {
 
-    private record Legs(StreamTransport.SubscriptionHandle price,
-            StreamTransport.SubscriptionHandle chart) {
+    /** A market's pair, leg by leg: a leg is forgotten the moment its own unsubscribe succeeds, so
+     * a refused twin never leaves an inactive handle to be re-passed to the SDK (E1-T10 #15). */
+    private static final class Pair {
+        StreamTransport.@Nullable SubscriptionHandle price;
+        StreamTransport.@Nullable SubscriptionHandle chart;
+
+        Pair(StreamTransport.SubscriptionHandle price, StreamTransport.SubscriptionHandle chart) {
+            this.price = price;
+            this.chart = chart;
+        }
     }
 
     private final IgSessions sessions;
@@ -53,7 +61,7 @@ public final class IgStreamControl implements StreamControl, AutoCloseable {
     private final Duration bootRetry;
     private final LongSupplier monotonicNanos;
     private final Duration bootBudget;
-    private final Map<String, Legs> legs = new HashMap<>();
+    private final Map<String, Pair> legs = new HashMap<>();
     private final Set<String> quarantined = new HashSet<>();
     private final AtomicInteger generation = new AtomicInteger(); // bumped as a connection is superseded
     private @Nullable StreamObserver observer;
@@ -105,6 +113,9 @@ public final class IgStreamControl implements StreamControl, AutoCloseable {
                 log.accept("boot attempt " + attempt + " — IG unreachable, retrying in "
                         + bootRetry + ": " + e);
                 sleeper.sleep(bootRetry);
+            } catch (RuntimeException e) {
+                log.accept("FATAL: the stream could not be set up at boot — not retrying: " + e);
+                throw e; // like rebuild()'s arm, but boot fails loud: nothing is left half-built (#17)
             }
         }
     }
@@ -175,33 +186,80 @@ public final class IgStreamControl implements StreamControl, AutoCloseable {
         closeStream();
     }
 
+    /** Connect and subscribe every market; the stream is published only once whole — a subscribe
+     * that throws closes the half-built connection and leaves nothing live-but-unknown (#17). */
     private void connect(IgSession session) {
         int gen = generation.get();
         IgStreamSession live = client.connect(session, events, gated(gen));
+        Map<String, Pair> subscribed = new HashMap<>();
+        try {
+            for (String epic : epics) {
+                if (!quarantined.contains(epic)) {
+                    subscribed.put(epic, subscribePair(live, epic, gen));
+                }
+            }
+        } catch (RuntimeException e) {
+            generation.incrementAndGet(); // its farewell is nobody's
+            try {
+                live.close();
+            } catch (RuntimeException closing) {
+                log.accept("half-built stream close failed: " + closing);
+            }
+            throw e;
+        }
         stream = live;
+        legs.putAll(subscribed);
         log.accept("stream connected: account " + session.activeAccountId() + " via "
                 + session.lightstreamerEndpoint());
-        for (String epic : epics) {
-            if (!quarantined.contains(epic)) {
-                legs.put(epic, subscribePair(live, epic, gen));
+    }
+
+    /** Both legs or neither: a CHART subscribe that throws rolls the PRICE leg back, so no handle
+     * streams without an owner and the next attempt starts clean (#16). */
+    private Pair subscribePair(IgStreamSession live, String epic, int gen) {
+        StreamTransport.SubscriptionHandle price =
+                live.subscribePrice(epic, leg(epic, WitnessQuarantine.Kind.PRICE, gen));
+        try {
+            return new Pair(price, live.subscribeChart1m(epic, leg(epic, WitnessQuarantine.Kind.CHART, gen)));
+        } catch (RuntimeException e) {
+            try {
+                live.unsubscribe(price);
+            } catch (RuntimeException rollback) {
+                log.accept("rollback of " + epic + " PRICE refused — a leg streams unowned: " + rollback);
             }
+            throw e;
         }
     }
 
-    private Legs subscribePair(IgStreamSession live, String epic, int gen) {
-        return new Legs(
-                live.subscribePrice(epic, leg(epic, WitnessQuarantine.Kind.PRICE, gen)),
-                live.subscribeChart1m(epic, leg(epic, WitnessQuarantine.Kind.CHART, gen)));
-    }
-
-    /** Drop a market's pair; the handles are forgotten only once both legs are gone, so a refused
-     * unsubscribe leaves nothing live-but-unknown for the next attempt to double-subscribe. */
+    /** Drop a market's pair, leg by leg: each leg is forgotten as its own unsubscribe succeeds, a
+     * refused one is kept for the next attempt — so nothing live is ever forgotten, and nothing
+     * already gone is ever re-passed to the SDK (#15). The first refusal is rethrown. */
     private void dropLegs(IgStreamSession live, String epic) {
-        Legs pair = legs.get(epic);
-        if (pair != null) {
-            live.unsubscribe(pair.price());
-            live.unsubscribe(pair.chart());
+        Pair pair = legs.get(epic);
+        if (pair == null) {
+            return;
+        }
+        RuntimeException refused = null;
+        if (pair.price != null) {
+            try {
+                live.unsubscribe(pair.price);
+                pair.price = null;
+            } catch (RuntimeException e) {
+                refused = e;
+            }
+        }
+        if (pair.chart != null) {
+            try {
+                live.unsubscribe(pair.chart);
+                pair.chart = null;
+            } catch (RuntimeException e) {
+                refused = refused == null ? e : refused;
+            }
+        }
+        if (pair.price == null && pair.chart == null) {
             legs.remove(epic);
+        }
+        if (refused != null) {
+            throw refused;
         }
     }
 

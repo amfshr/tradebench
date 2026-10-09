@@ -25,7 +25,6 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import java.time.Duration;
 import java.util.List;
 
-import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 
 import dev.amfshr.tradebench.marketdata.events.EventType;
@@ -513,7 +512,6 @@ class BeltScenariosTest {
     }
 
     @Test
-    @Disabled("E1-T10 B — finding #6: recover() needs no round trip, so the ladder resets every 5s")
     void aDatabaseThatRefusesWritesIsOneEpisodeClimbingTheLadder() throws Exception {
         // D28: a retryable failure is held for, backing off 5s → 60s, as one episode. A database
         // that accepts connections but refuses writes (disk full) must look like the blip at 100
@@ -534,7 +532,6 @@ class BeltScenariosTest {
     }
 
     @Test
-    @Disabled("E1-T10 B — finding #20: the shutdown tail drains one batch of 5 000 ticks")
     void aStopWithABacklogDrainsAllOfItIntoAHealthySink() throws Exception {
         // A stop lands with six thousand ticks queued and Postgres healthy: the tail must drain
         // all of them, not one TICK_BATCH, and a tick lost at shutdown must never be lost silently.
@@ -551,7 +548,6 @@ class BeltScenariosTest {
     }
 
     @Test
-    @Disabled("E1-T10 B — finding #20: a stop during a hold makes no recovery attempt")
     void aStopDuringAHoldAfterPostgresReturnedRecoversOnceAndLandsEverything() throws Exception {
         // Postgres blinks at 30 and is back by 37; the operator stops at 38, before the next retry
         // at 40. One recovery attempt in the tail lands the held batch and the queued ticks — the
@@ -569,6 +565,7 @@ class BeltScenariosTest {
         assertEquals(o.ticksDelivered, o.landed.size(), "nothing forfeited that the database would have taken");
         assertEquals(0, o.ticksHeldAtEnd);
         assertTrue(o.log.stream().noneMatch(line -> line.contains("pump failure at shutdown")));
+        assertEquals(1, o.events(EventType.SINK_FAILURE).size(), "the episode the tail ended is recorded like any other");
     }
 
     @Test
