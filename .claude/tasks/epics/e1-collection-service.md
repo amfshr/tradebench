@@ -195,15 +195,18 @@ pass-with-findings F1–F10, fixed on-branch except F9 (a declared residual). Te
 2 and 3 are now E1-T11's DoD** — the scenario harness; the PR #14 review confirmed the missing composed-loop test
 as the root of its findings 1, 2, 4, 5, 8 and 11. Residual 1 stays unticketed. **Update 2026-10-08: residual 2 is closed,
 final at T11's merge (PR #16); residual 3 is closed in its rebaseline half at the same merge, and its rebuild half
-closes with T10 A2 — ruled 2026-10-08 (Alex)** (`BeltScenariosTest` drives the composed loop over `CaptureAssembly`;
+closed with T10 A2 on 2026-10-09 — ruled 2026-10-08 (Alex); the 2026-10-09 update below** (`BeltScenariosTest` drives the composed loop over `CaptureAssembly`;
 the host-suspend scenario pins the rebaseline — a 16-minute wall jump raises no `WATCHDOG_STALE` and is annotated
 `hostSlept`, no rebuild, the client reconnects itself; the rebuild half — the host wakes with the Lightstreamer client
 stuck in `DISCONNECTED:WILL-RETRY` and the escalator rebuilds 120s after the wake, measured in awake time — was pinned
 at T11 only by the `@Disabled` dead-socket scenario, without the suspend (T11's doctrine review, finding 6), and is
-now an A2 scenario: that scenario with a 16-minute host suspend in front of the hang; T11's DoD wording stays as
-written). **Update 2026-10-09: residual 3's rebuild half is closed at A2 — `aHostThatWakesWithTheClientStuckIsRebuiltInAwakeTime`
-on `e1-t10-a2-detectors-verdicts` (PR #17, open), the hang then the suspend as reordered at A2's doctrine review so it
-discriminates awake from wall time; final at the merge of PR #17.**
+now an A2 scenario: that scenario with a 16-minute host suspend in front of the hang, as ruled — built the hang then the
+suspend, below; T11's DoD wording stays as written). **Update 2026-10-09: residual 3 is closed, final — its rebuild half at A2,
+`aHostThatWakesWithTheClientStuckIsRebuiltInAwakeTime` (PR #17, merged by Alex 2026-10-09, merge `2a2f289`), the hang then
+the suspend as reordered at A2's doctrine review (finding 1) so it discriminates awake from wall time — recorded as a deviation
+from the 2026-10-08 ruling's "suspend in front of the hang", with the reason (with the suspend first the scenario did not
+discriminate awake from wall time; reordered and `hostSlept=true` asserted, a consistent-wall-clock escalator fails it —
+rebuild at 60, not 180); its rebaseline half at T11 (PR #16, 2026-10-08).**
 1. The gated demo smoke (`IG_SMOKE=1 ./gradlew :ig-client:demoSmoke`) has not run, so the
    `application-allowance.json` wire fixture is *authored*, not captured — run it and re-golden before
    T6's heal budget leans on pacer discovery. A skew fails safe today: refused at the boundary, 10/min kept.
@@ -213,12 +216,13 @@ discriminates awake from wall time; final at the merge of PR #17.**
    in slice A's `StalenessWatchdogTest`. **→ E1-T11 (DoD) — closed in its rebaseline half at T11's merge
    (PR #16, 2026-10-08)** (`aLidCloseIsAnnotatedNotTreatedAsAnOutage` — renamed `aHostSuspendIsAnnotatedNotTreatedAsAnOutage`
    at A2, ruling 3, PR #17: a 16-minute wall jump, no `WATCHDOG_STALE`, annotated `hostSlept`, no rebuild); **the rebuild
-   half → T10 A2 (ruled 2026-10-08, Alex) — closed at A2 (2026-10-09, PR #17 open; final at its merge):**
+   half → T10 A2 (ruled 2026-10-08, Alex) — closed at A2, final (PR #17, merged 2026-10-09, `2a2f289`):**
    `aHostThatWakesWithTheClientStuckIsRebuiltInAwakeTime` — a variant of the dead-socket scenario
    (`aDeadSocketIsTheEscalatorsToRebuildAtOneHundredAndTwentySeconds`, #5) with a 16-minute host suspend; the ruling placed
    the suspend in front of the hang, and A2's doctrine review (finding 1, medium) reordered it — the hang, then the suspend,
-   `hostSlept=true` asserted — so a consistent-wall-clock escalator fails it (rebuild at 60, not 180): the host wakes with the
-   Lightstreamer client stuck in `DISCONNECTED:WILL-RETRY` and the escalator rebuilds it, measured in awake time.
+   `hostSlept=true` asserted — so a consistent-wall-clock escalator fails it (rebuild at 60, not 180); recorded as a deviation
+   from the ruling's ordering, for that reason: the host wakes with the Lightstreamer client stuck in `DISCONNECTED:WILL-RETRY`
+   and the escalator rebuilds it, measured in awake time. **Residual 3 is closed, final (2026-10-09).**
 
 ## T6 — Daily completeness + archive + digest (D6)
 
@@ -469,9 +473,9 @@ Results, this run:
 real stack. `written=` lagging `ticks=` + `bars=` by one on two later heartbeats is a snapshot artefact (a
 tick sitting in the queue at the instant the line is printed), not a loss.
 
-## T10 — Resilience belt hardening: the PR #14 review 🔶 (ticketed 2026-10-05; started 2026-10-08 — A1 ✅ PR #15; A2 🔶 built 2026-10-09 as scenarios on the merged E1-T11 harness — four increments + the review's fixes, PR #17 open, awaiting Alex's merge; B/C next)
+## T10 — Resilience belt hardening: the PR #14 review 🔶 (ticketed 2026-10-05; started 2026-10-08 — A1 ✅ PR #15, merged 2026-10-08; A2 ✅ PR #17, merged 2026-10-09; B/C next as scenarios on the E1-T11 harness, one PR per slice)
 
-**Type** build · **Branch** `e1-t10-a2-detectors-verdicts` (A2, from main `c2d46e8`; A1 merged from `e1-t10-belt-hardening`, PR #15) · **Started** 2026-10-08 · **Blocked by** —
+**Type** build · **Branch** — (slice B's branch not yet cut; A1 merged from `e1-t10-belt-hardening`, PR #15; A2 merged from `e1-t10-a2-detectors-verdicts`, PR #17) · **Started** 2026-10-08 · **Blocked by** —
 
 **Goal:** the belt's 32 review findings fixed or answered, each fix carrying the test that would have caught
 it — so chapter 10's promises hold on the code, not only in prose.
@@ -497,9 +501,10 @@ sweep thread via a bounded queue drained by one writer thread, drops counted in 
 (finding 12); (4) the `closing()`/`GRACEFUL_CLOSE` hush is deleted — the generation gate is the §3.6 hush
 (finding 29).
 
-**Slices (Alex's sequencing, refreshed 2026-10-08: A1 first with targeted tests — ✅ PR #15 → E1-T11 the harness — ✅ PR #16,
-merged 2026-10-08 → A2/B/C as scenarios on it, one PR per slice → E1-T12 replay acceptance → the review-only branch for
-the re-review → E1-T6):**
+**Slices (Alex's sequencing, refreshed 2026-10-09: A1 first with targeted tests — ✅ PR #15 → E1-T11 the harness — ✅ PR #16,
+merged 2026-10-08 → A2 as scenarios on it — ✅ PR #17, merged 2026-10-09 → the review-only branch for the cloud session's
+interim re-review, opened now (re-ruled 2026-10-09 — the close-out ruling, below) → B/C as scenarios, one PR per slice →
+E1-T12 replay acceptance → E1-T6):**
 
 - **A1 — the two highs, targeted tests, first.** **#1** a quarantined market's twin-leg rejection re-admits it:
   gate `SubscriptionError`s for epics in `quarantinedMarkets` in `Supervisor.sweep()`;
@@ -534,7 +539,9 @@ the re-review → E1-T6):**
   **Also in A2, ruled 2026-10-08 (Alex) after T11's close-out:** **T5 residual 3's rebuild half** — the host wakes with the
   Lightstreamer client stuck in `DISCONNECTED:WILL-RETRY` and the escalator rebuilds 120s after the wake, measured in
   awake time — as a new scenario: the dead-socket scenario (`aDeadSocketIsTheEscalatorsToRebuildAtOneHundredAndTwentySeconds`,
-  #5) with a 16-minute host suspend in front of the hang (the rebaseline half closed at T11; T11's DoD wording stays).
+  #5) with a 16-minute host suspend in front of the hang, as ruled (the rebaseline half closed at T11; T11's DoD wording
+  stays) — built the hang then the suspend, reordered at A2's doctrine review (finding 1) so the scenario discriminates
+  awake from wall time: a recorded deviation from the ruling's ordering, with the reason (T5 § residual 3).
   **Housekeeping — server-first language:** the service is designed for and deployed on a server; the laptop problems
   of the past were problems of running a server on a laptop and are not baked into the program or its language. The
   mechanism stays wherever it adds coverage and resilience — the wall/monotonic clock-divergence discriminator, the
@@ -545,7 +552,7 @@ the re-review → E1-T6):**
   `ReconnectClassifier`'s javadoc, `ReconnectClassifierTest` and `StalenessWatchdogTest`. Field Manual chapters 07, 08
   and 10 reworded 2026-10-08 direct to main (docs-only, the build session). On this plan and the board, "lid close"
   describing our scenario reads "host suspend"; the prototype's captured `host_slept` outages keep the fact with "the
-  prototype ran on a laptop" (T12 §). **Started 2026-10-09 — progress in "A2 — in progress", below.**
+  prototype ran on a laptop" (T12 §). **Started 2026-10-09, merged 2026-10-09 — PR #17; the record in "A2 — merged", below.**
 - **B — the sink and the database edge.** **#6** `recover()` makes a round trip — executes the held batch inside
   recovery, so "recovered" means a write landed — and carries attempt/since across consecutive episodes; **#7**
   `socketTimeout` 30s + `tcpKeepAlive` (D29 (2)) on the pool and `dedicatedConnection()`, with a Testcontainers
@@ -571,7 +578,7 @@ the re-review → E1-T6):**
   `core.md:15`, `:28`).
 - **#23** (no combined-detector test) *is* the harness — **E1-T11**.
 
-**A2 — in progress.** **Started 2026-10-09** on `e1-t10-a2-detectors-verdicts` (branched from main at `c2d46e8`); design nod
+**A2 — merged (PR #17, 2026-10-09).** **Started 2026-10-09** on `e1-t10-a2-detectors-verdicts` (branched from main at `c2d46e8`); design nod
 posted and accepted by Alex 2026-10-09 ("I accept your recommendations"). **Four increments, one PR for the slice:** **1 the
 watchdog** (#5, #33, #3) · **2 the witness** (#8, #4, #14) · **3 the session** (#18, #11, #13, #19, #21, #29) · **4
 housekeeping** (the host-suspend-then-stuck scenario — T5 residual 3's rebuild half; the ruling-3 rename of
@@ -633,16 +640,21 @@ original reason row (fifteen `STUCK_SUBSTATE_ESCALATED` rows for one escalation 
 equivalent (the escalator reset behind the re-ask latch; the give-up guard behind the short-circuits). Three mutations red
 and restored byte-identical.
 **Totals at the PR:** all twelve A2 findings fixed with their exposing tests (#3, #4, #5, #8, #11, #13, #14, #18, #19, #21,
-#29, #33); T5 residual 3's rebuild half closed by the reordered scenario (final at the merge); the server-first rename
+#29, #33); T5 residual 3's rebuild half closed by the reordered scenario (final at the merge, 2026-10-09 — residual 3 closed, final); the server-first rename
 done. 25 mutations red and restored byte-identical (8 + 8 + 5 + 1 across the increments, 3 on the review's fixes).
 `BeltScenariosTest` at 23: seven scenarios switched on (#3, #4 ×2, #5 ×2, #8, #33), two new
 (`aFeedThatCannotBeRebuiltDiesByTheBudgetNotTheCeiling`, `aHostThatWakesWithTheClientStuckIsRebuiltInAwakeTime`) plus the
 rename; three remain `@Disabled` for slice B (`aDatabaseThatRefusesWritesIsOneEpisodeClimbingTheLadder`,
 `aStopWithABacklogDrainsAllOfItIntoAHealthySink`, `aStopDuringAHoldAfterPostgresReturnedRecoversOnceAndLandsEverything`).
-Tests at the PR: market-data-service 212 (3 skipped) · ig-client 99 · docs site 63 · 0 failures; `./gradlew build` and the
-docs build green as CI runs them. **PR #17** opened 2026-10-09 (https://github.com/amfshr/tradebench/pull/17), awaiting
-Alex's merge; CI green (`build` and GitGuardian passed). **Next:** Alex merges PR #17 → the A2 close-out (this section, the board's
-T10 row, a Done history entry tagged E1-T10) → slice B as scenarios on the harness (#6, #20 ×2) → C.
+Tests at the PR and at merge: market-data-service 212 (3 skipped — slice B's) · ig-client 99 · docs site 63 · 0 failures;
+`./gradlew build` and the docs build green as CI runs them. **PR #17** opened 2026-10-09
+(https://github.com/amfshr/tradebench/pull/17), **merged by Alex 2026-10-09 into `main`, merge commit `2a2f289`**; CI green on
+the merged head (`build` 52s, GitGuardian pass); the local branch deleted. Commits as merged: `92d73f3` (1/4) · `a21e8d7` (2/4)
+· `6e0a82d` (3/4) · `ba7fe45` (4/4) · `3e7ca9a` (the review fixes) · `fb24eb5` (board). The board's Done history carries the
+entry (tagged E1-T10); T5 § residual 3 is closed, final. **Next:** slice B as scenarios on the harness (#6, #20 ×2 — the three
+`@Disabled`; with #7, #12, #15/#16, #17, #24, #30) → C, one PR per slice — the next build work once the cloud session's interim
+re-review of the belt (its review-only branch opened 2026-10-09 after A2 — re-ruled, the close-out ruling below) has its
+findings read.
 
 **The A2/B backlog on the harness (E1-T11 — merged 2026-10-08, PR #16; written 2026-10-08, the tenth, #4's window-lapse arm, added at T11's
 doctrine review; each verified red for its finding's reason):** the ten `@Disabled` scenarios in `BeltScenariosTest` —
@@ -659,12 +671,13 @@ session-rebuild-at-451 assertion already holds; the "no market surgery" assertio
 Each fix enables its scenario as the exposing test; the remaining A2/B findings get their exposing tests as each slice
 lands (per the DoD). **A2 also carries two items that are not `@Disabled` scenarios (ruled 2026-10-08, Alex):** a new
 scenario — the host-suspend-then-stuck variant of #5's dead-socket scenario (T5 residual 3's rebuild half: a 16-minute host
-suspend in front of the hang, the rebuild 120s after the wake in awake time) — and the server-first rename of
+suspend in front of the hang as ruled — built the hang then the suspend at A2, a recorded deviation with its reason, T5 § —
+the rebuild 120s after the wake in awake time) — and the server-first rename of
 `aLidCloseIsAnnotatedNotTreatedAsAnOutage` (green today) to a host-suspend name, with the lid/laptop framing purged from
 the test and code comments (the A2 bullet above). **Noted for the slices (T11's doctrine review, 2026-10-08):** the fake store's `recover()`
 deliberately models the unfixed #6 — slice B must give it a round trip with the production fix; the #3 scenario's window
 assertions tighten to exact offsets when A2 enables it; a `Supervisor.sweep()` exception is modelled as a harness error
-(a test error) until #19 lands. **Update 2026-10-09 (A2 built — PR #17, awaiting Alex's merge):** all seven A2 scenarios are switched on — #3, #5 ×2 and #33 at
+(a test error) until #19 lands. **Update 2026-10-09 (A2 merged — PR #17, `2a2f289`):** all seven A2 scenarios are switched on — #3, #5 ×2 and #33 at
 increment 1 (the #3 window assertions tightened to exact offsets as noted), #4 ×2 and #8 at increment 2; the two ruled
 additions are built (`aHostThatWakesWithTheClientStuckIsRebuiltInAwakeTime`, reordered at A2's doctrine review so the hang
 precedes the suspend; `aLidCloseIsAnnotatedNotTreatedAsAnOutage` → `aHostSuspendIsAnnotatedNotTreatedAsAnOutage`); a
@@ -691,6 +704,13 @@ review session re-verify.
 green** (sequenced 2026-10-08: T12 lands before the re-review, so the re-review judges a belt proven against real
 captured outages), a review-only branch (base `ee35f9b`, head `main`, as PR #14 was) carries all the belt work —
 T10, T11 and T12 — for the cloud review session's re-review; a pass gates E1-T6.
+
+**Re-ruled (Alex, 2026-10-09) — the re-review's timing:** the review-only branch for the cloud session's re-review is
+opened **now, after A2** — an interim re-review, before slices B/C and E1-T12 — not after T12 as sequenced above. It is a
+review-only PR with its base pinned at `ee35f9b` and its head = `main`, as PR #14 was, opened 2026-10-09 (its number is in
+the PR list — the build session reports it; not recorded here until known). Slices B/C and E1-T12 remain the next build
+work after the re-review's findings are read. The ruling as reported covers the timing; the 2026-10-08 clauses above (what
+the branch carries, a pass gating E1-T6) are not re-ruled here.
 
 ## T11 — The belt's scenario harness ✅ (PR #16, 2026-10-08 — complete; ticketed 2026-10-05, started 2026-10-08, design nod ruled 2026-10-08)
 
@@ -843,10 +863,12 @@ The full captured-outage library and the acceptance-mode rig are **E1-T12**, not
   corrected the same day (G8).*
 - **T5 residual 2** (the composed-loop test) is closed by this work; **residual 3** in its rebaseline half — a
   16-minute wall jump raises no `WATCHDOG_STALE` and is annotated `hostSlept` (`aLidCloseIsAnnotatedNotTreatedAsAnOutage`,
-  renamed to a host-suspend name at A2 — ruling 3); the rebuild half was pinned here only by the `@Disabled`
-  dead-socket scenario, without the suspend (doctrine review, finding 6), and closes with T10 A2 as the
-  host-suspend-then-stuck variant of that scenario (ruled 2026-10-08, Alex; see "Closed", below). Final at the merge
-  (PR #16, 2026-10-08).
+  renamed `aHostSuspendIsAnnotatedNotTreatedAsAnOutage` at A2 — ruling 3); the rebuild half was pinned here only by the
+  `@Disabled` dead-socket scenario, without the suspend (doctrine review, finding 6), and closed with T10 A2 as the
+  host-suspend-then-stuck variant of that scenario — `aHostThatWakesWithTheClientStuckIsRebuiltInAwakeTime`, PR #17, merged
+  2026-10-09 (ruled 2026-10-08, Alex; built the hang then the suspend, a recorded deviation from the ruling's "suspend in
+  front of the hang" so the scenario discriminates awake from wall time — T5 §; see "Closed", below). Residual 2 final at
+  this merge (PR #16, 2026-10-08); residual 3 final at A2's (PR #17, 2026-10-09).
 
 **Doctrine review (2026-10-08) — pass-with-findings.** Verdict: the harness sound, the production extraction
 (`CaptureAssembly`, the public `sweep()`/`cycle()` seams) faithful, every chapter-10 derivation re-derived and right,
@@ -879,20 +901,22 @@ docs build green as CI runs them.
 E1-T11); T12 is unblocked; T5 residual 2 and residual 3's rebaseline half are final. **Ruled 2026-10-08 (Alex, after the
 close-out):** (1) the DoD's "residuals 2 and 3 closed" is met in full for 2 and in its rebaseline half for 3; the rebuild
 half is ticketed into T10 A2 as the host-suspend-then-stuck variant of the dead-socket scenario — the DoD wording below
-stays as written; (2) #33 is fixed in A2, mechanically — the one-sweep hold; no separate decision entry; (3) server-first
+stays as written (**closed 2026-10-09 at A2's merge, PR #17** — built the hang then the suspend, a recorded deviation from
+this ruling's ordering, with the reason; residual 3 final); (2) #33 is fixed in A2, mechanically — the one-sweep hold; no separate decision entry; (3) server-first
 language — the belt's scenarios, test names, comments and docs frame a **suspended host**, never a laptop lid: the
 `aLidCloseIsAnnotatedNotTreatedAsAnOutage` rename and the comment purge ride A2's PR, Field Manual ch. 07/08/10 reworded
-2026-10-08 direct to main (docs-only). Detail: T10 § A2.
+2026-10-08 direct to main (docs-only). All three enacted at A2 (PR #17, merged 2026-10-09). Detail: T10 § A2.
 
-**Sequencing (Alex, 2026-10-08):** E1-T10 slice A1 is on main (PR #15, merged 2026-10-08); this harness is on main (PR #16,
-merged 2026-10-08). Next: T10's A2/B/C land as scenarios here, one PR per slice — the ten `@Disabled` scenarios are that
-backlog (A2 = #3 · #4 ×2 · #5 ×2 (+ the host-suspend-then-stuck variant — T5 residual 3's rebuild half) · #8 · #33 (ruled:
-the one-sweep hold) + the ruling-3 rename; B = #6 · #20 ×2; the list by test name is in T10 §) → **E1-T12** replay
-acceptance (unblocked by this merge) → the review-only branch of all the belt work for the cloud session's re-review (a
-pass gates E1-T6) → E1-T6.
+**Sequencing (Alex, 2026-10-08; refreshed 2026-10-09):** E1-T10 slice A1 is on main (PR #15, merged 2026-10-08); this harness
+is on main (PR #16, merged 2026-10-08); **T10 A2 is on main (PR #17, merged 2026-10-09)** — its seven scenarios switched on
+(#3 · #4 ×2 · #5 ×2 · #8 · #33), the host-suspend-then-stuck variant and the ruling-3 rename built. Next: the review-only
+branch of the belt work for the cloud session's **interim** re-review, opened now, after A2 (re-ruled 2026-10-09, Alex —
+not after T12; T10 § close-out ruling) → T10's B/C land as scenarios here, one PR per slice — the three remaining `@Disabled`
+scenarios are B's backlog (#6 · #20 ×2; the list by test name is in T10 §) → **E1-T12** replay acceptance (unblocked by
+this merge) → E1-T6 (the 2026-10-08 ruling: a re-review pass gates it).
 
-**DoD (met at the merge, 2026-10-08; residual 3 closed in its rebaseline half here, its rebuild half closes with T10 A2 —
-ruled 2026-10-08, see "Closed" above; wording kept as written):** the nine policy scenarios run deterministically with no real waiting, the scar replay as scenario ten
+**DoD (met at the merge, 2026-10-08; residual 3 closed in its rebaseline half here and in its rebuild half at T10 A2, PR #17,
+2026-10-09 — ruled 2026-10-08, see "Closed" above; residual 3 final; wording kept as written):** the nine policy scenarios run deterministically with no real waiting, the scar replay as scenario ten
 through the JSONL loader; each scenario's expectations are chapter 10's numbers; the `@Disabled` scenarios for
 #3/#4/#5/#6/#8/#20 written to chapter 10's expectations, each awaiting its fix; `Main` and the rig share
 `CaptureAssembly`; the harness's own behaviour mutation-verified (a wrong expected offset fails); T5's
@@ -955,8 +979,10 @@ field-manual note on the replay library (where it lives, how a new outage become
 
 **Estimate:** ≈ two sessions.
 
-**Sequencing (Alex, 2026-10-08):** T11 (✅ PR #16, merged 2026-10-08) → T10 A2/B/C as scenarios → **T12** → the review-only branch of all the
-belt work for the cloud session's re-review (a pass gates T6) → T6.
+**Sequencing (Alex, 2026-10-08; refreshed 2026-10-09):** T11 (✅ PR #16, merged 2026-10-08) → T10 A2 as scenarios (✅ PR #17,
+merged 2026-10-09) → the review-only branch of the belt work for the cloud session's interim re-review, opened now after A2
+(re-ruled 2026-10-09 — not after T12; T10 § close-out ruling) → T10 B/C as scenarios → **T12** → T6 (the 2026-10-08 ruling:
+a re-review pass gates T6).
 
 **Cross-references:** G1 (market data only — never strategy content) · P8 · E1-T6 (the heal consumes these
 bar-gap windows) · E1-T8 (the live-tier acceptance this does not replace) · Field Manual ch. 10 ·
