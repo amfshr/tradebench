@@ -25,7 +25,13 @@ re-litigates silently, and never implements past an unmade decision — it surfa
   strategy content** (Pattern 1, the range-bar family, any model of Dad's — the two
   unpublishables are credentials and strategy definitions, PRD §9). Example/teaching
   strategies are fine. Acceptance-anchor work against real specs happens **off-repo**; only
-  verdicts are recorded. When in doubt: it's private.
+  verdicts are recorded. When in doubt: it's private. **Everything in `.env*` is sensitive by
+  definition** (Alex, 2026-10-10): URLs, hostnames, usernames, account ids, instance names,
+  epics lists — not only passwords and keys. A value is in that file precisely because it is
+  personal and of no relevance to anyone else, so none of it appears in code, tests, wire
+  fixtures, docs, the board, commit messages or PR bodies; fixtures and examples use
+  synthetic values of the same shape. The `doctrine-reviewer` runs the `.env` leak check
+  before every PR (its checklist), reporting a leaked variable's *name*, never its value.
 - **G2 — Decisions are logged, never silent.** A real decision lands in `docs/decisions.md`
   with the why and a status. Inherited decisions are superseded by writing new Tradebench
   docs, never by editing `docs/inherited/` (read-only snapshot, D1).

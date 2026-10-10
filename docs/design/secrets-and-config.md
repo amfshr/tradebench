@@ -36,6 +36,12 @@
    hand (scp/console — rare, deliberate), and appear nowhere else: not the repo, not CI,
    not logs (`toString` masking is tested), not chat/PRs. GitGuardian is the backstop, not
    the plan.
+6. **Everything in the env file is sensitive, not only the secrets** (ruled 2026-10-10,
+   after two real account ids were found in test fixtures and redacted): URLs, hostnames,
+   usernames, account ids, instance names, the epics list — a value is in `.env` precisely
+   because it is personal and of no relevance to anyone else. Tests, wire fixtures, docs and
+   the board use synthetic values of the same shape; the pre-PR doctrine review greps the
+   tree for every `.env` value and reports a leak by variable name, never by value (G1).
 
 ## The matrix — where secrets live, per context
 

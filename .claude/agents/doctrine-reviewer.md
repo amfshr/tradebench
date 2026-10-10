@@ -23,6 +23,15 @@ Review only what changed, in its surrounding context.
 
 - **G1 sweep:** any credential, token, `.env*` content, or real strategy definition in the
   diff — including in test fixtures, comments, and docs. This is the highest-severity class.
+  **Everything in `.env*` is sensitive by definition** (Alex, 2026-10-10) — URLs, hostnames,
+  usernames, account ids, instance names, epics lists, not only passwords and keys — so run the
+  **`.env` leak check** every time: in a subshell, read each `KEY=value` of every local `.env*`
+  file at the repo root (never print, quote or echo the file or any value), and for every
+  non-empty value `git grep -q -F -- "$value"` across the tree and `grep -q -F` the diff. Report
+  a hit as the variable's *name* and the file:line that carries it — never the value. A value
+  that is a common word (e.g. `db`, `jsonl`, `demo`) is a false positive to judge, not to report.
+  A real id or name in a fixture is a finding even when G1's older text would not call it a
+  credential: fixtures use synthetic values of the same shape.
 - **Testing doctrine (G5):** every new behavioural test must carry evidence of mutation
   verification (the exact break it exists to catch was applied → red). Expectations anchored
   independently of the code under test — never asserting the implementation against itself.

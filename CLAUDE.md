@@ -83,6 +83,9 @@ stands alone) · P8 data collected forever, source-attributed always · P9 fail 
   direct to main.
 - This is a **public repository**. Never commit credentials, `.env*`, or **strategy
   definitions** (real strategy content lives only in deploy config/DB — the two things that must
-  never leak). Example/teaching strategies are fine.
+  never leak). Example/teaching strategies are fine. **Everything in `.env*` is sensitive by
+  definition** — URLs, usernames, account ids, instance names included, not only secrets: it is
+  in that file because it is personal. Tests, fixtures and docs use synthetic values of the same
+  shape (G1; the doctrine reviewer's `.env` leak check).
 - Commit style: `<area>: <emoji> <summary>` (inherited habit — e.g. `docs: 📈 …`,
   `collection: 📡 …`).
