@@ -73,14 +73,16 @@ class HealthProbeTest {
 
     private static final class RecordingStore implements StatusStore {
         final List<CaptureStatus> rows = new ArrayList<>();
+        int publishes;
         boolean fail;
 
         @Override
-        public void upsert(CaptureStatus status) {
+        public void upsert(List<CaptureStatus> batch) {
+            publishes++;
             if (fail) {
                 throw new IllegalStateException("capture_status unavailable");
             }
-            rows.add(status);
+            rows.addAll(batch);
         }
     }
 
@@ -125,23 +127,24 @@ class HealthProbeTest {
     }
 
     @Test
-    void publishUpsertsOneRowPerMarketInOrder() {
+    void publishUpsertsOneRowPerMarketInOrderInOneRoundTrip() {
         probe.publish();
 
         assertEquals(List.of(DAX, FTSE), store.rows.stream().map(CaptureStatus::epic).toList());
+        assertEquals(1, store.publishes, "every market in one batch — one connection wait, not one per market (E1-T10 #22)");
         assertEquals(0, probe.statusFailures());
     }
 
     @Test
-    void aFailingUpsertIsCountedNeverThrown() {
+    void aFailingPublishIsCountedOnceNeverThrown() {
         store.fail = true;
 
         probe.publish(); // must not throw — the heartbeat thread must survive
 
-        assertEquals(2, probe.statusFailures(), "one per market, loud not silent");
+        assertEquals(1, probe.statusFailures(), "one per publish, loud not silent");
         store.fail = false;
         probe.publish();
         assertEquals(2, store.rows.size(), "the store heals on the next heartbeat");
-        assertEquals(2, probe.statusFailures());
+        assertEquals(1, probe.statusFailures());
     }
 }

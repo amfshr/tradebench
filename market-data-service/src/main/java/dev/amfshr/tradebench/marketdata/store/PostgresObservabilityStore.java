@@ -2,13 +2,9 @@ package dev.amfshr.tradebench.marketdata.store;
 
 import java.sql.Connection;
 import java.sql.PreparedStatement;
-import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Types;
-import java.time.Instant;
-import java.time.OffsetDateTime;
-import java.time.ZoneOffset;
-import java.util.Map;
+import java.util.List;
 import java.util.concurrent.ConcurrentHashMap;
 
 import javax.sql.DataSource;
@@ -24,8 +20,8 @@ import dev.amfshr.tradebench.marketdata.events.ServiceEvent;
  * {@link PostgresStore} (one dedicated connection, the capture hot path), these writes come from
  * the pump (gaps + market-state, slice C step 3) and — as slice C wires them — the heartbeat and
  * supervisor threads, so each **borrows a pooled connection** for its one statement: low-frequency
- * work that must never contend with the hot path. Thread-safe by that design; the instrument-id
- * cache is concurrent.
+ * work that must never contend with the hot path. The heartbeat's rows go as one batch on one
+ * connection (E1-T10 #22). Thread-safe by that design; the instrument-id cache is concurrent.
  */
 public final class PostgresObservabilityStore implements EventLog, GapStore, StatusStore {
 
@@ -55,16 +51,16 @@ public final class PostgresObservabilityStore implements EventLog, GapStore, Sta
     private final String instance;
     private final short userId;
     private final short sourceId;
-    private final Map<String, Short> instrumentIds = new ConcurrentHashMap<>();
+    private final InstrumentIds instruments = new InstrumentIds(new ConcurrentHashMap<>());
 
     public PostgresObservabilityStore(DataSource dataSource, String userName, String sourceName,
             String instance) {
         this.dataSource = dataSource;
         this.instance = instance;
         try (Connection connection = dataSource.getConnection()) {
-            this.userId = lookupId(connection, "SELECT id FROM users WHERE name = ?", userName,
+            this.userId = Jdbc.lookupId(connection, "SELECT id FROM users WHERE name = ?", userName,
                     "user");
-            this.sourceId = lookupId(connection, "SELECT id FROM sources WHERE name = ?",
+            this.sourceId = Jdbc.lookupId(connection, "SELECT id FROM sources WHERE name = ?",
                     sourceName, "source");
         } catch (SQLException e) {
             throw new PersistenceException("observability store initialisation failed", e);
@@ -82,7 +78,7 @@ public final class PostgresObservabilityStore implements EventLog, GapStore, Sta
             statement.setString(5, event.category().db());
             statement.setString(6, event.type().db());
             statement.setString(7, event.severity().db());
-            statement.setObject(8, utc(event.eventTimeUtc()));
+            statement.setObject(8, Jdbc.utc(event.eventTimeUtc()));
             statement.setString(9, event.correlationId());
             statement.setString(10, event.detail() == null ? null : event.detail().toString());
             statement.executeUpdate();
@@ -97,9 +93,9 @@ public final class PostgresObservabilityStore implements EventLog, GapStore, Sta
                 PreparedStatement statement = connection.prepareStatement(INSERT_GAP)) {
             statement.setShort(1, userId);
             statement.setShort(2, sourceId);
-            statement.setShort(3, instrumentId(connection, gap.epic()));
-            statement.setObject(4, utc(gap.gapFromUtc()));
-            statement.setObject(5, utc(gap.gapToUtc()));
+            statement.setShort(3, instruments.idFor(connection, gap.epic()));
+            statement.setObject(4, Jdbc.utc(gap.gapFromUtc()));
+            statement.setObject(5, Jdbc.utc(gap.gapToUtc()));
             statement.setInt(6, Math.toIntExact(gap.missingMinutes()));
             statement.executeUpdate();
         } catch (SQLException e) {
@@ -107,30 +103,39 @@ public final class PostgresObservabilityStore implements EventLog, GapStore, Sta
         }
     }
 
+    /** Every row in one batch on one connection: the heartbeat waits for the pool once (#22). */
     @Override
-    public void upsert(CaptureStatus status) {
+    public void upsert(List<CaptureStatus> rows) {
         try (Connection connection = dataSource.getConnection();
                 PreparedStatement statement = connection.prepareStatement(UPSERT_STATUS)) {
-            statement.setString(1, instance);
-            statement.setShort(2, instrumentId(connection, status.epic()));
-            statement.setObject(3, utc(status.updatedAtUtc()));
-            statement.setString(4, status.streamState().db());
-            statement.setString(5, status.marketState());
-            statement.setObject(6, utcOrNull(status.lastTickAtUtc()));
-            statement.setObject(7, utcOrNull(status.lastBarAtUtc()));
-            statement.setLong(8, status.ticksTotal());
-            statement.setLong(9, status.barsTotal());
-            statement.setLong(10, status.droppedTicks());
-            statement.setLong(11, status.malformed());
-            statement.setLong(12, status.reconnectsTotal());
-            if (status.dbPending() != null) {
-                statement.setInt(13, status.dbPending());
-            } else {
-                statement.setNull(13, Types.INTEGER);
+            for (CaptureStatus status : rows) {
+                bind(statement, connection, status);
+                statement.addBatch();
             }
-            statement.executeUpdate();
+            statement.executeBatch();
         } catch (SQLException e) {
             throw new PersistenceException("status upsert failed", e);
+        }
+    }
+
+    private void bind(PreparedStatement statement, Connection connection, CaptureStatus status)
+            throws SQLException {
+        statement.setString(1, instance);
+        statement.setShort(2, instruments.idFor(connection, status.epic()));
+        statement.setObject(3, Jdbc.utc(status.updatedAtUtc()));
+        statement.setString(4, status.streamState().db());
+        statement.setString(5, status.marketState());
+        statement.setObject(6, Jdbc.utcOrNull(status.lastTickAtUtc()));
+        statement.setObject(7, Jdbc.utcOrNull(status.lastBarAtUtc()));
+        statement.setLong(8, status.ticksTotal());
+        statement.setLong(9, status.barsTotal());
+        statement.setLong(10, status.droppedTicks());
+        statement.setLong(11, status.malformed());
+        statement.setLong(12, status.reconnectsTotal());
+        if (status.dbPending() != null) {
+            statement.setInt(13, status.dbPending());
+        } else {
+            statement.setNull(13, Types.INTEGER);
         }
     }
 
@@ -139,45 +144,7 @@ public final class PostgresObservabilityStore implements EventLog, GapStore, Sta
         if (epic == null) {
             statement.setNull(index, Types.SMALLINT);
         } else {
-            statement.setShort(index, instrumentId(connection, epic));
+            statement.setShort(index, instruments.idFor(connection, epic));
         }
-    }
-
-    private short instrumentId(Connection connection, String epic) throws SQLException {
-        Short cached = instrumentIds.get(epic);
-        if (cached != null) {
-            return cached;
-        }
-        try (PreparedStatement insert = connection.prepareStatement(
-                "INSERT INTO instruments (epic) VALUES (?) ON CONFLICT (epic) DO NOTHING")) {
-            insert.setString(1, epic);
-            insert.executeUpdate();
-        }
-        short id = lookupId(connection, "SELECT id FROM instruments WHERE epic = ?", epic,
-                "instrument");
-        instrumentIds.put(epic, id);
-        return id;
-    }
-
-    private static short lookupId(Connection connection, String sql, String name, String kind)
-            throws SQLException {
-        try (PreparedStatement statement = connection.prepareStatement(sql)) {
-            statement.setString(1, name);
-            try (ResultSet result = statement.executeQuery()) {
-                if (!result.next()) {
-                    throw new IllegalStateException("unknown " + kind + " '" + name
-                            + "' — schema seeds are the source of truth; refusing to invent one");
-                }
-                return result.getShort(1);
-            }
-        }
-    }
-
-    private static @Nullable OffsetDateTime utcOrNull(@Nullable Instant instant) {
-        return instant == null ? null : utc(instant);
-    }
-
-    private static OffsetDateTime utc(Instant instant) {
-        return OffsetDateTime.ofInstant(instant, ZoneOffset.UTC);
     }
 }

@@ -20,7 +20,7 @@ import dev.amfshr.tradebench.ig.session.IgSession;
 import dev.amfshr.tradebench.ig.session.IgTokens;
 import dev.amfshr.tradebench.marketdata.events.EventType;
 import dev.amfshr.tradebench.marketdata.events.ServiceEvent;
-import dev.amfshr.tradebench.marketdata.store.EventLog;
+import dev.amfshr.tradebench.marketdata.store.BestEffortEventLog;
 
 class PacerDiscoveryTest {
 
@@ -35,7 +35,8 @@ class PacerDiscoveryTest {
     private final List<String> log = new ArrayList<>();
 
     private PacerDiscovery discovery(PacerDiscovery.AllowanceSource source) {
-        return new PacerDiscovery(source, applied::add, events, log::add, FROZEN);
+        return new PacerDiscovery(source, applied::add, new BestEffortEventLog(events, log::add),
+                log::add, FROZEN);
     }
 
     private static ApplicationAllowance published(int accountOverall) {

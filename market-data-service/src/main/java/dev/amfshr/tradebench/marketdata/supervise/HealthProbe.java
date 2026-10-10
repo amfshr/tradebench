@@ -9,8 +9,9 @@ import dev.amfshr.tradebench.marketdata.store.StatusStore;
 
 /**
  * Publishes one {@link CaptureStatus} row per (instance, market) each heartbeat, on the heartbeat
- * thread, from volatile/concurrent views only. Observability is best-effort: a failing upsert is
- * counted in {@link #statusFailures()}, never thrown.
+ * thread, from volatile/concurrent views only — every market's row in one round trip, so a
+ * database that is down costs one connection wait, not one per market (E1-T10 #22). Observability
+ * is best-effort: a failing publish is counted in {@link #statusFailures()}, never thrown.
  */
 public final class HealthProbe {
 
@@ -41,18 +42,16 @@ public final class HealthProbe {
                 markets.pendingWrites());
     }
 
-    /** UPSERT every market's row; a failing write is counted, never thrown. */
+    /** UPSERT every market's row, in one batch; a failing publish is counted once, never thrown. */
     public void publish() {
-        for (String epic : epics) {
-            try {
-                store.upsert(snapshot(epic));
-            } catch (RuntimeException e) {
-                failures.incrementAndGet();
-            }
+        try {
+            store.upsert(epics.stream().map(this::snapshot).toList());
+        } catch (RuntimeException e) {
+            failures.incrementAndGet();
         }
     }
 
-    /** Status writes that failed and were swallowed — nonzero is the alarm. */
+    /** Publishes that failed and were swallowed — nonzero is the alarm. */
     public long statusFailures() {
         return failures.get();
     }

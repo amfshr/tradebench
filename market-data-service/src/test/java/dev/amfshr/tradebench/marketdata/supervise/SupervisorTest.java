@@ -25,7 +25,7 @@ import dev.amfshr.tradebench.marketdata.events.EventType;
 import dev.amfshr.tradebench.marketdata.events.ServiceEvent;
 import dev.amfshr.tradebench.marketdata.events.Severity;
 import dev.amfshr.tradebench.marketdata.events.StreamState;
-import dev.amfshr.tradebench.marketdata.store.EventLog;
+import dev.amfshr.tradebench.marketdata.store.BestEffortEventLog;
 
 class SupervisorTest {
 
@@ -37,6 +37,8 @@ class SupervisorTest {
 
     private FakeClock clock;
     private RecordingEventLog events;
+    private BestEffortEventLog beltEvents;
+    private List<String> log;
     private FakeStream stream;
     private FakeFreshness freshness;
     private AtomicBoolean exhausted;
@@ -47,6 +49,8 @@ class SupervisorTest {
     void setUp() {
         clock = new FakeClock(Instant.parse("2026-09-28T09:00:00Z"));
         events = new RecordingEventLog();
+        log = new ArrayList<>();
+        beltEvents = new BestEffortEventLog(events, log::add);
         stream = new FakeStream();
         freshness = new FakeFreshness();
         exhausted = new AtomicBoolean();
@@ -195,7 +199,28 @@ class SupervisorTest {
         supervisor.sweep(); // must not throw — the sweep thread must survive
 
         assertEquals(1, stream.rebuilds, "the remedy still happens; observability is downstream");
-        assertEquals(1, supervisor.eventWriteFailures(), "counted — loud, not silent");
+        assertEquals(1, beltEvents.failures(), "counted — loud, not silent");
+    }
+
+    @Test
+    void everyEventTheBeltRecordsIsAlsoAConsoleLine() {
+        // E1-T10 #9: the operator reads the console; the row may never land (the test above).
+        supervisor.onServerError(stream.generation, 7, "licence lapsed");
+        supervisor.sweep();
+
+        assertEquals(1, count(EventType.IG_API_ERROR));
+        assertEquals("belt IG_API_ERROR {\"code\":7,\"message\":\"licence lapsed\"}", log.get(0));
+    }
+
+    @Test
+    void anInPlaceRetryIsAConsoleLine() {
+        supervisor.watch(DAX);
+        supervisor.onSubscriptionError(stream.generation, DAX, WitnessQuarantine.Kind.PRICE, 40, "rejected");
+        supervisor.sweep(); // strike 1 → a surgical retry, which records no event — so it says so itself
+
+        assertEquals(List.of(DAX), stream.resubscribed);
+        assertEquals(List.of("belt RETRY " + DAX
+                + " — re-asking for the pair in place after its PRICE leg was rejected (40)"), log);
     }
 
     @Test
@@ -701,7 +726,7 @@ class SupervisorTest {
 
     /** jitter = 1.0 → deterministic backoff; Sleeper/interval unused (tests drive sweep() directly). */
     private Supervisor supervisorWith(Tuning tuning) {
-        return new Supervisor(clock, tuning, () -> 1.0, events, stream, freshness,
+        return new Supervisor(clock, tuning, () -> 1.0, beltEvents, log::add, stream, freshness,
                 () -> {
                     exhausted.set(true);
                     giveUps++;

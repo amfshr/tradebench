@@ -120,9 +120,9 @@ Every number, where it lives, and what it means:
 | 5s / 10s | `hostSleepSkew` / `processFreezeJump` | the clock-divergence discriminators (chapter 7) |
 | 1s | `Main.SWEEP_INTERVAL` | the supervisor's cadence — the detectors assume it |
 | 30s / 10 min | `Main.BOOT_RETRY` / the same `giveUpAfter` | boot retry spacing and budget |
-| 60s | `Main.HEARTBEAT` | the `capture_status` cadence, and the backstop for a dead supervisor thread (a dead pump is reported by `onDeath` at once); a Postgres outage adds at most the pool's 5s timeout per market |
+| 60s | `Main.HEARTBEAT` | the `capture_status` cadence, and the backstop for a dead supervisor thread (a dead pump is reported by `onDeath` at once); a Postgres outage adds at most the pool's 5s timeout per heartbeat — every market's row on one pooled connection (E1-T10 #22) |
 | 5s floor → 60s cap | the belt's `BackoffPolicy`, via `Pump` | the sink's retry pacing during a hold — the floor also clears HikariCP's 500ms alive-bypass window, so the second attempt gets a validated connection |
-| 5s | `Database.CONNECTION_TIMEOUT` | how long a Tier-2 write or a sink recovery waits for a pooled connection while Postgres is down — the heartbeat's worst case per market |
+| 5s | `Database.CONNECTION_TIMEOUT` | how long a Tier-2 write or a sink recovery waits for a pooled connection while Postgres is down — the heartbeat's worst case per publish, one connection for every market's row (E1-T10 #22) |
 | 250ms | `Pump.HOLD_SLICE` | how quickly a hold notices `stop()` |
 | 61s | `LoginRateGate.MIN_INTERVAL` | spacing between logins — IG caches login responses, so faster re-logins get stale tokens |
 | 10/min → published − 5 | `RequestPacer.CONSERVATIVE_START` → `PacerDiscovery.HEADROOM` | the REST budget: a conservative start, then the tighter of the account's and the key's real allowance (never the published constant — demo enforces 10/min) minus headroom for T6's heal, which spends the same key |
@@ -155,7 +155,7 @@ Five threads touch the belt. Knowing which owns what is most of what there is to
 | `capture-supervisor` (the sweep) | the cores, `watched`, `IgStreamControl`'s handles | everything decided and executed |
 | `capture-pump` | the sink, the gap detector | write market data; derive gaps and state events; hold and retry through a sink outage (E1-T9) |
 | `capture-events` (the Tier-2 writer) | the event queue | hand the sweep's queued service events to Postgres, off the sweep thread (D29 (3)); a refused write is counted and dropped, never retried, never blocking a sweep |
-| main (heartbeat) | the health probe | watch the sweep and the pump live; exit 1 if one dies; publish `capture_status` through the shared pool — a Postgres outage holds it at most 5s per market (`Database.CONNECTION_TIMEOUT`); a dead pump is reported by `onDeath` at once, so this check is the backstop |
+| main (heartbeat) | the health probe | watch the sweep and the pump live; exit 1 if one dies; publish `capture_status` through the shared pool — a Postgres outage holds it at most 5s per heartbeat, every market's row on one pooled connection (`Database.CONNECTION_TIMEOUT`, E1-T10 #22); a dead pump is reported by `onDeath` at once, so this check is the backstop |
 
 Three fences make the hand-offs safe. **Queue** — what a callback wrote before `add()` is visible
 to the sweep after `poll()`; the pump has the same contract with `Buffers`. **`Thread.start()`**
@@ -313,7 +313,8 @@ in-ticket record.
 - **2026-10-03 — step 4:** the heartbeat publishes `capture_status` through `HealthProbe` (per-market
   telemetry from `Buffers`, stream state and reconnects from the Supervisor's `BeltView`);
   `last_bar_at_utc` is the bar's start; dropped ticks are charged to the shed tick's market;
-  `db_pending` is bars + ticks queued; a failing upsert is counted, never thrown. **Ruled the same
+  `db_pending` is bars + ticks queued; every market's row goes in one batch on one connection, and a
+  failing publish is counted once, never thrown (E1-T10 #22). **Ruled the same
   day:** the view and `ReconnectClassifier` share one rule — any `CONNECTED:*` substate except the
   `STREAM-SENSING` handshake is streaming, so a resume onto a polling fallback ends the outage and
   resets the ladder (the degradation itself is `TRANSPORT_DOWNGRADED`); the two voices cannot

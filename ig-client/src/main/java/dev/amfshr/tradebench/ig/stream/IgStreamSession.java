@@ -37,7 +37,7 @@ public final class IgStreamSession implements AutoCloseable {
                 (item, fields) -> {
                     TickUpdate tick = StreamParsers.parseTick(epic, fields);
                     if (tick == null) {
-                        events.onMalformed(item);
+                        events.onMalformed(epic, item);
                     } else {
                         events.onTick(tick);
                     }
@@ -55,7 +55,7 @@ public final class IgStreamSession implements AutoCloseable {
                 (item, fields) -> {
                     String consEnd = fields.get("CONS_END");
                     if (consEnd == null) {
-                        events.onMalformed(item);
+                        events.onMalformed(epic, item);
                         return;
                     }
                     if (!"1".equals(consEnd)) {
@@ -63,7 +63,7 @@ public final class IgStreamSession implements AutoCloseable {
                     }
                     SealedBarUpdate bar = StreamParsers.parseSealedBar(epic, fields);
                     if (bar == null) {
-                        events.onMalformed(item);
+                        events.onMalformed(epic, item);
                     } else {
                         events.onSealedBar(bar);
                     }

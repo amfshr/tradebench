@@ -11,6 +11,7 @@ import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.function.Consumer;
 import java.util.function.DoubleSupplier;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -24,7 +25,7 @@ import dev.amfshr.tradebench.marketdata.events.EventType;
 import dev.amfshr.tradebench.marketdata.events.ServiceEvent;
 import dev.amfshr.tradebench.marketdata.events.Severity;
 import dev.amfshr.tradebench.marketdata.events.StreamState;
-import dev.amfshr.tradebench.marketdata.store.EventLog;
+import dev.amfshr.tradebench.marketdata.store.BestEffortEventLog;
 
 /**
  * The resilience belt's shell (E1-T5 slice C): it composes the pure cores into a running service.
@@ -37,14 +38,16 @@ import dev.amfshr.tradebench.marketdata.store.EventLog;
  * is hit, or the broker rejects the configuration outright. It covers connection resilience
  * (reconnect classification, stuck-substate escalation, backoff, exhaustion), the staleness
  * watchdog (quiet vs dead), witness quarantine (§3.5 blast radius), and the {@link BeltView} the
- * heartbeat reads.
+ * heartbeat reads. The console hears every event it records, and each in-place retry, as the
+ * database does (E1-T10 #9).
  */
 public final class Supervisor implements StreamObserver, BeltView, Runnable {
 
     private static final ObjectMapper MAPPER = new ObjectMapper();
 
     private final Clock clock;
-    private final EventLog events;
+    private final BestEffortEventLog events;
+    private final Consumer<String> log;
     private final StreamControl stream;
     private final MarketFreshness freshness;
     private final Runnable onExhausted;
@@ -57,7 +60,6 @@ public final class Supervisor implements StreamObserver, BeltView, Runnable {
     private final StalenessWatchdog watchdog;
     private final WitnessQuarantine witness;
     private final BackoffPolicy backoff;
-    private final AtomicLong eventWriteFailures = new AtomicLong();
     private final AtomicLong reconnectsTotal = new AtomicLong();
     private final Set<String> quarantinedMarkets = ConcurrentHashMap.newKeySet();
     // The heartbeat's view: written here on the sweep thread, read on the heartbeat thread.
@@ -94,11 +96,12 @@ public final class Supervisor implements StreamObserver, BeltView, Runnable {
     private @Nullable EventType downReason;
     private int rebuildsConnected;
 
-    public Supervisor(Clock clock, Tuning tuning, DoubleSupplier jitter, EventLog events,
-            StreamControl stream, MarketFreshness freshness, Runnable onExhausted, Sleeper sleeper,
-            Duration sweepInterval) {
+    public Supervisor(Clock clock, Tuning tuning, DoubleSupplier jitter, BestEffortEventLog events,
+            Consumer<String> log, StreamControl stream, MarketFreshness freshness,
+            Runnable onExhausted, Sleeper sleeper, Duration sweepInterval) {
         this.clock = clock;
         this.events = events;
+        this.log = log;
         this.stream = stream;
         this.freshness = freshness;
         this.onExhausted = onExhausted;
@@ -303,6 +306,8 @@ public final class Supervisor implements StreamObserver, BeltView, Runnable {
     private void applyJudgment(WitnessQuarantine.Judgment judgment, Observation.SubscriptionError error) {
         switch (judgment) {
             case WitnessQuarantine.Judgment.Retry(String epic) -> {
+                log.accept("belt RETRY " + epic + " — re-asking for the pair in place after its "
+                        + error.kind() + " leg was rejected (" + error.code() + ")");
                 witness.onSubscribeStarted(epic, clock.monotonicNanos());
                 reasking(epic);
                 stream.resubscribe(epic); // surgical re-attempt of the failing pair
@@ -480,20 +485,14 @@ public final class Supervisor implements StreamObserver, BeltView, Runnable {
         giveUp("fatal", clock.wallInstant(), String.valueOf(cause));
     }
 
-    /** Event writes that failed and were swallowed — the belt never dies for a breadcrumb (the
-     * pump ruling, applied here too); nonzero is the alarm, surfaced by the heartbeat. */
-    public long eventWriteFailures() {
-        return eventWriteFailures.get();
-    }
-
-    // Observability is downstream of the decision: a failing write is counted, never allowed to
-    // kill the sweep thread — and giveUp() must always reach onExhausted.
+    // Observability is downstream of the decision: the log is best-effort by type, so a refused
+    // write never kills the sweep thread — and giveUp() always reaches onExhausted. The console
+    // line comes first: it is what the operator reads when the database refused the row (#9).
     private void record(ServiceEvent event) {
-        try {
-            events.write(event);
-        } catch (RuntimeException e) {
-            eventWriteFailures.incrementAndGet();
-        }
+        log.accept("belt " + event.type()
+                + (event.epic() == null ? "" : " " + event.epic())
+                + (event.detail() == null ? "" : " " + event.detail()));
+        events.write(event);
     }
 
     // --- the heartbeat's read-only view --------------------------------------------------------

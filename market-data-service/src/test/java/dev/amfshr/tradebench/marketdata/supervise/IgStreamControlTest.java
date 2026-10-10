@@ -120,7 +120,7 @@ class IgStreamControlTest {
         }
 
         @Override
-        public void onMalformed(String itemName) {
+        public void onMalformed(String epic, String itemName) {
         }
     };
 

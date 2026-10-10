@@ -76,8 +76,8 @@ class BuffersTest {
     @Test
     void malformedUpdatesAreCounted() {
         Buffers queues = buffers(10);
-        queues.onMalformed("PRICE:X:Y");
-        queues.onMalformed("PRICE:X:Y");
+        queues.onMalformed(DAX, "PRICE:X:" + DAX);
+        queues.onMalformed(DAX, "PRICE:X:" + DAX);
         assertEquals(2, queues.malformedUpdates());
     }
 
@@ -142,13 +142,12 @@ class BuffersTest {
     }
 
     @Test
-    void malformedUpdatesAreChargedToTheMarketNamedInTheItem() {
+    void malformedUpdatesAreChargedToTheirMarket() {
         Buffers queues = buffers(10);
-        queues.onMalformed("PRICE:Z6CS3E:" + DAX);
-        queues.onMalformed("CHART:" + FTSE + ":1MINUTE");
-        queues.onMalformed("something-unrecognisable");
+        queues.onMalformed(DAX, "PRICE:Z6CS3E:" + DAX);
+        queues.onMalformed(FTSE, "CHART:" + FTSE + ":1MINUTE");
 
-        assertEquals(3, queues.malformedUpdates());
+        assertEquals(2, queues.malformedUpdates());
         assertEquals(1, queues.countsFor(DAX).malformed());
         assertEquals(1, queues.countsFor(FTSE).malformed());
     }
@@ -163,16 +162,5 @@ class BuffersTest {
         assertEquals(3, queues.pendingWrites(), "one bar + two ticks");
         queues.removeBarNow();
         assertEquals(2, queues.pendingWrites());
-    }
-
-    @Test
-    void aTruncatedItemNameIsCountedGloballyAndThrowsNothing() {
-        Buffers queues = buffers(10);
-
-        queues.onMalformed("PRICE:Z6CS3E"); // two parts — there is no epic to charge
-
-        assertEquals(1, queues.malformedUpdates());
-        assertEquals(MarketTelemetry.MarketCounts.NONE, queues.countsFor("Z6CS3E"),
-                "nothing charged to a non-market; the LS thread saw no exception");
     }
 }

@@ -95,24 +95,9 @@ public final class Buffers implements StreamEvents, MarketTelemetry {
     }
 
     @Override
-    public void onMalformed(String itemName) {
+    public void onMalformed(String epic, String itemName) {
         malformedUpdates.incrementAndGet();
-        String epic = epicOf(itemName);
-        if (epic != null) {
-            market(epic).malformed.increment();
-        }
-    }
-
-    // LS item names carry the market: PRICE:<account>:<epic> and CHART:<epic>:1MINUTE (chapter 1).
-    static @Nullable String epicOf(String itemName) {
-        String[] parts = itemName.split(":");
-        if (parts.length >= 3 && parts[0].equals("PRICE")) {
-            return parts[2];
-        }
-        if (parts.length >= 3 && parts[0].equals("CHART")) {
-            return parts[1];
-        }
-        return null;
+        market(epic).malformed.increment();
     }
 
     private Market market(String epic) {

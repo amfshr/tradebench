@@ -16,8 +16,8 @@ import dev.amfshr.tradebench.ig.time.Sleeper;
 import dev.amfshr.tradebench.marketdata.coverage.GapDetector;
 import dev.amfshr.tradebench.marketdata.events.EventType;
 import dev.amfshr.tradebench.marketdata.events.ServiceEvent;
+import dev.amfshr.tradebench.marketdata.store.BestEffortEventLog;
 import dev.amfshr.tradebench.marketdata.store.CaptureStore;
-import dev.amfshr.tradebench.marketdata.store.EventLog;
 import dev.amfshr.tradebench.marketdata.store.GapStore;
 import dev.amfshr.tradebench.marketdata.store.PersistenceException;
 import dev.amfshr.tradebench.marketdata.supervise.BackoffPolicy;
@@ -33,10 +33,10 @@ import dev.amfshr.tradebench.marketdata.supervise.BackoffPolicy;
  * {@link #stop()} is honoured mid-hold. Any other failure is terminal: kept in {@link #failure()},
  * {@code onDeath} fires at once, never re-drained into a broken sink (P9 fail-closed). Each sealed
  * bar then feeds gap detection, and {@code DLG_FLAG} transitions become {@code market_state_change}
- * events: both are derived observability written to the event log, and — unlike the sink — are
- * <b>best-effort</b>: a failing write is counted in {@link #observabilityFailures()} and surfaced
- * in the heartbeat (loud), never thrown (ruled 2026-10-03). Ticks are best-effort by design
- * (shed-oldest queue).
+ * events: both are derived observability, and — unlike the sink — <b>best-effort</b> (ruled
+ * 2026-10-03): the event log is a {@link BestEffortEventLog}, whose failures are its own, and a
+ * failing gap write is counted in {@link #gapWriteFailures()} — surfaced in the heartbeat (loud),
+ * never thrown. Ticks are best-effort by design (shed-oldest queue).
  */
 public final class Pump implements Runnable {
 
@@ -49,7 +49,7 @@ public final class Pump implements Runnable {
     private final CaptureStore sink;
     private final GapDetector gapDetector;
     private final GapStore gaps;
-    private final EventLog events;
+    private final BestEffortEventLog events;
     private final Sleeper sleeper;
     private final Clock clock;
     private final BackoffPolicy backoff;
@@ -57,7 +57,7 @@ public final class Pump implements Runnable {
     private final Consumer<RuntimeException> onDeath;
     private final ObjectMapper mapper = new ObjectMapper();
     private final AtomicLong written = new AtomicLong();
-    private final AtomicLong observabilityFailures = new AtomicLong();
+    private final AtomicLong gapWriteFailures = new AtomicLong();
     private final AtomicLong sinkFailures = new AtomicLong();
     private volatile boolean running = true;
     private volatile @Nullable RuntimeException failure;
@@ -87,7 +87,7 @@ public final class Pump implements Runnable {
     }
 
     public Pump(Buffers queues, CaptureStore sink, GapDetector gapDetector, GapStore gaps,
-            EventLog events, Sleeper sleeper, Clock clock, BackoffPolicy backoff,
+            BestEffortEventLog events, Sleeper sleeper, Clock clock, BackoffPolicy backoff,
             Consumer<String> log, Consumer<RuntimeException> onDeath) {
         this.queues = queues;
         this.sink = sink;
@@ -131,7 +131,7 @@ public final class Pump implements Runnable {
     }
 
     // Best-effort by ruling: the bar is already persisted and acked before we get here, so a
-    // failing gap/event write is counted (loud) and swallowed — never allowed to halt capture.
+    // failing gap write is counted (loud) and swallowed — never allowed to halt capture.
     private void detectGap(Bar1m bar) {
         try {
             GapDetector.Gap gap = gapDetector.onSealedBar(bar.epic(), bar.startUtc());
@@ -145,18 +145,14 @@ public final class Pump implements Runnable {
                                 .put("missingMinutes", gap.missingMinutes())));
             }
         } catch (RuntimeException e) {
-            observabilityFailures.incrementAndGet();
+            gapWriteFailures.incrementAndGet();
         }
     }
 
     private void recordStateChange(Buffers.StateChange state) {
-        try {
-            events.write(ServiceEvent.of(EventType.MARKET_STATE_CHANGE, state.atUtc())
-                    .forEpic(state.epic())
-                    .withDetail(mapper.createObjectNode().put("dealFlag", state.dealFlag())));
-        } catch (RuntimeException e) {
-            observabilityFailures.incrementAndGet();
-        }
+        events.write(ServiceEvent.of(EventType.MARKET_STATE_CHANGE, state.atUtc())
+                .forEpic(state.epic())
+                .withDetail(mapper.createObjectNode().put("dealFlag", state.dealFlag())));
     }
 
     /** One pass — drain, or flush and idle; a retryable sink failure holds here. The unit
@@ -270,17 +266,13 @@ public final class Pump implements Runnable {
     }
 
     private void recordRecovery(Episode over, Duration outage) {
-        try {
-            events.write(ServiceEvent.of(EventType.SINK_FAILURE, over.failedAt)
-                    .withDetail(mapper.createObjectNode()
-                            .put("cause", over.cause.getMessage() + " — " + over.cause.getCause())
-                            .put("outageMs", outage.toMillis())
-                            .put("attempts", over.attempts)
-                            .put("ticksShed", over.shed)
-                            .put("queuedAtRecovery", over.queuedAtRecovery)));
-        } catch (RuntimeException e) {
-            observabilityFailures.incrementAndGet(); // the breadcrumb is Tier 2 — counted, never thrown
-        }
+        events.write(ServiceEvent.of(EventType.SINK_FAILURE, over.failedAt)
+                .withDetail(mapper.createObjectNode()
+                        .put("cause", over.cause.getMessage() + " — " + over.cause.getCause())
+                        .put("outageMs", outage.toMillis())
+                        .put("attempts", over.attempts)
+                        .put("ticksShed", over.shed)
+                        .put("queuedAtRecovery", over.queuedAtRecovery)));
     }
 
     @Override
@@ -350,14 +342,10 @@ public final class Pump implements Runnable {
     }
 
     private void recordDeath(RuntimeException cause) {
-        try {
-            events.write(ServiceEvent.of(EventType.DB_ERROR, clock.wallInstant())
-                    .withDetail(mapper.createObjectNode()
-                            .put("cause", String.valueOf(cause))
-                            .put("queued", queues.pendingWrites())));
-        } catch (RuntimeException e) {
-            observabilityFailures.incrementAndGet();
-        }
+        events.write(ServiceEvent.of(EventType.DB_ERROR, clock.wallInstant())
+                .withDetail(mapper.createObjectNode()
+                        .put("cause", String.valueOf(cause))
+                        .put("queued", queues.pendingWrites())));
     }
 
     public void stop() {
@@ -370,9 +358,9 @@ public final class Pump implements Runnable {
         return written.get();
     }
 
-    /** Derived-observability writes that failed and were swallowed — nonzero is the alarm. */
-    public long observabilityFailures() {
-        return observabilityFailures.get();
+    /** Gap writes that failed and were swallowed — nonzero is the alarm; the event log counts its own. */
+    public long gapWriteFailures() {
+        return gapWriteFailures.get();
     }
 
     /** Sink outages held through — one per episode, however many retries or provisional

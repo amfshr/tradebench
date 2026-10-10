@@ -6,17 +6,18 @@ import java.util.List;
 import dev.amfshr.tradebench.marketdata.events.CaptureStatus;
 import dev.amfshr.tradebench.marketdata.store.StatusStore;
 
-/** Every {@code capture_status} upsert in order; {@link #down} makes each one fail (Tier 2). */
+/** Every {@code capture_status} row in order, publish by publish; {@link #down} makes each publish
+ * fail (Tier 2). */
 public final class RecordingStatusStore implements StatusStore {
 
     public final List<CaptureStatus> rows = new ArrayList<>();
     public boolean down;
 
     @Override
-    public void upsert(CaptureStatus status) {
+    public void upsert(List<CaptureStatus> batch) {
         if (down) {
             throw new IllegalStateException("capture_status unavailable");
         }
-        rows.add(status);
+        rows.addAll(batch);
     }
 }

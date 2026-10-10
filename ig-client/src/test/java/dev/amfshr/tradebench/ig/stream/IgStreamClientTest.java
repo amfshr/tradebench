@@ -33,6 +33,7 @@ class IgStreamClientTest {
         final List<TickUpdate> ticks = new ArrayList<>();
         final List<SealedBarUpdate> bars = new ArrayList<>();
         final List<String> malformed = new ArrayList<>();
+        final List<String> malformedEpics = new ArrayList<>();
 
         @Override
         public void onTick(TickUpdate tick) {
@@ -45,7 +46,8 @@ class IgStreamClientTest {
         }
 
         @Override
-        public void onMalformed(String itemName) {
+        public void onMalformed(String epic, String itemName) {
+            malformedEpics.add(epic);
             malformed.add(itemName);
         }
     }
@@ -108,6 +110,7 @@ class IgStreamClientTest {
 
         assertTrue(events.ticks.isEmpty());
         assertEquals(List.of("PRICE:Z6CS3E:" + DAX), events.malformed);
+        assertEquals(List.of(DAX), events.malformedEpics, "charged to the market it was subscribed for (E1-T10 #31)");
     }
 
     @Test
@@ -133,6 +136,7 @@ class IgStreamClientTest {
 
         assertTrue(events.bars.isEmpty());
         assertEquals(List.of("CHART:" + DAX + ":1MINUTE"), events.malformed);
+        assertEquals(List.of(DAX), events.malformedEpics);
     }
 
     @Test

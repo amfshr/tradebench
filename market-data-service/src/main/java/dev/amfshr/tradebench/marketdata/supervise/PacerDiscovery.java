@@ -13,7 +13,7 @@ import dev.amfshr.tradebench.ig.rest.ApplicationAllowance;
 import dev.amfshr.tradebench.ig.session.IgSession;
 import dev.amfshr.tradebench.marketdata.events.EventType;
 import dev.amfshr.tradebench.marketdata.events.ServiceEvent;
-import dev.amfshr.tradebench.marketdata.store.EventLog;
+import dev.amfshr.tradebench.marketdata.store.BestEffortEventLog;
 
 /**
  * Sets the REST budget after login from the tighter of the account's and our key's published
@@ -37,11 +37,11 @@ public final class PacerDiscovery {
 
     private final AllowanceSource source;
     private final IntConsumer applyBudget;
-    private final EventLog events;
+    private final BestEffortEventLog events;
     private final Consumer<String> log;
     private final Clock clock;
 
-    public PacerDiscovery(AllowanceSource source, IntConsumer applyBudget, EventLog events,
+    public PacerDiscovery(AllowanceSource source, IntConsumer applyBudget, BestEffortEventLog events,
             Consumer<String> log, Clock clock) {
         this.source = source;
         this.applyBudget = applyBudget;
@@ -71,7 +71,7 @@ public final class PacerDiscovery {
         log.accept("pacer: IG publishes " + account + "/min for the account and " + application
                 + "/min for our key; using " + used + "/min (" + published + " − " + HEADROOM
                 + " headroom)");
-        record(ServiceEvent.of(EventType.PACER_DISCOVERED, clock.wallInstant())
+        events.write(ServiceEvent.of(EventType.PACER_DISCOVERED, clock.wallInstant())
                 .withDetail(MAPPER.createObjectNode()
                         .put("account", account)
                         .put("application", application)
@@ -83,17 +83,9 @@ public final class PacerDiscovery {
     // The console learns why from the event log; stdout alone is not an alarm anyone watches.
     private void keepTheStart(String line, String why) {
         log.accept(line);
-        record(ServiceEvent.of(EventType.IG_API_ERROR, clock.wallInstant())
+        events.write(ServiceEvent.of(EventType.IG_API_ERROR, clock.wallInstant())
                 .withDetail(MAPPER.createObjectNode()
                         .put("operation", OPERATION)
                         .put("message", why)));
-    }
-
-    private void record(ServiceEvent event) {
-        try {
-            events.write(event);
-        } catch (RuntimeException e) {
-            log.accept("pacer event not written: " + e);
-        }
     }
 }

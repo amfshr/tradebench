@@ -48,8 +48,9 @@ at their exact wire scale (D36), which is what makes the files usable as golden 
 `user_id` and `source_id` by name and throws `unknown source … refusing to invent one`
 if the seeds don't know them (P9). Users and sources are *configuration truth* — seeded
 in the migration, never auto-created. Instruments are the deliberate exception
-(`instrumentId()` auto-registers with `ON CONFLICT DO NOTHING`, then caches): an epic is
-a *discovered fact* — the stream told you it exists — not a config decision.
+(`InstrumentIds.idFor()`, shared with the observability store since E1-T10 #10, auto-registers
+with `ON CONFLICT DO NOTHING`, then caches): an epic is a *discovered fact* — the stream told you
+it exists — not a config decision.
 
 The write methods split by criticality, mirroring the queues:
 

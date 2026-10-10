@@ -14,6 +14,7 @@ import dev.amfshr.tradebench.ig.time.Sleeper;
 import dev.amfshr.tradebench.marketdata.coverage.GapDetector;
 import dev.amfshr.tradebench.marketdata.ingest.Buffers;
 import dev.amfshr.tradebench.marketdata.ingest.Pump;
+import dev.amfshr.tradebench.marketdata.store.BestEffortEventLog;
 import dev.amfshr.tradebench.marketdata.store.CaptureStore;
 import dev.amfshr.tradebench.marketdata.store.EventLog;
 import dev.amfshr.tradebench.marketdata.store.GapStore;
@@ -63,6 +64,9 @@ public final class CaptureAssembly {
     /** The supervisor's events, queued for one writer thread — never written on the sweep thread. */
     public final QueuedEventLog events;
 
+    // Best-effort by type (E1-T10 #26): one per producer, so the heartbeat says whose writes failed.
+    private final BestEffortEventLog pumpEvents;
+    private final BestEffortEventLog beltEvents;
     private final List<String> epics;
     private final CaptureStore sink;
     private final Consumer<String> log;
@@ -76,13 +80,15 @@ public final class CaptureAssembly {
         this.sink = p.sink();
         this.log = p.log();
         queues = new Buffers(p.tickCapacity(), p.clock()::monotonicNanos);
-        pump = new Pump(queues, p.sink(), new GapDetector(), p.gaps(), p.events(), p.sleeper(),
+        pumpEvents = new BestEffortEventLog(p.events(), p.log());
+        pump = new Pump(queues, p.sink(), new GapDetector(), p.gaps(), pumpEvents, p.sleeper(),
                 p.clock(), new BackoffPolicy(p.tuning(), p.jitter()), p.log(), p.onPumpDeath());
         control = new IgStreamControl(p.sessions(), new IgStreamClient(p.transport()), queues, epics,
                 p.log(), p.sleeper(), BOOT_RETRY, p.clock()::monotonicNanos, p.tuning().giveUpAfter());
         events = new QueuedEventLog(p.events(), EVENT_QUEUE_CAPACITY);
-        supervisor = new Supervisor(p.clock(), p.tuning(), p.jitter(), events, control, queues,
-                p.onExhausted(), p.sleeper(), SWEEP_INTERVAL);
+        beltEvents = new BestEffortEventLog(events, p.log());
+        supervisor = new Supervisor(p.clock(), p.tuning(), p.jitter(), beltEvents, p.log(), control,
+                queues, p.onExhausted(), p.sleeper(), SWEEP_INTERVAL);
         control.bind(supervisor); // the one back-edge of the control loop, tied off here
         probe = new HealthProbe(p.instance(), epics, queues, supervisor, p.clock(), p.status());
     }
@@ -142,9 +148,9 @@ public final class CaptureAssembly {
                 + " written=" + pump.writtenCount()
                 + " dropped=" + queues.droppedTicks() + " malformed=" + queues.malformedUpdates()
                 + " sinkFailures=" + pump.sinkFailures()
-                + " obsFailures=" + pump.observabilityFailures()
+                + " obsFailures=" + (pump.gapWriteFailures() + pumpEvents.failures())
                 + " eventsQueued=" + events.queued()
-                + " eventWriteFailures=" + (supervisor.eventWriteFailures() + events.writeFailures())
+                + " eventWriteFailures=" + (beltEvents.failures() + events.writeFailures())
                 + " statusFailures=" + probe.statusFailures();
     }
 }
