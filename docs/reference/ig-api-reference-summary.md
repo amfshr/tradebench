@@ -122,9 +122,9 @@ the underlying API contract that makes both bugs make sense.
 
 ### `POST /session` (v2) — login
 - Request: `identifier` (username) **must match regex `[A-Za-z0-9\-_]{1,30}`**
-  — no dots allowed. This is *exactly* why `amfshr.demo` failed with
+  — no dots allowed. This is *exactly* why `demo.trader` failed with
   `validation.pattern.invalid.authenticationRequest.identifier` and
-  `amfshr-demo` (hyphen) worked.
+  `demo-trader` (hyphen) worked.
 - Response includes `currentAccountId` and the full `accounts[]` list, each
   with `accountId`, `accountType` (`CFD`/`PHYSICAL`/`SPREADBET`), and
   `preferred` (bool). **Login always activates whichever account has

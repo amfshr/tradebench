@@ -22,7 +22,7 @@ public record IgCredentials(String identifier, String password, String apiKey, S
             throw new IgFatalConfigException(
                     "IG identifier '" + identifier + "' violates IG's pattern "
                             + IDENTIFIER_PATTERN.pattern()
-                            + " (no dots — 'amfshr.demo' fails where 'amfshr-demo' works)");
+                            + " (no dots — 'demo.trader' fails where 'demo-trader' works)");
         }
         if (!ACCOUNT_PATTERN.matcher(accountId).matches()) {
             throw new IgFatalConfigException(

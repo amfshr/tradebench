@@ -206,8 +206,8 @@ reusable artefact for a new build. Classify every IG error into three buckets:
 
 ### 1.7 Config & credential traps
 
-- **Username regex: `[A-Za-z0-9\-_]{1,30}` — no dots.** `amfshr.demo` failed with
-  `validation.pattern.invalid.authenticationRequest.identifier`; `amfshr-demo` (hyphen) worked.
+- **Username regex: `[A-Za-z0-9\-_]{1,30}` — no dots.** `demo.trader` failed with
+  `validation.pattern.invalid.authenticationRequest.identifier`; `demo-trader` (hyphen) worked.
 - **Account-id regex: `[A-Za-z0-9\-]{1,30}` — no underscore** (asymmetric with the username pattern,
   which *does* allow underscore). Neither allows dots.
 - **Keep secrets out of the main config file.** In the reference build, non-secret config lives in

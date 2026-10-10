@@ -40,7 +40,7 @@ class IgSessionManagerTest {
         transport = new FakeTransport();
         time = new FakeTime();
         IgCredentials credentials =
-                new IgCredentials("amfshr-demo", "pw", "placeholder-key", "AB12CE");
+                new IgCredentials("demo-trader", "pw", "placeholder-key", "AB12CE");
         manager = new IgSessionManager(transport, IgEnvironment.DEMO, credentials,
                 new RequestPacer(30, time.clock(), time.sleeper()),
                 new LoginRateGate(time.clock(), time.sleeper()));
@@ -79,7 +79,7 @@ class IgSessionManagerTest {
         assertEquals("https://demo-api.ig.com/gateway/deal/session", login.uri().toString());
         assertEquals("2", login.headers().get("VERSION"));
         assertEquals("placeholder-key", login.headers().get("X-IG-API-KEY"));
-        assertEquals("{\"identifier\":\"amfshr-demo\",\"password\":\"pw\"}", login.body());
+        assertEquals("{\"identifier\":\"demo-trader\",\"password\":\"pw\"}", login.body());
 
         HttpCall switchCall = transport.calls.get(1);
         assertEquals("PUT", switchCall.method());
