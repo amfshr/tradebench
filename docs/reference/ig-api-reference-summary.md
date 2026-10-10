@@ -147,7 +147,7 @@ the underlying API contract that makes both bugs make sense.
 
 ### `GET /accounts` — list accounts on this login
 Matches what our diagnostic spike used (`fetch_accounts()`) to discover
-Alex's two accounts (`Z6CS3D` CFD/preferred, `Z6CS3E` SPREADBET). Also
+the fixture's two accounts (`AB12CD` CFD/preferred, `AB12CE` SPREADBET — synthetic ids, same shape as IG's). Also
 returns `balance.{available,balance,deposit,profitLoss}` and `status`
 (`ENABLED`/`DISABLED`/`SUSPENDED_FROM_DEALING`) per account — useful later
 for a pre-flight sanity check in the OMS.

@@ -24,7 +24,7 @@ import dev.amfshr.tradebench.marketdata.store.BestEffortEventLog;
 
 class PacerDiscoveryTest {
 
-    private static final IgSession SESSION = new IgSession(new IgTokens("cst", "xst"), "Z6CS3E",
+    private static final IgSession SESSION = new IgSession(new IgTokens("cst", "xst"), "AB12CE",
             "https://demo-apd.marketdatasystems.com", List.of());
     private static final Instant NOW = Instant.parse("2026-09-28T07:00:05Z");
     private static final Clock FROZEN = new FakeClock(NOW);

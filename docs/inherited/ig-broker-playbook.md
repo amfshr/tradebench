@@ -78,8 +78,8 @@ Two compounding causes:
   account:
 
   ```
-  Z6CS3D  CFD         preferred=True   ← every fresh login lands here
-  Z6CS3E  SPREADBET   preferred=False  ← the account we actually trade
+  AB12CD  CFD         preferred=True   ← every fresh login lands here
+  AB12CE  SPREADBET   preferred=False  ← the account we actually trade
   ```
 
   The session tokens (CST / X-SECURITY-TOKEN) are **bound to the active account**, and the price
@@ -109,7 +109,7 @@ Reference: `ig_client.py:424-464`. The load-bearing lines:
 
 ```
 POST '/session', resp 200
-switched active account Z6CS3D -> Z6CS3E
+switched active account AB12CD -> AB12CE
 Lightstreamer status: CONNECTED:WS-STREAMING
 subscribed: PRICE:IX.D.DAX.DAILY.IP
 ```

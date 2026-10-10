@@ -144,7 +144,7 @@ class BuffersTest {
     @Test
     void malformedUpdatesAreChargedToTheirMarket() {
         Buffers queues = buffers(10);
-        queues.onMalformed(DAX, "PRICE:Z6CS3E:" + DAX);
+        queues.onMalformed(DAX, "PRICE:AB12CE:" + DAX);
         queues.onMalformed(FTSE, "CHART:" + FTSE + ":1MINUTE");
 
         assertEquals(2, queues.malformedUpdates());

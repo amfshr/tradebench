@@ -12,7 +12,7 @@ import dev.amfshr.tradebench.ig.session.IgTokens;
  * it fails retryably — IG is down. */
 public final class FakeSessions implements IgSessions {
 
-    public static final String ACCOUNT = "Z6CS3E";
+    public static final String ACCOUNT = "AB12CE";
 
     public int logins;
     public int reLogins;

@@ -19,7 +19,7 @@ import org.junit.jupiter.api.Test;
 /** The fake's wire contract — what the scenario harness leans on (E1-T11 increment 1). */
 class FakeStreamTransportTest {
 
-    private static final String DAX_PRICE = "PRICE:Z6CS3E:IX.D.DAX.DAILY.IP";
+    private static final String DAX_PRICE = "PRICE:AB12CE:IX.D.DAX.DAILY.IP";
     private static final String DAX_CHART = "CHART:IX.D.DAX.DAILY.IP:1MINUTE";
 
     private final FakeStreamTransport fake = new FakeStreamTransport();
