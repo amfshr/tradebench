@@ -23,4 +23,4 @@ vendor-neutral seams and decides nothing. Resilience policy lives in the consume
   (`JdkHttpTransport`, `LightstreamerTransport`) — swapping a provider is one class.
 - Injectable timeouts and `Sleeper`; wire fixtures carry a provenance ledger.
 
-*Teaches the concepts: Field Manual [ch. 1 — Sockets & Lightstreamer](../../../field-manual/01-sockets-and-lightstreamer.md).*
+*Teaches the concepts: Field Manual [ch. 1 — Sockets & Lightstreamer](../../../field-manual/market-data-service/01-sockets-and-lightstreamer.md).*

@@ -14,10 +14,12 @@ secrets.json
 # --- strategy definitions (real strategy content never enters the repo) ---
 strategies/private/
 
-# --- java / gradle ---
+# --- java / gradle (bare names: the negations keep src/ packages of the same name visible — E1-T10 #32) ---
 build/
+!**/src/**/build/
 .gradle/
 out/
+!**/src/**/out/
 *.class
 *.jar
 !gradle/wrapper/gradle-wrapper.jar
@@ -38,3 +40,4 @@ web/**/coverage/
 *.parquet
 data/local/
 tmp/
+!**/src/**/tmp/

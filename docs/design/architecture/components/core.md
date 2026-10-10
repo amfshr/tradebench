@@ -12,7 +12,7 @@ No I/O, no framework, no vendor.
 - **Time SPI** (`core.time`): `Clock` — two methods, deliberately split: `wallInstant()`
   for stamps and `monotonicNanos()` for spans. `SystemClock` is the only place the platform
   reads a real clock; everything else takes readings as arguments (see the Field Manual on
-  [clocks](../../../field-manual/07-clocks-wall-monotonic-and-sleep.md)).
+  [clocks](../../../field-manual/foundations/07-clocks-wall-monotonic-and-sleep.md)).
 
 ## Boundaries
 
@@ -25,4 +25,4 @@ No I/O, no framework, no vendor.
 JSpecify `@NullMarked` from birth (D14); Java 25 (D12). No validating constructors on wire
 DTOs — judging market data is a consumer concern (tech-notes).
 
-*Teaches the concepts: Field Manual [ch. 7 — Clocks](../../../field-manual/07-clocks-wall-monotonic-and-sleep.md).*
+*Teaches the concepts: Field Manual [ch. 7 — Clocks](../../../field-manual/foundations/07-clocks-wall-monotonic-and-sleep.md).*

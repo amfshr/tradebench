@@ -1,4 +1,5 @@
-# PR lane for web/** — test + typecheck + build. Not a required check yet
+# PR lane for web/** — test + typecheck + build — and for the docs the site serves, whose
+# dead-link check (deadLinks.test.ts) runs here too (E1-T10 #25). Not a required check yet
 # (protection requires the Java `build`); promote once E2 merges and proves stable.
 name: web
 
@@ -6,6 +7,10 @@ on:
   pull_request:
     paths:
       - 'web/**'
+      - 'docs/**'
+      - '.claude/tasks/**'
+      - 'README.md'
+      - 'CLAUDE.md'
       - '.github/workflows/web-ci.yml'
 
 jobs:
