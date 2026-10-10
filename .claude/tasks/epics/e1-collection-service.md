@@ -771,7 +771,7 @@ one Testcontainers test per store; mutation: return 0 instead of throwing); (2) 
 pre-existing test literals (`ig-client` and `market-data-service` tests) and the wire fixture
 `ig-client/src/test/resources/wire/login-response.json` on main — G1's text did not then call an account id a credential and slice C
 did not add it — surfaced as open for Alex, not a finding; **closed by PR #21 the same day** (merge `5735640`: both ids replaced
-with the synthetic pair `AB12CD`/`AB12CE`; the rule — everything in `.env` is sensitive — now in G1, `27e30d0`). **T10 closes with this merge: every finding
+with the synthetic pair `AB12CD`/`AB12CE`; the rule — everything in `.env` is sensitive — now in G1, `27e30d0`; the check's two further hits, the IG login identifier and the instance name, redacted by PR #22, merge `200ca52`). **T10 closes with this merge: every finding
 of the PR #14 review is resolved** (A1 #1, #2 · A2 twelve · B nine — #15 and #16 counted apart, fixed together · T11 two, #23 and #27 · C eight — 33 findings,
 four slices plus the harness). **Next:** E1-T12 → the belt's single cloud re-review, now gated only on T12 (the close-out ruling below) → E1-T6.
 
