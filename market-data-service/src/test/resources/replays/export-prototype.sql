@@ -11,6 +11,9 @@
 --
 -- anchor: the instant placed at offset before_secs (here the last DAX tick before the silence);
 -- the window runs from anchor - before_secs to anchor + until_secs - before_secs.
+-- recorded / modelled: the curator's two header sections (the T12 nod, 2026-10-10) — what the source
+-- recorded that the expectations may anchor on, and what the harness supplies because the source
+-- did not record it (here: the server's answers). scripts/export-replay.sh passes every variable.
 \set QUIET on
 with params as (
   select :'anchor'::timestamptz as anchor,
@@ -41,6 +44,8 @@ bars as (
 lines as (
   select 0::bigint as at, 0 as ord, json_build_object('at', 0, 'kind', 'replay', 'payload', json_build_object(
            'name', :'name',
+           'recorded', :'recorded',
+           'modelled', :'modelled',
            'source', 'prototype igtrader_demo: igtrader.dax_ticks + igtrader.nasdaq_ticks; bars synthesised per minute from the ticks; no Lightstreamer statuses were stored, so the server answers as a healthy one would',
            'origin', to_char(p.origin at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"'),
            'anchor', to_char(p.anchor at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"'),

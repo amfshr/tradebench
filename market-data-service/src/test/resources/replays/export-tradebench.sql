@@ -38,6 +38,8 @@ epics as (
 lines as (
   select 0::bigint as at, 0 as ord, json_build_object('at', 0, 'kind', 'replay', 'payload', json_build_object(
            'name', :'name',
+           'recorded', :'recorded',
+           'modelled', :'modelled',
            'source', 'tradebench market_data: ticks + bars_1m (the CHART feed''s bid/ask candles); ticks carry no DLG_FLAG, so dealFlag is omitted; no Lightstreamer statuses are stored, so the server answers as a healthy one would',
            'origin', to_char(p.origin at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"'),
            'anchor', to_char(p.anchor at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"'),
