@@ -240,7 +240,9 @@ event writes go onto a bounded queue that one writer thread drains (`QueuedEvent
 E1-T10 #12) — a full queue refuses the event and the sweep counts the drop, a write Postgres refuses
 is counted by the writer and dropped (`eventWriteFailures`, surfaced by the heartbeat), never
 retried and never allowed to kill a thread; only a rebuild's re-login blocks, and that is the
-sweep's own remedy. Observability is downstream of the decision. **Every event named here is a `ServiceEvent` written through the
+sweep's own remedy. Observability is downstream of the decision — and every event the belt records is
+also one console line, an in-place retry saying so itself, so the operator reads the story even while the
+row is refused (E1-T10 #9). **Every event named here is a `ServiceEvent` written through the
 `EventLog` seam into
 `service_events`** — slice B (merged, PR #11) gave the belt its durable voice, so the reason
 a 3am rebuild happened is a row, not a lost log line; the catalogue is D25's `EventType`, the

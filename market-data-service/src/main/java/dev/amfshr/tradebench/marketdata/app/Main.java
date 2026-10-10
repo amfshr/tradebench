@@ -28,6 +28,7 @@ import dev.amfshr.tradebench.marketdata.store.PostgresStore;
 import dev.amfshr.tradebench.marketdata.store.SingleInstanceLock;
 
 import org.jspecify.annotations.Nullable;
+import dev.amfshr.tradebench.marketdata.store.BestEffortEventLog;
 import dev.amfshr.tradebench.marketdata.store.JsonlStore;
 import dev.amfshr.tradebench.marketdata.store.CaptureStore;
 import dev.amfshr.tradebench.marketdata.store.EventLog;
@@ -150,7 +151,8 @@ public final class Main {
         pumpThread.start();
         supervisorThread.start();
         eventsThread.start();
-        new PacerDiscovery(rest::applicationAllowance, pacer::setPerMinute, eventLog,
+        new PacerDiscovery(rest::applicationAllowance, pacer::setPerMinute,
+                new BestEffortEventLog(eventLog, message -> log(instance, message)),
                 message -> log(instance, message), clock).discover(sessions.current());
 
         while (true) {

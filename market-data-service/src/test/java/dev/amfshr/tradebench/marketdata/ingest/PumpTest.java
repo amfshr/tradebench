@@ -35,6 +35,7 @@ import dev.amfshr.tradebench.marketdata.events.EventCategory;
 import dev.amfshr.tradebench.marketdata.events.EventType;
 import dev.amfshr.tradebench.marketdata.events.ServiceEvent;
 import dev.amfshr.tradebench.marketdata.events.Severity;
+import dev.amfshr.tradebench.marketdata.store.BestEffortEventLog;
 import dev.amfshr.tradebench.marketdata.store.CaptureStore;
 import dev.amfshr.tradebench.marketdata.store.EventLog;
 import dev.amfshr.tradebench.marketdata.store.GapStore;
@@ -53,6 +54,11 @@ class PumpTest {
     };
     private static final Consumer<RuntimeException> NO_DEATH = cause -> {
     };
+
+    /** As the assembly wires it: the pump's log is best-effort by type (E1-T10 #26). */
+    private static BestEffortEventLog bestEffort(EventLog delegate) {
+        return new BestEffortEventLog(delegate, LOG_NOWHERE);
+    }
 
     private static class RecordingSink implements CaptureStore {
         final List<String> order = new ArrayList<>();
@@ -116,7 +122,7 @@ class PumpTest {
         queues.onTick(tick(10));   // null -> DEAL is a transition: one state change
         queues.onTick(tick(11));   // still DEAL: no new state change
         queues.onSealedBar(bar(60));
-        Pump pump = new Pump(queues, sink, new GapDetector(), gaps, events, NO_SLEEP, new FakeClock(), BACKOFF, LOG_NOWHERE, NO_DEATH);
+        Pump pump = new Pump(queues, sink, new GapDetector(), gaps, bestEffort(events), NO_SLEEP, new FakeClock(), BACKOFF, LOG_NOWHERE, NO_DEATH);
 
         int worked = pump.drainOnce();
 
@@ -142,7 +148,7 @@ class PumpTest {
         RecordingEventLog events = new RecordingEventLog();
         queues.onSealedBar(bar(0));     // minute 0 seeds the watermark
         queues.onSealedBar(bar(180));   // minute 3 -> minutes 1 and 2 are missing
-        Pump pump = new Pump(queues, sink, new GapDetector(), gaps, events, NO_SLEEP, new FakeClock(), BACKOFF, LOG_NOWHERE, NO_DEATH);
+        Pump pump = new Pump(queues, sink, new GapDetector(), gaps, bestEffort(events), NO_SLEEP, new FakeClock(), BACKOFF, LOG_NOWHERE, NO_DEATH);
 
         pump.drainOnce();
 
@@ -168,14 +174,14 @@ class PumpTest {
         GapStore boom = gap -> {
             throw new RuntimeException("bar_gaps insert failed");
         };
-        Pump pump = new Pump(queues, sink, new GapDetector(), boom, new RecordingEventLog(), NO_SLEEP, new FakeClock(), BACKOFF, LOG_NOWHERE, NO_DEATH);
+        Pump pump = new Pump(queues, sink, new GapDetector(), boom, bestEffort(new RecordingEventLog()), NO_SLEEP, new FakeClock(), BACKOFF, LOG_NOWHERE, NO_DEATH);
         pump.stop();
 
         pump.run();
 
         assertNull(pump.failure(),
                 "a derived-observability write must never halt capture (ruled 2026-10-03)");
-        assertEquals(1, pump.observabilityFailures(),
+        assertEquals(1, pump.gapWriteFailures(),
                 "but the failure is counted — loud, not silent");
         assertEquals(List.of("bar@0", "bar@180"), sink.order,
                 "both bars persisted — the product plane never stalled on a breadcrumb");
@@ -190,14 +196,15 @@ class PumpTest {
         EventLog boom = event -> {
             throw new RuntimeException("service_events insert failed");
         };
-        Pump pump = new Pump(queues, sink, new GapDetector(), new FakeGapStore(), boom, NO_SLEEP, new FakeClock(), BACKOFF, LOG_NOWHERE, NO_DEATH);
+        BestEffortEventLog events = bestEffort(boom);
+        Pump pump = new Pump(queues, sink, new GapDetector(), new FakeGapStore(), events, NO_SLEEP, new FakeClock(), BACKOFF, LOG_NOWHERE, NO_DEATH);
         pump.stop();
 
         pump.run();
 
         assertNull(pump.failure(),
                 "a failing market_state_change write must not halt capture (ruled 2026-10-03)");
-        assertEquals(1, pump.observabilityFailures(),
+        assertEquals(1, events.failures(),
                 "the state-event failure is counted — loud, not silent");
         assertEquals(List.of("bar@60", "tick@10"), sink.order,
                 "the bar and tick still persisted — the product plane never stalled");
@@ -207,7 +214,7 @@ class PumpTest {
     void idleCycleFlushesTheSink() throws InterruptedException {
         RecordingSink sink = new RecordingSink();
         Pump pump = new Pump(new Buffers(10, () -> 0L), sink, new GapDetector(), new FakeGapStore(),
-                new RecordingEventLog(), NO_SLEEP, new FakeClock(), BACKOFF, LOG_NOWHERE, NO_DEATH);
+                bestEffort(new RecordingEventLog()), NO_SLEEP, new FakeClock(), BACKOFF, LOG_NOWHERE, NO_DEATH);
 
         pump.cycle();
 
@@ -220,7 +227,7 @@ class PumpTest {
         RecordingSink sink = new RecordingSink();
         queues.onSealedBar(bar(60));
         Pump pump = new Pump(queues, sink, new GapDetector(), new FakeGapStore(),
-                new RecordingEventLog(), NO_SLEEP, new FakeClock(), BACKOFF, LOG_NOWHERE, NO_DEATH);
+                bestEffort(new RecordingEventLog()), NO_SLEEP, new FakeClock(), BACKOFF, LOG_NOWHERE, NO_DEATH);
         pump.stop();
 
         pump.run();
@@ -247,7 +254,7 @@ class PumpTest {
         };
         List<RuntimeException> deaths = new ArrayList<>();
         Pump pump = new Pump(queues, failingSink, new GapDetector(), new FakeGapStore(),
-                new RecordingEventLog(), NO_SLEEP, new FakeClock(), BACKOFF, LOG_NOWHERE, deaths::add);
+                bestEffort(new RecordingEventLog()), NO_SLEEP, new FakeClock(), BACKOFF, LOG_NOWHERE, deaths::add);
 
         pump.run();
 
@@ -337,7 +344,7 @@ class PumpTest {
         RecordingEventLog events = new RecordingEventLog();
         List<String> log = new ArrayList<>();
         List<RuntimeException> deaths = new ArrayList<>();
-        Pump pump = new Pump(queues, sink, new GapDetector(), new FakeGapStore(), events, sleeper,
+        Pump pump = new Pump(queues, sink, new GapDetector(), new FakeGapStore(), bestEffort(events), sleeper,
                 clock, BACKOFF, log::add, deaths::add);
         return new Rig(queues, sink, events, clock, sleeper, log, deaths, pump);
     }
@@ -415,14 +422,15 @@ class PumpTest {
         EventLog down = event -> {
             throw new RuntimeException("service_events insert failed");
         };
+        BestEffortEventLog events = bestEffort(down);
         List<RuntimeException> deaths = new ArrayList<>();
-        Pump pump = new Pump(queues, sink, new GapDetector(), new FakeGapStore(), down,
+        Pump pump = new Pump(queues, sink, new GapDetector(), new FakeGapStore(), events,
                 new FakeSleeper(clock), clock, BACKOFF, LOG_NOWHERE, deaths::add);
 
         pump.run();
 
         assertEquals(List.of(boom), deaths, "the breadcrumb is Tier 2 — it never blocks the exit");
-        assertEquals(1, pump.observabilityFailures());
+        assertEquals(1, events.failures());
     }
 
     @Test
@@ -564,14 +572,15 @@ class PumpTest {
         EventLog boom = event -> {
             throw new RuntimeException("service_events insert failed");
         };
-        Pump pump = new Pump(queues, sink, new GapDetector(), new FakeGapStore(), boom, sleeper,
+        BestEffortEventLog events = bestEffort(boom);
+        Pump pump = new Pump(queues, sink, new GapDetector(), new FakeGapStore(), events, sleeper,
                 clock, BACKOFF, LOG_NOWHERE, NO_DEATH);
 
         pump.cycle();
         pump.cycle();
 
         assertEquals(List.of("bar@60"), sink.order);
-        assertEquals(1, pump.observabilityFailures(), "the breadcrumb is Tier 2 — counted, never thrown");
+        assertEquals(1, events.failures(), "the breadcrumb is Tier 2 — counted, never thrown");
     }
 
     @Test

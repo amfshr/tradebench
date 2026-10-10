@@ -473,9 +473,9 @@ Results, this run:
 real stack. `written=` lagging `ticks=` + `bars=` by one on two later heartbeats is a snapshot artefact (a
 tick sitting in the queue at the instant the line is printed), not a loss.
 
-## T10 — Resilience belt hardening: the PR #14 review 🔶 (ticketed 2026-10-05; started 2026-10-08 — A1 ✅ PR #15, merged 2026-10-08; A2 ✅ PR #17, merged 2026-10-09; B ✅ PR #19, merged 2026-10-10; C next — the last slice, one PR; T10 closes with it)
+## T10 — Resilience belt hardening: the PR #14 review 🔶 (ticketed 2026-10-05; started 2026-10-08 — A1 ✅ PR #15, merged 2026-10-08; A2 ✅ PR #17, merged 2026-10-09; B ✅ PR #19, merged 2026-10-10; C 🔶 started 2026-10-10 — the last slice, one PR; T10 closes with it)
 
-**Type** build · **Branch** — (slice C's branch not yet cut; A1 merged from `e1-t10-belt-hardening`, PR #15; A2 merged from `e1-t10-a2-detectors-verdicts`, PR #17; B merged from `e1-t10-b-sink-and-database-edge`, PR #19) · **Started** 2026-10-08 · **Blocked by** —
+**Type** build · **Branch** `e1-t10-c-loudness-reuse-docs` (slice C, from main `897fb99`; A1 merged from `e1-t10-belt-hardening`, PR #15; A2 merged from `e1-t10-a2-detectors-verdicts`, PR #17; B merged from `e1-t10-b-sink-and-database-edge`, PR #19) · **Started** 2026-10-08 · **Blocked by** —
 
 **Goal:** the belt's 32 review findings fixed or answered, each fix carrying the test that would have caught
 it — so chapter 10's promises hold on the code, not only in prose.
@@ -503,7 +503,7 @@ sweep thread via a bounded queue drained by one writer thread, drops counted in 
 
 **Slices (Alex's sequencing, 2026-10-08, standing: A1 first with targeted tests — ✅ PR #15 → E1-T11 the harness — ✅ PR #16,
 merged 2026-10-08 → A2 as scenarios on it — ✅ PR #17, merged 2026-10-09 → B as scenarios — ✅ PR #19, merged 2026-10-10 → C,
-the last slice, one PR → E1-T12 replay acceptance → the belt's single cloud re-review, once every T10 finding is resolved
+the last slice, one PR — 🔶 started 2026-10-10 → E1-T12 replay acceptance → the belt's single cloud re-review, once every T10 finding is resolved
 (the close-out ruling, below) → E1-T6):**
 
 - **A1 — the two highs, targeted tests, first.** **#1** a quarantined market's twin-leg rejection re-admits it:
@@ -576,7 +576,7 @@ the last slice, one PR → E1-T12 replay acceptance → the belt's single cloud 
   asserting `tick@10, tick@11`; **#31** `StreamEvents.onMalformed(epic, item)` so `Buffers.epicOf` and its tests
   go (closes the slice C step-4 review's `epicOf` follow-up — `41969a7`); **#32** `.gitignore` un-ignores
   `**/src/**/build|out|tmp/`; **#25** the three field-manual links broken by D26 (`components/ig-client.md:26`,
-  `core.md:15`, `:28`).
+  `core.md:15`, `:28`). **Started 2026-10-10 — the record in "C — started", below.**
 - **#23** (no combined-detector test) *is* the harness — **E1-T11**.
 
 **A2 — merged (PR #17, 2026-10-09).** **Started 2026-10-09** on `e1-t10-a2-detectors-verdicts` (branched from main at `c2d46e8`); design nod
@@ -727,8 +727,24 @@ merge 2026-10-09T23:31Z); CI green on the merged head (`build` 48s, GitGuardian 
 `54d6ab2` (1/4) · `cb7ec46` (2/4) · `1d3d351` (3/4) · `58fff49` (4/4) · `d5b4ef9` (the review fixes) · `381d06a` (board). The
 board's Done history carries the entry (tagged E1-T10). **Open for Alex:** whether the `boolean recover()` mechanism (review
 finding 3) stands as taken — noted, not a blocker. **Next:** **slice C — the last slice of T10, one PR; T10 closes with it** (#9,
-#10, #22, #25, #26, #28, #31, #32; #27 done at T11) → E1-T12 → the belt's single cloud re-review once every T10 finding is
-resolved (the close-out ruling below) → E1-T6.
+#10, #22, #25, #26, #28, #31, #32; #27 done at T11; **started 2026-10-10 — the record in "C — started", below**) → E1-T12 → the
+belt's single cloud re-review once every T10 finding is resolved (the close-out ruling below) → E1-T6.
+
+**C — started 2026-10-10** on `e1-t10-c-loudness-reuse-docs` (branched from main at `897fb99`); design nod posted and accepted by Alex
+2026-10-10 ("okay fab proceed"). **Three increments, one PR for the slice — the last slice of T10; T10 closes with it:** **1 loudness**
+(#9, #26) · **2 reuse and seams** (#10, #31, #28, #22) · **3 docs and conventions** (#25, #32); #27 was done at T11. **In-ticket
+decisions accepted at the nod:** **#26** the decorator is `BestEffortEventLog` — the codebase's own term, not the review's
+`CountingEventLog`: a refused write is counted and logged, never thrown; one per producer (pump, supervisor, pacer); the heartbeat
+line keeps its D27 vocabulary — `obsFailures=` stays the pump's Tier-2 total (the gap store + its events), `eventWriteFailures=`
+the belt's (the supervisor's decorator + the queue writer); **#9** every event the Supervisor records is also one console line,
+plus a line on the Retry verdict (a superset of the four lines the review names); **#22** the batch, not the short-circuit — the
+status store takes the list of rows, one pooled connection, one statement, so a failed publish counts once (one acquire timeout
+per heartbeat, not one per market); **#25** the three links fixed plus a real dead-link check — a vitest test in the docs site
+walks the repo's docs and board on disk and fails on any relative markdown link whose target is missing (a census on 2026-10-10
+found exactly the three review-named links dead), and the web PR lane's paths widened to `docs/**` and `.claude/tasks/**` so it
+runs on docs-only PRs; **#28** test fidelity only — the flaky sink holds a failed tick and replays it in `recover`, as the real
+store does; **#31** `onMalformed(epic, itemName)` as the review wrote; `Buffers` charges the market by epic. **Next:** this
+slice's PR → E1-T12 → the belt's single cloud re-review once every T10 finding is resolved (the close-out ruling below) → E1-T6.
 
 **The A2/B backlog on the harness (E1-T11 — merged 2026-10-08, PR #16; written 2026-10-08, the tenth, #4's window-lapse arm, added at T11's
 doctrine review; each verified red for its finding's reason):** the ten `@Disabled` scenarios in `BeltScenariosTest` —
@@ -984,7 +1000,7 @@ language — the belt's scenarios, test names, comments and docs frame a **suspe
 **Sequencing (Alex, 2026-10-08, standing):** E1-T10 slice A1 is on main (PR #15, merged 2026-10-08); this harness
 is on main (PR #16, merged 2026-10-08); **T10 A2 is on main (PR #17, merged 2026-10-09)** — its seven scenarios switched on
 (#3 · #4 ×2 · #5 ×2 · #8 · #33), the host-suspend-then-stuck variant and the ruling-3 rename built; **T10 B is on main (PR #19, merged 2026-10-10)** — its three
-scenarios switched on here (#6 · #20 ×2), none `@Disabled` remain. Next: T10's C, the last slice, one PR → **E1-T12** replay acceptance (unblocked by this merge) → the belt's single cloud re-review, once every
+scenarios switched on here (#6 · #20 ×2), none `@Disabled` remain. Next: T10's C, the last slice, one PR (🔶 started 2026-10-10) → **E1-T12** replay acceptance (unblocked by this merge) → the belt's single cloud re-review, once every
 T10 finding is resolved (T10 § close-out ruling; Alex's 2026-10-09 clarification named only T10; T12 before the re-review
 confirmed by Alex 2026-10-10 — "part C, then T12, then review") → E1-T6 (a re-review pass gates it).
 
@@ -1053,7 +1069,7 @@ field-manual note on the replay library (where it lives, how a new outage become
 **Estimate:** ≈ two sessions.
 
 **Sequencing (Alex, 2026-10-08, standing):** T11 (✅ PR #16, merged 2026-10-08) → T10 A2 as scenarios (✅ PR #17,
-merged 2026-10-09) → T10 B as scenarios (✅ PR #19, merged 2026-10-10) → T10 C → **T12** → the belt's single cloud re-review, once every T10 finding is resolved
+merged 2026-10-09) → T10 B as scenarios (✅ PR #19, merged 2026-10-10) → T10 C (🔶 started 2026-10-10) → **T12** → the belt's single cloud re-review, once every T10 finding is resolved
 (T10 § close-out ruling; Alex's 2026-10-09 clarification named only T10 — T12 before the re-review confirmed by Alex 2026-10-10)
 → T6 (a re-review pass gates T6).
 
