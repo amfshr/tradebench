@@ -23,7 +23,7 @@ import dev.amfshr.tradebench.ig.testutil.Wire;
 
 /**
  * The §1.1 bring-up sequence and §1.2 rebuild discipline. Anchors are the wire facts from
- * the playbook (fixture: profile prefers CFD Z6CS3D; we trade SPREADBET Z6CS3E).
+ * the playbook (fixture: profile prefers CFD AB12CD; we trade SPREADBET AB12CE).
  */
 class IgSessionManagerTest {
 
@@ -40,7 +40,7 @@ class IgSessionManagerTest {
         transport = new FakeTransport();
         time = new FakeTime();
         IgCredentials credentials =
-                new IgCredentials("amfshr-demo", "pw", "placeholder-key", "Z6CS3E");
+                new IgCredentials("amfshr-demo", "pw", "placeholder-key", "AB12CE");
         manager = new IgSessionManager(transport, IgEnvironment.DEMO, credentials,
                 new RequestPacer(30, time.clock(), time.sleeper()),
                 new LoginRateGate(time.clock(), time.sleeper()));
@@ -58,11 +58,11 @@ class IgSessionManagerTest {
         // Tokens MUST be the switch response's — switching refreshes them (§1.4). Reading the
         // login tokens here is exactly the "streaming connects but shows nothing" bug.
         assertEquals(new IgTokens("switchedCst", "switchedXst"), session.tokens());
-        assertEquals("Z6CS3E", session.activeAccountId());
+        assertEquals("AB12CE", session.activeAccountId());
         assertEquals("https://demo-apd.marketdatasystems.com", session.lightstreamerEndpoint());
         assertEquals(List.of(
-                new IgAccount("Z6CS3D", "CFD", true),
-                new IgAccount("Z6CS3E", "SPREADBET", false)), session.accounts());
+                new IgAccount("AB12CD", "CFD", true),
+                new IgAccount("AB12CE", "SPREADBET", false)), session.accounts());
         assertEquals("CST-switchedCst|XST-switchedXst", session.tokens().lightstreamerPassword());
     }
 
@@ -86,13 +86,13 @@ class IgSessionManagerTest {
         assertEquals("1", switchCall.headers().get("VERSION"));
         assertEquals("loginCst", switchCall.headers().get("CST"));
         assertEquals("loginXst", switchCall.headers().get("X-SECURITY-TOKEN"));
-        assertEquals("{\"accountId\":\"Z6CS3E\",\"defaultAccount\":false}", switchCall.body());
+        assertEquals("{\"accountId\":\"AB12CE\",\"defaultAccount\":false}", switchCall.body());
     }
 
     @Test
     void noSwitchWhenLoginAlreadyLandsOnTheConfiguredAccount() throws Exception {
         String alreadyRight = Wire.fixture("login-response.json")
-                .replace("\"currentAccountId\": \"Z6CS3D\"", "\"currentAccountId\": \"Z6CS3E\"");
+                .replace("\"currentAccountId\": \"AB12CD\"", "\"currentAccountId\": \"AB12CE\"");
         transport.enqueue(FakeTransport.jsonWithTokens(200, alreadyRight, "loginCst", "loginXst"));
 
         IgSession session = manager.current();
@@ -111,7 +111,7 @@ class IgSessionManagerTest {
         IgSession session = manager.current();
 
         assertEquals(new IgTokens("loginCst", "loginXst"), session.tokens());
-        assertEquals("Z6CS3E", session.activeAccountId());
+        assertEquals("AB12CE", session.activeAccountId());
     }
 
     @Test
@@ -161,7 +161,7 @@ class IgSessionManagerTest {
         transport.enqueue(FakeTransport.jsonWithTokens(200, SWITCH_OK_BODY, "c2", "x2"));
         IgSession original = manager.current();
 
-        transport.enqueue(FakeTransport.json(200, "{\"accountId\":\"Z6CS3E\"}"));
+        transport.enqueue(FakeTransport.json(200, "{\"accountId\":\"AB12CE\"}"));
         IgSession revalidated = manager.afterFailure();
 
         // Rebuilds must NOT re-login while tokens live — rapid logins get IG's cached,

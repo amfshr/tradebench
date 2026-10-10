@@ -17,7 +17,7 @@ class IgCredentialsTest {
             "IG_DEMO_IDENTIFIER", "amfshr-demo",
             "IG_DEMO_PASSWORD", "placeholder-password",
             "IG_DEMO_API_KEY", "placeholder-api-key",
-            "IG_DEMO_ACCOUNT_ID", "Z6CS3E");
+            "IG_DEMO_ACCOUNT_ID", "AB12CE");
 
     @Test
     void loadsTheEnvironmentsOwnVariables() {
@@ -25,7 +25,7 @@ class IgCredentialsTest {
         assertEquals("amfshr-demo", creds.identifier());
         assertEquals("placeholder-password", creds.password());
         assertEquals("placeholder-api-key", creds.apiKey());
-        assertEquals("Z6CS3E", creds.accountId());
+        assertEquals("AB12CE", creds.accountId());
     }
 
     @Test
@@ -33,7 +33,7 @@ class IgCredentialsTest {
         Map<String, String> withoutKey = Map.of(
                 "IG_DEMO_IDENTIFIER", "amfshr-demo",
                 "IG_DEMO_PASSWORD", "pw",
-                "IG_DEMO_ACCOUNT_ID", "Z6CS3E");
+                "IG_DEMO_ACCOUNT_ID", "AB12CE");
         IgFatalConfigException thrown = assertThrows(IgFatalConfigException.class,
                 () -> IgCredentials.fromEnv(withoutKey, IgEnvironment.DEMO));
         assertTrue(thrown.getMessage().contains("IG_DEMO_API_KEY"),
@@ -51,7 +51,7 @@ class IgCredentialsTest {
     void identifierWithDotIsRejectedUpFront() {
         // IG's pattern forbids dots — 'amfshr.demo' failed live where 'amfshr-demo' worked.
         assertThrows(IgFatalConfigException.class,
-                () -> new IgCredentials("amfshr.demo", "pw", "key", "Z6CS3E"));
+                () -> new IgCredentials("amfshr.demo", "pw", "key", "AB12CE"));
     }
 
     @Test

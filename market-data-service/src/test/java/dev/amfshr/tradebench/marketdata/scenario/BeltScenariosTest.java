@@ -39,7 +39,7 @@ class BeltScenariosTest {
 
     private static final String DAX = "IX.D.DAX.DAILY.IP";
     private static final String NASDAQ = "IX.D.NASDAQ.CASH.IP";
-    private static final String DAX_PRICE = "PRICE:Z6CS3E:" + DAX;
+    private static final String DAX_PRICE = "PRICE:AB12CE:" + DAX;
     private static final String DAX_CHART = "CHART:" + DAX + ":1MINUTE";
 
     private static Duration s(long seconds) {

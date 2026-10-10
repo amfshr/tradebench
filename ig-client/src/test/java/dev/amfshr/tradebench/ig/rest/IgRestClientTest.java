@@ -37,9 +37,9 @@ class IgRestClientTest {
         transport = new FakeTransport();
         FakeTime time = new FakeTime();
         client = new IgRestClient(transport, IgEnvironment.DEMO,
-                new IgCredentials("amfshr-demo", "pw", "placeholder-key", "Z6CS3E"),
+                new IgCredentials("amfshr-demo", "pw", "placeholder-key", "AB12CE"),
                 new RequestPacer(30, time.clock(), time.sleeper()));
-        session = new IgSession(new IgTokens("cstA", "xstA"), "Z6CS3E",
+        session = new IgSession(new IgTokens("cstA", "xstA"), "AB12CE",
                 "https://demo-apd.marketdatasystems.com", List.of());
     }
 

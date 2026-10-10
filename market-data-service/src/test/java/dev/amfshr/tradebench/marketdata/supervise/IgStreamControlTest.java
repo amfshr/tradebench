@@ -33,9 +33,9 @@ class IgStreamControlTest {
 
     private static final String DAX = "IX.D.DAX.DAILY.IP";
     private static final String FTSE = "IX.D.FTSE.DAILY.IP";
-    private static final String DAX_PRICE = "PRICE:Z6CS3E:" + DAX;
+    private static final String DAX_PRICE = "PRICE:AB12CE:" + DAX;
     private static final String DAX_CHART = "CHART:" + DAX + ":1MINUTE";
-    private static final String FTSE_PRICE = "PRICE:Z6CS3E:" + FTSE;
+    private static final String FTSE_PRICE = "PRICE:AB12CE:" + FTSE;
     private static final String FTSE_CHART = "CHART:" + FTSE + ":1MINUTE";
     private static final Duration BOOT_RETRY = Duration.ofSeconds(30);
     private static final Duration BOOT_BUDGET = Duration.ofMinutes(10);
@@ -80,7 +80,7 @@ class IgStreamControlTest {
         }
 
         private static IgSession session(String cst) {
-            return new IgSession(new IgTokens(cst, "xst"), "Z6CS3E",
+            return new IgSession(new IgTokens(cst, "xst"), "AB12CE",
                     "https://demo-apd.marketdatasystems.com", List.of());
         }
     }

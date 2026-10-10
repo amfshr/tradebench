@@ -15,11 +15,11 @@ class LightstreamerTransportTest {
     @Test
     void mapsSpecToTheSdkSubscriptionExactly() {
         Subscription subscription = LightstreamerTransport.toSubscription(
-                new StreamTransport.SubscriptionSpec("MERGE", List.of("PRICE:Z6CS3E:X"),
+                new StreamTransport.SubscriptionSpec("MERGE", List.of("PRICE:AB12CE:X"),
                         List.of("TIMESTAMP", "BIDPRICE1"), "Pricing"));
 
         assertEquals("MERGE", subscription.getMode());
-        assertEquals(List.of("PRICE:Z6CS3E:X"), Arrays.asList(subscription.getItems()));
+        assertEquals(List.of("PRICE:AB12CE:X"), Arrays.asList(subscription.getItems()));
         assertEquals(List.of("TIMESTAMP", "BIDPRICE1"), Arrays.asList(subscription.getFields()));
         assertEquals("Pricing", subscription.getDataAdapter());
     }
@@ -27,8 +27,8 @@ class LightstreamerTransportTest {
     @Test
     void extractsTheSubscribedFieldsFromAnItemUpdate() {
         StreamTransport.SubscriptionSpec spec = new StreamTransport.SubscriptionSpec("MERGE",
-                List.of("PRICE:Z6CS3E:X"), List.of("TIMESTAMP", "BIDPRICE1"), "Pricing");
-        var update = fakeItemUpdate("PRICE:Z6CS3E:X",
+                List.of("PRICE:AB12CE:X"), List.of("TIMESTAMP", "BIDPRICE1"), "Pricing");
+        var update = fakeItemUpdate("PRICE:AB12CE:X",
                 java.util.Map.of("TIMESTAMP", "1790348223250", "BIDPRICE1", "24510.5"));
 
         var fields = LightstreamerTransport.extractFields(update, spec);

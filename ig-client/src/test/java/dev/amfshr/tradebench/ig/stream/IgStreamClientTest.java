@@ -56,7 +56,7 @@ class IgStreamClientTest {
     void setUp() {
         fake = new FakeStreamTransport();
         events = new RecordingEvents();
-        IgSession session = new IgSession(new IgTokens("cstA", "xstA"), "Z6CS3E",
+        IgSession session = new IgSession(new IgTokens("cstA", "xstA"), "AB12CE",
                 "https://demo-apd.marketdatasystems.com", List.of());
         streamSession = new IgStreamClient(fake).connect(session, events, new NoopConnection());
         priceHandle = streamSession.subscribePrice(DAX, new NoopState());
@@ -66,7 +66,7 @@ class IgStreamClientTest {
     @Test
     void connectsWithTheSessionsEndpointAccountAndTokenPassword() {
         assertEquals("https://demo-apd.marketdatasystems.com", fake.last().serverAddress);
-        assertEquals("Z6CS3E", fake.last().user);
+        assertEquals("AB12CE", fake.last().user);
         assertEquals("CST-cstA|XST-xstA", fake.last().password);
     }
 
@@ -75,7 +75,7 @@ class IgStreamClientTest {
         assertEquals(2, fake.last().specs.size());
         StreamTransport.SubscriptionSpec price = fake.last().specs.get(0);
         assertEquals("MERGE", price.mode());
-        assertEquals(List.of("PRICE:Z6CS3E:" + DAX), price.items());
+        assertEquals(List.of("PRICE:AB12CE:" + DAX), price.items());
         assertEquals(List.of("TIMESTAMP", "BIDPRICE1", "ASKPRICE1", "DLG_FLAG"), price.fields());
         assertEquals("Pricing", price.dataAdapter());
 
@@ -96,7 +96,7 @@ class IgStreamClientTest {
         fields.put("ASKPRICE1", "24511.7");
         fields.put("DLG_FLAG", "DEAL ");
 
-        fake.last().updateListeners.get(0).onUpdate("PRICE:Z6CS3E:" + DAX, fields);
+        fake.last().updateListeners.get(0).onUpdate("PRICE:AB12CE:" + DAX, fields);
 
         assertEquals(List.of(new TickUpdate(DAX, Instant.parse("2026-09-25T14:57:03.250Z"),
                 new BigDecimal("24510.5"), new BigDecimal("24511.7"), "DEAL")), events.ticks);
@@ -105,11 +105,11 @@ class IgStreamClientTest {
 
     @Test
     void garbagePriceUpdateCountsAsMalformed() {
-        fake.last().updateListeners.get(0).onUpdate("PRICE:Z6CS3E:" + DAX,
+        fake.last().updateListeners.get(0).onUpdate("PRICE:AB12CE:" + DAX,
                 Map.of("TIMESTAMP", "garbage"));
 
         assertTrue(events.ticks.isEmpty());
-        assertEquals(List.of("PRICE:Z6CS3E:" + DAX), events.malformed);
+        assertEquals(List.of("PRICE:AB12CE:" + DAX), events.malformed);
         assertEquals(List.of(DAX), events.malformedEpics, "charged to the market it was subscribed for (E1-T10 #31)");
     }
 
