@@ -313,7 +313,8 @@ in-ticket record.
 - **2026-10-03 — step 4:** the heartbeat publishes `capture_status` through `HealthProbe` (per-market
   telemetry from `Buffers`, stream state and reconnects from the Supervisor's `BeltView`);
   `last_bar_at_utc` is the bar's start; dropped ticks are charged to the shed tick's market;
-  `db_pending` is bars + ticks queued; a failing upsert is counted, never thrown. **Ruled the same
+  `db_pending` is bars + ticks queued; every market's row goes in one batch on one connection, and a
+  failing publish is counted once, never thrown (E1-T10 #22). **Ruled the same
   day:** the view and `ReconnectClassifier` share one rule — any `CONNECTED:*` substate except the
   `STREAM-SENSING` handshake is streaming, so a resume onto a polling fallback ends the outage and
   resets the ladder (the degradation itself is `TRANSPORT_DOWNGRADED`); the two voices cannot

@@ -9,6 +9,7 @@ import java.sql.SQLException;
 import java.sql.Statement;
 import java.time.Instant;
 import java.time.OffsetDateTime;
+import java.util.List;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -116,12 +117,12 @@ class PostgresObservabilityStoreTest extends PostgresTestBase {
     @Test
     void statusUpsertReplacesEveryFieldLatestWins() throws SQLException {
         // Two snapshots differing in EVERY field, so each DO UPDATE SET column is load-bearing.
-        store.upsert(new CaptureStatus("test-run", DAX, Instant.parse("2026-09-28T09:20:00Z"),
+        store.upsert(List.of(new CaptureStatus("test-run", DAX, Instant.parse("2026-09-28T09:20:00Z"),
                 StreamState.CONNECTED_STREAMING, "DEAL", Instant.parse("2026-09-28T09:19:59Z"),
-                Instant.parse("2026-09-28T09:19:00Z"), 10, 2, 1, 0, 0, 5));
-        store.upsert(new CaptureStatus("test-run", DAX, Instant.parse("2026-09-28T09:21:00Z"),
+                Instant.parse("2026-09-28T09:19:00Z"), 10, 2, 1, 0, 0, 5)));
+        store.upsert(List.of(new CaptureStatus("test-run", DAX, Instant.parse("2026-09-28T09:21:00Z"),
                 StreamState.RECONNECTING, "CLOSED", Instant.parse("2026-09-28T09:20:30Z"),
-                Instant.parse("2026-09-28T09:20:00Z"), 25, 4, 3, 1, 2, 7));
+                Instant.parse("2026-09-28T09:20:00Z"), 25, 4, 3, 1, 2, 7)));
 
         try (Connection c = database.dataSource().getConnection();
                 Statement s = c.createStatement();
@@ -147,14 +148,37 @@ class PostgresObservabilityStoreTest extends PostgresTestBase {
 
     @Test
     void statusUpsertStoresNullDbPending() throws SQLException {
-        store.upsert(new CaptureStatus("test-run", DAX, Instant.parse("2026-09-28T09:22:00Z"),
-                StreamState.WINDOW_CLOSED, null, null, null, 0, 0, 0, 0, 0, null));
+        store.upsert(List.of(new CaptureStatus("test-run", DAX, Instant.parse("2026-09-28T09:22:00Z"),
+                StreamState.WINDOW_CLOSED, null, null, null, 0, 0, 0, 0, 0, null)));
 
         try (Connection c = database.dataSource().getConnection();
                 Statement s = c.createStatement();
                 ResultSet r = s.executeQuery("SELECT db_pending FROM capture_status")) {
             r.next();
             assertNull(r.getObject("db_pending"));
+        }
+    }
+
+    @Test
+    void statusUpsertLandsEveryMarketOfTheBatch() throws SQLException {
+        // E1-T10 #22: the heartbeat sends every market's row in one call — each must land.
+        store.upsert(List.of(
+                new CaptureStatus("test-run", DAX, Instant.parse("2026-09-28T09:23:00Z"),
+                        StreamState.CONNECTED_STREAMING, "DEAL", null, null, 11, 1, 0, 0, 0, 0),
+                new CaptureStatus("test-run", "IX.D.FTSE.DAILY.IP", Instant.parse("2026-09-28T09:23:00Z"),
+                        StreamState.CONNECTED_STREAMING, "CLOSED", null, null, 22, 2, 0, 0, 0, 0)));
+
+        try (Connection c = database.dataSource().getConnection();
+                Statement s = c.createStatement();
+                ResultSet r = s.executeQuery("SELECT i.epic, cs.ticks_total FROM capture_status cs"
+                        + " JOIN instruments i ON cs.instrument_id = i.id ORDER BY i.epic")) {
+            r.next();
+            assertEquals(DAX, r.getString("epic"));
+            assertEquals(11, r.getLong("ticks_total"));
+            r.next();
+            assertEquals("IX.D.FTSE.DAILY.IP", r.getString("epic"));
+            assertEquals(22, r.getLong("ticks_total"));
+            assertEquals(false, r.next(), "two markets, two rows");
         }
     }
 

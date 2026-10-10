@@ -2,15 +2,10 @@ package dev.amfshr.tradebench.marketdata.store;
 
 import java.sql.Connection;
 import java.sql.PreparedStatement;
-import java.sql.ResultSet;
 import java.sql.SQLException;
-import java.time.Instant;
-import java.time.OffsetDateTime;
-import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
 
 import javax.sql.DataSource;
 
@@ -57,7 +52,7 @@ public final class PostgresStore implements CaptureStore {
     private final DataSource dataSource;
     private final short userId;
     private final short sourceId;
-    private final Map<String, Short> instrumentIds = new HashMap<>();
+    private final InstrumentIds instruments = new InstrumentIds(new HashMap<>()); // one thread: the pump's
     private final List<Tick> pending = new ArrayList<>(); // the batch, owned here
     private Connection connection;
     private PreparedStatement tickInsert;
@@ -68,9 +63,9 @@ public final class PostgresStore implements CaptureStore {
         this.dataSource = dataSource;
         try {
             this.connection = dataSource.getConnection();
-            this.userId = lookupId(connection, "SELECT id FROM users WHERE name = ?", userName,
+            this.userId = Jdbc.lookupId(connection, "SELECT id FROM users WHERE name = ?", userName,
                     "user");
-            this.sourceId = lookupId(connection, "SELECT id FROM sources WHERE name = ?",
+            this.sourceId = Jdbc.lookupId(connection, "SELECT id FROM sources WHERE name = ?",
                     sourceName, "source");
             this.tickInsert = connection.prepareStatement(INSERT_TICK);
             this.barUpsert = connection.prepareStatement(UPSERT_BAR);
@@ -101,8 +96,8 @@ public final class PostgresStore implements CaptureStore {
         try {
             barUpsert.setShort(1, userId);
             barUpsert.setShort(2, sourceId);
-            barUpsert.setShort(3, instrumentId(connection, bar.epic()));
-            barUpsert.setObject(4, utc(bar.startUtc()));
+            barUpsert.setShort(3, instruments.idFor(connection, bar.epic()));
+            barUpsert.setObject(4, Jdbc.utc(bar.startUtc()));
             setOhlc(barUpsert, 5, bar.bid());
             setOhlc(barUpsert, 9, bar.ask());
             if (bar.lastTradedVolume() != null) {
@@ -183,42 +178,10 @@ public final class PostgresStore implements CaptureStore {
     private void bind(PreparedStatement insert, Connection on, Tick tick) throws SQLException {
         insert.setShort(1, userId);
         insert.setShort(2, sourceId);
-        insert.setShort(3, instrumentId(on, tick.epic()));
-        insert.setObject(4, utc(tick.timestamp()));
+        insert.setShort(3, instruments.idFor(on, tick.epic()));
+        insert.setObject(4, Jdbc.utc(tick.timestamp()));
         insert.setBigDecimal(5, tick.bid());
         insert.setBigDecimal(6, tick.ask());
-    }
-
-    private short instrumentId(Connection on, String epic) throws SQLException {
-        Short cached = instrumentIds.get(epic);
-        if (cached != null) {
-            return cached;
-        }
-        try (PreparedStatement insert = on.prepareStatement(
-                "INSERT INTO instruments (epic) VALUES (?) ON CONFLICT (epic) DO NOTHING")) {
-            insert.setString(1, epic);
-            insert.executeUpdate();
-        }
-        short id = lookupId(on, "SELECT id FROM instruments WHERE epic = ?", epic, "instrument");
-        instrumentIds.put(epic, id);
-        return id;
-    }
-
-    // Throws the SQLException through, so every SQL failure reaches a write's catch and breaks
-    // the sink; only the constructor wraps it.
-    private static short lookupId(Connection on, String sql, String name, String kind)
-            throws SQLException {
-        try (PreparedStatement statement = on.prepareStatement(sql)) {
-            statement.setString(1, name);
-            try (ResultSet result = statement.executeQuery()) {
-                if (!result.next()) {
-                    throw new IllegalStateException(
-                            "unknown " + kind + " '" + name + "' — schema seeds are the"
-                                    + " source of truth; refusing to invent one");
-                }
-                return result.getShort(1);
-            }
-        }
     }
 
     // Discarding dead or superseded JDBC objects: a failure to close them has nothing to act on.
@@ -240,9 +203,5 @@ public final class PostgresStore implements CaptureStore {
         statement.setBigDecimal(firstIndex + 1, prices.high());
         statement.setBigDecimal(firstIndex + 2, prices.low());
         statement.setBigDecimal(firstIndex + 3, prices.close());
-    }
-
-    private static OffsetDateTime utc(Instant instant) {
-        return OffsetDateTime.ofInstant(instant, ZoneOffset.UTC);
     }
 }

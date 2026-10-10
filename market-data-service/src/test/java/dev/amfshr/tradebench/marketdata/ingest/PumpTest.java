@@ -285,6 +285,7 @@ class PumpTest {
         int recoverRefusals;
         @Nullable RuntimeException recoverFailure; // thrown by the next recover(), once
         boolean recoverLands; // when true, recover() reports that it landed held writes
+        @Nullable Tick held; // a tick taken but not landed — re-sent by recover(), as PostgresStore does (E1-T10 #28)
         private final FakeClock clock;
 
         FlakySink(FakeClock clock) {
@@ -306,7 +307,12 @@ class PumpTest {
 
         @Override
         public void write(Tick tick) {
-            failIfArmed();
+            try {
+                failIfArmed();
+            } catch (RuntimeException e) {
+                held = tick; // the store took it: the pump never sees this tick again
+                throw e;
+            }
             super.write(tick);
         }
 
@@ -327,6 +333,11 @@ class PumpTest {
             }
             if (recoverRefusals-- > 0) {
                 throw retryable("still down");
+            }
+            if (held != null) {
+                super.write(held);
+                held = null;
+                return true; // the held batch landed — the recovery is its own proof
             }
             return recoverLands;
         }
@@ -476,8 +487,8 @@ class PumpTest {
 
         assertEquals(List.of(5L), r.sink().recoverCalledAtSeconds);
         assertEquals(1, r.pump().sinkFailures());
-        assertEquals(List.of("tick@11"), r.sink().order,
-                "capture resumes — the failed tick is the store's to re-send (chapter 5)");
+        assertEquals(List.of("tick@10", "tick@11"), r.sink().order,
+                "the store re-sends the tick it held as it recovers, then capture resumes (chapter 5)");
         assertTrue(r.deaths().isEmpty());
     }
 
@@ -530,18 +541,19 @@ class PumpTest {
     }
 
     @Test
-    void anIdleFlushAfterAProvisionalRecoveryProvesNothing() throws InterruptedException {
-        // An empty flush is a no-op in the store — not evidence. The episode closes on the first
-        // real write after it: here the bar, one cycle later.
+    void aProvisionalRecoveryIsProvenByTheBarThatLandsNotByTheReconnect() throws InterruptedException {
+        // A bar failure holds nothing in the store (the bar stays queued), so its recovery only
+        // reconnects — provisional. The episode closes when the re-sent bar lands, one cycle later.
+        // (A tick failure is never provisional: the store holds the tick and recovery lands it —
+        // E1-T10 #28 made the fake say so, and the idle-flush variant this test replaced unreachable.)
         Rig r = rig(10);
-        r.queues().onTick(tick(1));
-        r.sink().armed.add(retryable("tick write failed"));
-        r.pump().cycle(); // fails → hold → recover (provisional)
-        r.pump().cycle(); // nothing queued: an idle flush
-        assertEquals(0, r.events().count(EventType.SINK_FAILURE), "no round trip yet — the episode is still open");
-
         r.queues().onSealedBar(bar(60));
-        r.pump().cycle();
+        r.sink().armed.add(retryable("bar write failed"));
+        r.pump().cycle(); // fails → hold → recover at 5s (provisional)
+        assertEquals(0, r.events().count(EventType.SINK_FAILURE), "reconnected, nothing landed — the episode is still open");
+
+        r.pump().cycle(); // the queued bar is re-sent and lands
+        assertEquals(List.of("bar@60"), r.sink().order);
         assertEquals(1, r.events().count(EventType.SINK_FAILURE), "the bar landed: now it is over");
     }
 

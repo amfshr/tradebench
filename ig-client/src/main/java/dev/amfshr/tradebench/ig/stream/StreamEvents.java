@@ -10,6 +10,7 @@ public interface StreamEvents {
 
     void onSealedBar(SealedBarUpdate bar);
 
-    /** A structurally broken update was dropped (in-progress candles are NOT malformed). */
-    void onMalformed(String itemName);
+    /** A structurally broken update was dropped (in-progress candles are NOT malformed): the
+     * market it was subscribed for, and the item it arrived on. */
+    void onMalformed(String epic, String itemName);
 }
