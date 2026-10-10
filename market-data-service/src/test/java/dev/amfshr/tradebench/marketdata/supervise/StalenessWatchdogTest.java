@@ -271,4 +271,39 @@ class StalenessWatchdogTest {
         assertEquals(List.of(new Fired(90, new Remedy(DAX, Action.RESUBSCRIBE, Signal.TICK_SILENT))), fired,
                 "not within a sweep: DAX gets its own remedy");
     }
+
+    @Test
+    void aSessionThatAnswersAndSendsNothingClimbsTheLadderToItsCap() {
+        // E1-T12 ruling 4 (from the extended scar replay): every rebuilt connection says it streams
+        // and nothing follows. The connection does not reset the session ladder — only data does —
+        // so it doubles from 60s to the 10-minute session cap instead of re-firing every 90s.
+        dog.track(NDX, 0);
+        List<Long> verdicts = new ArrayList<>();
+        while (clockSecond < 2200) {
+            clockSecond++;
+            for (Remedy r : dog.evaluate(clockSecond * S, clockSecond * 1000)) {
+                assertEquals(Action.REBUILD, r.action());
+                verdicts.add(clockSecond);
+                dog.onConnection(false, clockSecond * S); // the rebuild tears the session down
+                dog.onConnection(true, clockSecond * S + 1); // and the new one answers at once
+            }
+        }
+        assertEquals(List.of(90L, 210L, 450L, 930L, 1530L, 2130L), verdicts,
+                "grace 60s → 120 → 240 → 480 → 600 (the cap): a login every ten minutes at the limit");
+    }
+
+    @Test
+    void theSessionLadderClosesOnTheFirstTickAfterARebuild() {
+        dog.track(NDX, 0);
+        runTo(90); // the session verdict
+        dog.onConnection(false, 90 * S);
+        dog.onConnection(true, 90 * S + 1);
+        dog.onTick(DAX, 100 * S); // the new session delivers — the episode is over
+        dog.onTick(NDX, 100 * S);
+
+        runTo(300);
+
+        assertEquals(List.of(90L, 190L), fired.stream().map(Fired::second).toList(),
+                "the next silence is a fresh episode, judged 90s after its last tick — not held to the doubled 120s grace");
+    }
 }

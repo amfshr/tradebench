@@ -60,8 +60,9 @@ class BeltScenariosTest {
         assertEquals(List.of(DAX_PRICE, DAX_CHART),
                 o.remedies("subscribe").stream().map(Observed.Remedy::item).toList(), "the pair, once");
         assertTrue(o.remedies("unsubscribe").isEmpty());
-        assertEquals(List.of(EventType.MARKET_STATE_CHANGE),
-                o.events.stream().map(Observed.Seen::type).toList(), "the first DEAL flag is the only event");
+        assertEquals(List.of(EventType.CONNECTION_STATUS, EventType.MARKET_STATE_CHANGE),
+                o.events.stream().map(Observed.Seen::type).toList(),
+                "the boot's one status transition and the first DEAL flag are the only events");
         assertEquals(o.ticksDelivered + o.barsDelivered, o.landed.size(), "every tick and bar landed");
         assertEquals(0, o.ticksHeldAtEnd);
         assertEquals(List.of(60L, 120L, 180L),
@@ -280,7 +281,8 @@ class BeltScenariosTest {
                 "at 180 the supervisor had already seen the blink — it swept through the hold");
         assertEquals(StreamState.CONNECTED_STREAMING, o.heartbeats(DAX).get(3).state());
         assertTrue(o.events(EventType.RECONNECT).isEmpty(), "the breadcrumb was refused by the database");
-        assertTrue(o.summary.contains("eventWriteFailures=1"), o.summary);
+        assertTrue(o.summary.contains("eventWriteFailures=3"),
+                "the two raw status rows and the RECONNECT, all refused: " + o.summary);
         assertEquals(o.ticksDelivered, o.landed.size(), "and nothing was lost meanwhile");
         assertEquals(List.of(0L), o.secondsOf("connect"));
         assertTrue(o.exits.isEmpty());
@@ -589,5 +591,24 @@ class BeltScenariosTest {
         assertTrue(o.log.stream().anyMatch(line -> line.contains("sink close failed")));
         assertTrue(o.landed.size() < o.ticksDelivered, "the ticks after the outage began did not land");
         assertTrue(o.events(EventType.SINK_FAILURE).isEmpty(), "no recovery, so no recovery is recorded");
+    }
+
+    @Test
+    void aSessionThatAnswersAndSendsNothingIsRebuiltOnTheLadderNotEveryNinetySeconds() throws Exception {
+        // E1-T12 ruling 4, from the extended scar replay: every rebuild is greeted CONNECTED:WS-STREAMING
+        // and nothing follows. The watchdog's session ladder climbs across rebuilds — 60s → 120 → 240 →
+        // 480 → 600, the 10-minute cap — so the silence costs a login every ten minutes at the limit,
+        // not one every 90s; and the belt never gives up a feed that may return.
+        Scenario mute = Scenario.named("a session that answers and sends nothing").markets(DAX, NASDAQ)
+                .serverAnswers()
+                .every(s(1), s(1), s(60), t -> tick(DAX)).every(s(1), s(1), s(60), t -> tick(NASDAQ))
+                .until(s(1600)).build();
+
+        Observed o = ScenarioRunner.run(mute);
+
+        assertEquals(List.of(0L, 149L, 269L, 509L, 989L, 1589L), o.secondsOf("connect"),
+                "the first sweep 90s after the last tick (at 59s), then +120, +240, +480, +600, +600");
+        assertEquals(5, o.events(EventType.WATCHDOG_STALE).size(), "one session verdict per rebuild");
+        assertTrue(o.exits.isEmpty(), "never given up — the feed may return");
     }
 }

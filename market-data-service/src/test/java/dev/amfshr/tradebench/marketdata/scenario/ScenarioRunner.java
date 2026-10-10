@@ -17,6 +17,7 @@ import dev.amfshr.tradebench.ig.stream.StreamTransport;
 import dev.amfshr.tradebench.marketdata.app.CaptureAssembly;
 import dev.amfshr.tradebench.marketdata.ingest.Buffers;
 import dev.amfshr.tradebench.marketdata.store.Database;
+import dev.amfshr.tradebench.marketdata.store.PersistenceException;
 import dev.amfshr.tradebench.marketdata.supervise.Tuning;
 import dev.amfshr.tradebench.marketdata.testutil.FakeClock;
 import dev.amfshr.tradebench.marketdata.testutil.FakeSessions;
@@ -274,9 +275,20 @@ public final class ScenarioRunner {
         }
     }
 
-    private Observed finish() {
+    private Observed finish() throws InterruptedException {
         observeWire();
         if (!stopped) {
+            // The pump's last turn (E1-T12): what the final sleep's hook delivered is drained, and the
+            // batch flushed as its next idle cycle would have — without that cycle's sleep, so no time
+            // passes and no sweep falls due past the window. A sink still down keeps its batch held.
+            if (capture.queues.pendingWrites() > 0) {
+                capture.pump.cycle();
+            }
+            try {
+                stores.sink().flush();
+            } catch (PersistenceException e) {
+                // reported by ticksHeldAtEnd
+            }
             capture.events.drainOnce(); // a run that ended by the clock: the writer catches up
         }
         stores.collect(observed, start);

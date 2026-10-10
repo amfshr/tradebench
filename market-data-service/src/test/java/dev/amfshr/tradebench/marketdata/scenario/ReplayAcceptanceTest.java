@@ -14,6 +14,7 @@ import java.util.List;
 import java.util.Set;
 
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
@@ -63,6 +64,97 @@ class ReplayAcceptanceTest extends PostgresTestBase {
     }
 
     @Test
+    void theScarToTheCeilingCostsALoginEveryTenMinutesAtTheLimitAndNeverGivesUp() throws Exception {
+        // Recorded: 60s of health, then both feeds dead within 584ms of the anchor (NASDAQ's last tick
+        // at 60.056s) and silent for 23 minutes; the prototype sat CONNECTED:WS-STREAMING for 2h56m.
+        // Modelled: every rebuilt connection answers "streaming". Ruled (E1-T12 ruling 4): the session
+        // ladder climbs across such rebuilds — 60s → 120 → 240 → 480 → 600 (the cap) — and the belt
+        // never gives up a feed that may return.
+        Scenario scar = Replays.load("/replays/2026-08-04-silent-while-connected-ceiling.jsonl").build();
+
+        Observed o = ScenarioRunner.accept(scar, database);
+
+        assertEquals(List.of(0L, 151L, 271L, 511L, 991L), o.secondsOf("connect"),
+                "the first sweep 90s after the later last tick (60.056s), then +120, +240, +480; the +600 falls past the window");
+        assertEquals(4, o.events(EventType.WATCHDOG_STALE).size(), "one session verdict row per rebuild");
+        assertTrue(o.events(EventType.FEED_DEAD).isEmpty(), "never given up");
+        assertTrue(o.exits.isEmpty());
+        assertEquals(distinctTicks(scar), o.landed.stream().filter(l -> l.startsWith("tick@")).count(),
+                "every tick of the healthy minute is a row");
+        assertEquals(0, o.barsDelivered, "no minute closed with the feed alive at its end — the fixture holds no candle");
+        assertTrue(o.events(EventType.BAR_GAP).isEmpty());
+    }
+
+    @Test
+    void daxThinAtDawnEarnsOneResubscribeAndTheGapTheRecordShows() throws Exception {
+        // Recorded (2026-08-05): DAX silent 157s from the anchor (05:07:23.539Z), then 72s and 64s,
+        // while NASDAQ ticked; the prototype's watchdog resubscribed DAX once (05:08:53.662Z, silent
+        // 90.1s) and recorded bar_gap missing_bars 2 at 05:11:00Z. Only the first silence crosses 90s.
+        Scenario dawn = Replays.load("/replays/2026-08-05-dax-thin-at-dawn.jsonl").build();
+
+        Observed o = ScenarioRunner.accept(dawn, database);
+
+        assertEquals(List.of(0L), o.secondsOf("connect"), "one market quiet is market surgery, never a session verdict");
+        assertEquals(List.of(233L, 233L), o.remedies("subscribe").stream().filter(r -> r.at().toSeconds() > 0)
+                .map(r -> r.at().toSeconds()).toList(),
+                "the DAX pair re-asked for at the first sweep 90s after its last tick (143s) — the prototype's 05:08:53.662Z — and never again: 72s and 64s are under the line");
+        assertTrue(o.remedies("subscribe").stream().filter(r -> r.at().toSeconds() > 0)
+                .allMatch(r -> r.item().contains(DAX)), "NASDAQ, alive throughout, is left alone");
+        List<Observed.Seen> gaps = o.events(EventType.BAR_GAP);
+        assertEquals(1, gaps.size(), "one bar_gaps row");
+        assertEquals(DAX, gaps.get(0).epic());
+        assertEquals(2, gaps.get(0).detail().get("missingMinutes").asInt(), "05:08 and 05:09 had no DAX tick — the prototype's missing_bars 2");
+        assertEquals("2026-08-05T05:08:00Z", gaps.get(0).detail().get("gapFromUtc").asText());
+        assertEquals(distinctTicks(dawn), o.landed.stream().filter(l -> l.startsWith("tick@")).count());
+        assertEquals(bars(dawn), o.landed.stream().filter(l -> l.startsWith("bar@")).count());
+        assertTrue(o.exits.isEmpty());
+    }
+
+    @Test
+    @Disabled("E1-T12 finding 1 — a market returning from a long tick silence is judged bar-silent the"
+            + " instant its ticks resume (the bar stopwatch runs from boot), earning a spurious pair"
+            + " resubscribe at 210s; awaiting Alex's ruling on rebasing the bar stopwatch when ticks return")
+    void daxQuietAtDawnIsMarketSurgeryWhileNasdaqIsLeftAlone() throws Exception {
+        // Recorded (2026-08-10): NASDAQ wakes at the anchor (10s) and ticks ~200/min; DAX, silent since
+        // before the window, stays silent 207s into it with the flag reading DEAL; the prototype
+        // resubscribed DAX twice on a flat 90s grace. Ours doubles the grace, so the second re-ask
+        // (not before 210s) is overtaken by DAX's return at 207.5s: one resubscribe, no session verdict.
+        // No bar_gaps row: the window holds no DAX candle before the silence to measure the gap from.
+        Scenario dawn = Replays.load("/replays/2026-08-10-dax-quiet-at-dawn.jsonl").build();
+
+        Observed o = ScenarioRunner.accept(dawn, database);
+
+        assertEquals(List.of(0L), o.secondsOf("connect"));
+        assertEquals(List.of(90L, 90L), o.remedies("subscribe").stream().filter(r -> r.at().toSeconds() > 0)
+                .map(r -> r.at().toSeconds()).toList(), "DAX's pair, 90s after boot — its silence is older than the window");
+        assertTrue(o.remedies("subscribe").stream().filter(r -> r.at().toSeconds() > 0)
+                .allMatch(r -> r.item().contains(DAX)));
+        assertTrue(o.events(EventType.BAR_GAP).isEmpty());
+        assertEquals(distinctTicks(dawn), o.landed.stream().filter(l -> l.startsWith("tick@")).count());
+        assertEquals(bars(dawn), o.landed.stream().filter(l -> l.startsWith("bar@")).count());
+        assertTrue(o.exits.isEmpty());
+    }
+
+    @Test
+    void aBusyTenMinutesLandsExactlyOnceWithNothingRemediedAndNothingRecorded() throws Exception {
+        // Recorded (2026-09-23 11:00–11:10Z): 4,384 ticks, 16 candles, not one service event 10:50–11:20Z.
+        Scenario busy = Replays.load("/replays/2026-09-23-busy-ten-minutes.jsonl").build();
+
+        Observed o = ScenarioRunner.accept(busy, database);
+
+        assertEquals(List.of(0L), o.secondsOf("connect"));
+        assertTrue(o.remedies("subscribe").stream().noneMatch(r -> r.at().toSeconds() > 0), "no remedy");
+        assertTrue(o.events.stream().allMatch(e -> e.type() == EventType.MARKET_STATE_CHANGE
+                || e.type() == EventType.CONNECTION_STATUS),
+                "the boot's status transition and the two DEAL flags are the only rows — nothing else was recorded");
+        assertEquals(1, o.events(EventType.CONNECTION_STATUS).size(), "one connection, one transition");
+        assertEquals(distinctTicks(busy), o.landed.stream().filter(l -> l.startsWith("tick@")).count(), "every distinct tick a row");
+        assertEquals(bars(busy), o.landed.stream().filter(l -> l.startsWith("bar@")).count(), "every candle a row");
+        assertEquals(2, rows("capture_status"));
+        assertTrue(o.exits.isEmpty());
+    }
+
+    @Test
     void databaseWeatherIsNotAcceptanceModesToScript() {
         // A real Postgres cannot be made to misbehave on cue; a replay that asks is a fixture error,
         // never answered by pretending (the T12 nod: model nothing that can be real).
@@ -86,6 +178,12 @@ class ReplayAcceptanceTest extends PostgresTestBase {
             }
         }
         return keys.size();
+    }
+
+    /** The fixture's own count of candles before the end — one row each, no dedupe to speak of. */
+    private static long bars(Scenario scenario) {
+        return scenario.steps.stream()
+                .filter(s -> s.at().compareTo(scenario.until) < 0 && s.event() instanceof Event.Bar).count();
     }
 
     private static long rows(String table) throws SQLException {

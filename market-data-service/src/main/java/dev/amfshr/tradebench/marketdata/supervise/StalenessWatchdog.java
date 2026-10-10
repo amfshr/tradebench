@@ -42,6 +42,9 @@ public final class StalenessWatchdog {
     private boolean connectionDown;
     private long lastSessionVerdict;
     private long sessionGraceNanos;
+    // The session ladder closes on data, never on a connection that merely says it streams: a
+    // rebuilt session that sends nothing would otherwise reset it every 90s (E1-T12 ruling 4).
+    private boolean fedSinceVerdict;
 
     /** {@code sweepInterval} is the shell's cadence, not a tunable: "stale together" (§3.4) means
      * within one sweep of each other (E1-T10 #33). */
@@ -88,6 +91,7 @@ public final class StalenessWatchdog {
             return;
         }
         m.lastTick = monotonicNanos;
+        fedSinceVerdict = true;
         healIf(m, Signal.TICK_SILENT);
     }
 
@@ -97,6 +101,7 @@ public final class StalenessWatchdog {
             return;
         }
         m.lastBar = monotonicNanos;
+        fedSinceVerdict = true;
         healIf(m, Signal.BAR_SILENT_TICKS_FLOWING);
     }
 
@@ -126,7 +131,8 @@ public final class StalenessWatchdog {
 
     /** The connection's state: down (any retry substate, the handshake, a rebuild in flight) means
      * no verdicts — silence is the connection's, not a market's; streaming again means every
-     * stopwatch and episode starts afresh, so the new session gets its full window. */
+     * stopwatch and market episode starts afresh, so the new session gets its full window. The
+     * session ladder is not reset here: only data closes it (E1-T12 ruling 4). */
     public void onConnection(boolean streaming, long monotonicNanos) {
         if (!streaming) {
             connectionDown = true;
@@ -138,7 +144,6 @@ public final class StalenessWatchdog {
             for (Market m : markets.values()) {
                 m.episode = null;
             }
-            sessionGraceNanos = 0;
         }
     }
 
@@ -160,19 +165,25 @@ public final class StalenessWatchdog {
         }
         if (stale.size() >= 2) {
             // Session-shaped: several markets stale together is never market noise (§3.4).
-            // Same storm-guard as per-market episodes: verdicts don't re-fire every round.
+            // Same storm-guard as per-market episodes: verdicts don't re-fire every round — and
+            // the ladder climbs across rebuilds until data flows, capped at sessionGraceCap, so a
+            // session that answers "streaming" and sends nothing earns a login every 10 minutes,
+            // not every 90s (E1-T12 ruling 4; the playbook's "nothing retries forever" in spirit).
             if (sessionGraceNanos == 0) {
                 sessionGraceNanos = tuning.watchdogGraceBase().toNanos();
             } else if (monotonicNanos - lastSessionVerdict < sessionGraceNanos) {
                 return List.of();
             }
             lastSessionVerdict = monotonicNanos;
+            fedSinceVerdict = false;
             sessionGraceNanos = Math.min(sessionGraceNanos * 2,
-                    tuning.watchdogGraceCap().toNanos());
+                    tuning.sessionGraceCap().toNanos());
             return List.of(new Remedy(stale.getFirst().getKey(), Action.REBUILD,
                     stale.getFirst().getValue()));
         }
-        sessionGraceNanos = 0;
+        if (fedSinceVerdict) {
+            sessionGraceNanos = 0; // the session delivered: the next silence is a new episode
+        }
         List<Remedy> remedies = teachingRemedies(monotonicNanos);
         if (stale.size() == 1 && anotherWithinASweep(stale.getFirst().getKey(), monotonicNanos)) {
             return remedies; // hold: next round they are stale together, and that is one verdict

@@ -30,6 +30,9 @@ public enum EventType {
     CONNECTION_DEAD(RESILIENCE, WARN),
     SESSION_REFRESHED(RESILIENCE, INFO),
     TRANSPORT_DOWNGRADED(RESILIENCE, WARN),
+    /** Every raw Lightstreamer status transition, as the SDK said it — so an outage Tradebench lives
+     * through replays with its real connection sequence (E1-T12 ruling 3; D25 amended 2026-10-10). */
+    CONNECTION_STATUS(RESILIENCE, INFO),
 
     WATCHDOG_STALE(DATA_LIVENESS, WARN),
     WATCHDOG_RECOVERED(DATA_LIVENESS, INFO),

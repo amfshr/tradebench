@@ -14,6 +14,8 @@ import java.util.List;
 
 import org.junit.jupiter.api.Test;
 
+import dev.amfshr.tradebench.marketdata.events.EventType;
+
 /** The instrument's own promises: its failures are never the system's. */
 class ScenarioRunnerTest {
 
@@ -58,6 +60,7 @@ class ScenarioRunnerTest {
         Observed o = ScenarioRunner.run(replay);
 
         assertEquals(List.of("tick@" + origin.plusMillis(25).toEpochMilli()), o.landed, "the fixture's millisecond, not the clock's slice");
-        assertEquals(Duration.ofMillis(25), o.events.get(0).at(), "and the event it raised is dated from the fixture's origin");
+        assertEquals(Duration.ofMillis(25), o.events(EventType.MARKET_STATE_CHANGE).get(0).at(),
+                "and the event it raised is dated from the fixture's origin (the boot's status row is dated 0)");
     }
 }

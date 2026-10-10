@@ -100,7 +100,10 @@ Around the signals, seven pieces of judgment, each visible in the code:
   own threshold waits a round, so two feeds dying 584ms apart earn one verdict, not a stray
   resubscribe the sweep before it. It carries its own doubling grace
   (`lastSessionVerdict`/`sessionGraceNanos`), added after the test harness caught the
-  verdict re-firing every round.
+  verdict re-firing every round — and since E1-T12 (ruling 4, D29 (5)) that ladder closes only on
+  data: a rebuilt connection that reports streaming and sends nothing does not reset it, so the
+  verdicts space out 60s → 120 → 240 → 480 → `sessionGraceCap` (10 minutes) instead of re-firing
+  every 90s for the whole silence, as the 2026-08-04 scar's replay showed they did.
 - *Clock-anomaly immunity*: chapter 7's discriminator; anomalous rounds re-baseline every
   stopwatch and return nothing. The contract is a **~1s evaluation cadence** — the freeze
   detector *defines* coarser jumps as anomalies, which is why the tests advance

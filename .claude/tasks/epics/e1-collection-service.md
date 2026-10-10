@@ -1046,7 +1046,7 @@ residuals 2 and 3 (the composed-loop test; the suspend → wake → `WILL-RETRY`
 by it; the subsumed `SupervisorTest` scenarios removed, the pure-core unit tests kept, `IgStreamControlTest` on
 the extended fake.
 
-## T12 — Replay acceptance: the captured-outage library and the rig in acceptance mode 🔶 (ticketed 2026-10-08; unblocked 2026-10-08 — E1-T11 merged, PR #16; design nod ruled and started 2026-10-10 — increment 1 in progress)
+## T12 — Replay acceptance: the captured-outage library and the rig in acceptance mode 🔶 (ticketed 2026-10-08; unblocked 2026-10-08 — E1-T11 merged, PR #16; design nod ruled and started 2026-10-10, amended with ruling 4 the same day — increments 1 and 2 ✅ 2026-10-10 (`9a2b3c0` · `8b07cb9`), increment 3 built 2026-10-10 and staged for Alex's review — one open `Decision: (TBD)`, finding 1)
 
 **Type** build · **Branch** `e1-t12-replay-acceptance` (cut from main `1d09cc4`) · **Started** 2026-10-10 · **Blocked by** —
 
@@ -1100,8 +1100,15 @@ three are on main since T11's merge (PR #16, 2026-10-08), so this ticket is unbl
 - **(e) The raw-status event** (added at the nod, ruling 3): every raw Lightstreamer status transition recorded as a
   low-severity event — today the belt records only the classified outcome of a status change (RECONNECT,
   TRANSPORT_DOWNGRADED, CONNECTION_DEAD), not the raw string — so each outage Tradebench itself lives through becomes a
-  complete fixture through the existing `export-tradebench.sql`. T12's one change to belt code; the cloud re-review after
-  T12 will see it.
+  complete fixture through the existing `export-tradebench.sql`. T12's first change to belt code (the second is (f)); the
+  cloud re-review after T12 will see both.
+- **(f) The session-ladder fix** (added at the nod's amendment, ruling 4, 2026-10-10): the watchdog's session ladder resets
+  on the first tick after a rebuild — not on the rebuilt connection reporting streaming, not on the rebaseline — and gets
+  its own cap, **10 minutes** (`Tuning.sessionGraceCap`, new); the per-market ladder keeps its 30-minute `watchdogGraceCap`.
+  Found by increment 2's probe of the extended-scar fixture (`2026-08-04-silent-while-connected-ceiling.jsonl`): the belt
+  rebuilt the session every 90s for the whole 23-minute silence and would never have given up. T12's second change to belt
+  code; the extended-scar fixture's acceptance expectations anchor on the fixed behaviour; a scenario on the harness is its
+  exposing test.
 
 **Not in scope:** real threads (ruled at T11's nod); the live tier — the live outage drill (T9 §), T8's
 shadow-diff week, T7's staging soak.
@@ -1109,14 +1116,16 @@ shadow-diff week, T7's staging soak.
 **DoD:** the curated set green in both modes (scripted stores and acceptance); expectations anchored on the
 prototype's recorded events; the exporter documented; the suite runnable on demand and in its CI lane; a
 field-manual note on the replay library (where it lives, how a new outage becomes a fixture); raw status transitions
-recorded as events from this ticket on (added at the 2026-10-10 nod, ruling 3).
+recorded as events from this ticket on (added at the 2026-10-10 nod, ruling 3); the session ladder resets on data, capped at
+10 minutes (ruling 4, 2026-10-10).
 
 **Estimate:** ≈ two sessions (the ticket's own; reaffirmed at the nod 2026-10-10 — possibly three with the export session;
 roughly 1,000 lines of code plus 2–3 MB of fixture data).
 
 **Design nod — ruled (Alex, 2026-10-10: "okay record that as the t12 nod and start increment 1"); started 2026-10-10** on
 `e1-t12-replay-acceptance` (branched from main at `1d09cc4`). Raised by Alex's concern that the prototype never stored the
-Lightstreamer status sequence, so a reconstructed sequence "won't be real life". Three rulings:
+Lightstreamer status sequence, so a reconstructed sequence "won't be real life". Three rulings at the nod, and a fourth the
+same day — an amendment from increment 2's probe:
 1. **Replay what was recorded; model what was not, and label it.** A fixture's header carries two sections — *recorded*
    (ticks, bars, `DLG_FLAG` transitions, the prototype's `service_events` and `bar_gaps`, `offline_seconds`) and *modelled*
    (any connection answer). Expectations are anchored on recorded facts only: every replayed tick and bar landed exactly
@@ -1135,18 +1144,97 @@ Lightstreamer status sequence, so a reconstructed sequence "won't be real life".
    (RECONNECT, TRANSPORT_DOWNGRADED, CONNECTION_DEAD), not the raw string. T12 adds every raw Lightstreamer status
    transition as a low-severity event, so each outage Tradebench itself lives through becomes a complete fixture through
    the existing `export-tradebench.sql` — the first real outage our own service survives is the first fully real one.
-   T12's one change to belt code; the cloud re-review after T12 will see it.
+   T12's first change to belt code (the second: ruling 4's session-ladder fix); the cloud re-review after T12 will see both.
+4. **Ruling 4 (2026-10-10) — the session ladder resets on data, capped at 10 minutes.** An amendment to the nod (Alex,
+   2026-10-10: "i go with your recommendation make the change pls"). A probe of the extended-scar fixture
+   (`2026-08-04-silent-while-connected-ceiling.jsonl`, increment 2) showed the belt rebuilding the session every 90s for the
+   whole 23-minute silence — sixteen logins; about 117 over the real 2h56m scar — and never giving up: the watchdog's session
+   ladder (60s doubling to the 30-minute `watchdogGraceCap`) is reset to zero whenever the rebuilt connection reports
+   streaming ("the new session gets its full window") and again whenever the rebaselined markets read non-stale, so for a
+   session that reports streaming and sends nothing the ladder never climbs; the playbook's "nothing retries forever" is
+   broken in this one case. Not a rate-limit risk — the 61s `LoginRateGate` and the 5s floor hold, and IG's allowances are
+   per-minute REST — but a design defeated by its reset condition. **Ruled:** the session ladder resets on the first tick
+   after a rebuild, not on the connection reporting streaming or the rebaseline; the session ladder gets its own cap,
+   **10 minutes** (`Tuning.sessionGraceCap`, new); the per-market ladder keeps its 30-minute cap. Consequence: over the
+   scar's 2h56m about 18 logins instead of ~117, and a recovery that needs a rebuild is caught within 10 minutes. T12's
+   second belt change, beside ruling 3's raw-status event; the extended-scar fixture's acceptance expectations anchor on
+   the fixed behaviour; a scenario on the harness is its exposing test (increment 3). The probe's second observation — a
+   boot into a quiet but open pair costs one session rebuild at 90s — **accepted by Alex as fine** ("the market is dead so
+   we are not missing anything"); the dawn fixture's expectation states it.
 
-**Increments — three, one PR:** **1 the rig in acceptance mode** — the scar replay through the real `Pump`, `PostgresStore`
-and `PostgresObservabilityStore` into a Testcontainers Postgres instead of the scripted stores; the data invariants asserted
-as rows (exactly once; `bar_gaps` as recorded; no spurious remedy); gated behind a JUnit tag and its own Gradle task, the
-`demoSmoke` pattern — built alone, proven on the scar before any export. *(In progress from 2026-10-10.)* · **2 the fixture
-library** — the one-command exporter wrapper and six or seven captured windows from the prototype database (a session with
-Alex present: read-only selects over market data and the event log, never strategy or OMS tables — G1); each fixture's
-header with its recorded/modelled sections. · **3 expectations, the lane, the note, the status event** — per-fixture
-expectations from the recorded events; both modes green; a nightly/on-demand CI lane; the field-manual note (where the
-library lives, how a new outage becomes a fixture); the raw-status event. Estimate unchanged at ≈ two sessions (the
-ticket's own), possibly three with the export session; roughly 1,000 lines of code plus 2–3 MB of fixture data.
+**Increments — three, one PR:** **1 the rig in acceptance mode ✅ 2026-10-10 (commit `9a2b3c0`)** — the scar replay through
+the real `Pump`, `PostgresStore` and `PostgresObservabilityStore` into a Testcontainers Postgres instead of the scripted
+stores; the data invariants asserted as rows (exactly once; `bar_gaps` as recorded; no spurious remedy); gated behind a JUnit
+tag and its own Gradle task, the `demoSmoke` pattern — built alone, proven on the scar before any export. · **2 the fixture
+library ✅ 2026-10-10 (commit `8b07cb9`)** — planned as the one-command exporter wrapper and six or seven captured windows
+from the prototype database (a session with Alex present: read-only selects over market data and the event log, never
+strategy or OMS tables — G1), each fixture's header with its recorded/modelled sections; landed as **four** fixtures from
+the prototype's `igtrader_demo` (market data only, G1), about 1 MB — `2026-08-04-silent-while-connected-ceiling.jsonl` (the
+scar extended: 60s of health, 23 minutes of the silence), `2026-08-05-dax-thin-at-dawn.jsonl` (DAX silent 157s, 72s, 64s
+while NASDAQ ticks — one silence over the 90s line, two under; the prototype resubscribed once and recorded `bar_gap` 2),
+`2026-08-10-dax-quiet-at-dawn.jsonl` (NASDAQ wakes at the anchor, DAX silent 207s more, flag DEAL; the prototype resubscribed
+twice and recorded `bar_gap` 4), `2026-09-23-busy-ten-minutes.jsonl` (4,384 ticks, 16 candles, no event recorded) — each
+header carrying `recorded` and `modelled` sections (ruling 1); `scripts/export-replay.sh` the one-command exporter (the
+prototype via its Docker container, tradebench via a psql URL; nothing machine-specific defaulted); the export session run
+with Alex present 2026-10-10. Dropped, not modelled (ruling 2): the host-suspend windows (the record shows the host awake and
+without network inside the gaps, and its `offline_seconds` do not match the tick gaps, so it cannot say how long the host
+slept) and the weekend CLOSED → open transition (neither source stored the deal flag; our `MARKET_STATE_CHANGE` events do,
+so a future exporter can join them). The `tradebench` branch of the script is unexercised until our own capture holds an
+outage. The probe of each fixture surfaced ruling 4 (above) and the accepted boot-into-a-quiet-pair observation. ·
+**3 expectations, the lane, the note, the status event, the session-ladder fix — built 2026-10-10, staged for Alex's review**
+(on the branch, not yet committed — Alex commits) — planned as per-fixture expectations from the recorded events (the extended
+scar's anchored on the fixed ladder; the dawn fixture's stating the one rebuild at 90s), both modes green, a nightly/on-demand
+CI lane, the field-manual note, the raw-status event (ruling 3) and the session-ladder fix with its harness scenario as the
+exposing test (ruling 4). Built:
+
+- **The session-ladder fix (ruling 4)** in `StalenessWatchdog`: the ladder closes only on data (`fedSinceVerdict`), not on the
+  connection reporting streaming or the rebaseline; `Tuning.sessionGraceCap` = 10 minutes, new. Two `StalenessWatchdogTest`
+  tests (the ladder climbs 90 → 210 → 450 → 930 → 1530 → 2130s; data closes it) and one harness scenario,
+  `aSessionThatAnswersAndSendsNothingIsRebuiltOnTheLadderNotEveryNinetySeconds` (connects at 0, 149, 269, 509, 989, 1589s;
+  never gives up). Three mutations killed: the connection resets the ladder again; the ladder resets whenever fewer than two
+  are stale; data never closes it. D29 gains (5), dated 2026-10-10.
+- **The raw-status event (ruling 3):** `EventType.CONNECTION_STATUS` (resilience, info); `Supervisor.applyStatus` records
+  every raw transition before classifying it — and, through #9's console line, every status is now a log line too;
+  `export-tradebench.sql` emits the recorded statuses as `status` lines and sets `serverAnswers` false when a window holds
+  any; a new Testcontainers test, `ExportTradebenchSqlTest`, runs the Tradebench exporter end to end (rows in → a replay with
+  the real sequence out), so the script's `tradebench` branch is no longer unexercised. D25 amended for the catalogue, dated
+  2026-10-10. Two mutations killed: the raw row not recorded; the exporter leaving statuses out. Four existing tests
+  re-anchored for the extra rows — two counts of refused writes during a DB outage rise by the status rows; two "only event"
+  lists gain the boot's transition.
+- **Acceptance expectations** for the four fixtures in `ReplayAcceptanceTest`: the scar to the ceiling
+  (`theScarToTheCeilingCostsALoginEveryTenMinutesAtTheLimitAndNeverGivesUp`) — connects at 0, 151, 271, 511, 991s, four
+  verdict rows, never gives up; DAX thin at dawn (`daxThinAtDawnEarnsOneResubscribeAndTheGapTheRecordShows`) — one DAX
+  resubscribe at 233s (the prototype's own 05:08:53.662Z), `bar_gaps` 2 minutes from 05:08Z (the prototype's `missing_bars`
+  2), NASDAQ untouched; a busy ten minutes (`aBusyTenMinutesLandsExactlyOnceWithNothingRemediedAndNothingRecorded`) — exactly
+  once, nothing remedied, only the boot's status row and the two DEAL flags recorded; DAX quiet at dawn
+  (`daxQuietAtDawnIsMarketSurgeryWhileNasdaqIsLeftAlone`) — written, but `@Disabled` pending finding 1 (below).
+- **The CI lane** `.github/workflows/replay-acceptance.yml`: nightly 03:17 UTC and on demand (`workflow_dispatch`); runs
+  `./gradlew :market-data-service:replayAcceptance` and uploads the results.
+- **Docs:** chapter 10 gains "The replay library (E1-T12)" (where it lives, the recorded/modelled rule, the exporter,
+  acceptance mode and the lane); chapter 08's session-ladder paragraph carries ruling 4; the replay README's table names the
+  acceptance tests.
+- **A harness fix** — finding 2 (below): `ScenarioRunner.finish()` gives the pump its last turn.
+
+Estimate unchanged at ≈ two sessions (the ticket's own), possibly three with the export session; roughly 1,000 lines of code
+plus 2–3 MB of fixture data (the library landed at ~1 MB).
+
+**Findings from the first acceptance runs (2026-10-10)** — both observed by probes in acceptance mode, not inferred:
+1. **Finding 1 — open, `Decision: (TBD)` for Alex: a market returning from a long tick silence is judged bar-silent the
+   instant its ticks resume.** `StalenessWatchdog`'s bar stopwatch (`lastBar`) runs from boot, and the
+   `BAR_SILENT_TICKS_FLOWING` rule fires when ticks flow and no candle has closed for 210s — so in the 2026-08-10 dawn
+   replay DAX, silent 207s into the window, earned a second pair resubscribe at 210s, two seconds after its ticks returned
+   (observed in acceptance mode: subscribes at 90, 90, 210, 210 against an expectation of 90, 90). With the real SDK that is
+   a pair dropped and re-asked right as data returns — the first ticks after resumption are at risk. **Recommendation
+   (Claude):** when a tick-silence episode heals (ticks resume), rebase the market's bar stopwatch to now, so the CHART leg
+   gets its own 210s from the resumption. A small change; a harness scenario is its exposing test; the `@Disabled`
+   acceptance test `daxQuietAtDawnIsMarketSurgeryWhileNasdaqIsLeftAlone` re-enables with it. **Not implemented — awaiting
+   Alex's ruling.**
+2. **Finding 2 — harness, fixed in this increment: a clock-ended run landed one tick short.** A replay whose last tick falls
+   inside the pump's final idle sleep before the window's end landed one tick short (the busy and thin-dawn fixtures: written
+   4400, landed 4399 — the busy fixture's 4,384 ticks and 16 candles). The pump wrote it, but a clock-ended run never gave the
+   pump the flush its next idle cycle would have done. `ScenarioRunner.finish()` now gives the pump its last turn — drain,
+   then flush, without that cycle's sleep so no sweep falls due past the window; a sink still down keeps its batch held.
+   Mutation: no flush → both fixtures red. The T11 scar escaped it only because its window ends in silence.
 
 **Sequencing (Alex, 2026-10-08, standing):** T11 (✅ PR #16, merged 2026-10-08) → T10 A2 as scenarios (✅ PR #17,
 merged 2026-10-09) → T10 B as scenarios (✅ PR #19, merged 2026-10-10) → T10 C (✅ PR #20, merged 2026-10-10 — T10 ✅ complete) → **T12 — in progress (started 2026-10-10)** → the belt's single cloud re-review, now gated only on T12 — every T10 finding is resolved
