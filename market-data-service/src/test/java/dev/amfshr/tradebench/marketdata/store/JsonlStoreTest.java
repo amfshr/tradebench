@@ -22,7 +22,7 @@ class JsonlStoreTest {
     void writesTheThreeLineKindsExactly() {
         StringWriter out = new StringWriter();
         try (JsonlStore sink = new JsonlStore(out)) {
-            sink.writeMeta("default-user", "ig-stream-demo", "capture-mac", List.of(DAX),
+            sink.writeMeta("default-user", "ig-stream-demo", "capture-demo-01", List.of(DAX),
                     Instant.parse("2026-09-28T07:00:00Z"));
             sink.write(new Tick(DAX, Instant.parse("2026-09-25T14:57:03.250Z"),
                     new BigDecimal("24510.5"), new BigDecimal("24511.7")));
@@ -36,7 +36,7 @@ class JsonlStoreTest {
 
         assertEquals("""
                 {"kind":"meta","user":"default-user","source":"ig-stream-demo",\
-                "instance":"capture-mac","startedUtc":"2026-09-28T07:00:00Z",\
+                "instance":"capture-demo-01","startedUtc":"2026-09-28T07:00:00Z",\
                 "epics":["IX.D.DAX.DAILY.IP"]}
                 {"kind":"tick","epic":"IX.D.DAX.DAILY.IP","utc":"2026-09-25T14:57:03.250Z",\
                 "bid":24510.5,"ask":24511.7}

@@ -18,7 +18,7 @@ class JdkHttpTransportTest {
     private static final HttpCall CALL = new HttpCall("POST",
             URI.create("https://demo-api.ig.com/gateway/deal/session"),
             Map.of("X-IG-API-KEY", "placeholder-key", "VERSION", "2"),
-            "{\"identifier\":\"amfshr-demo\"}");
+            "{\"identifier\":\"demo-trader\"}");
 
     @Test
     void requestCarriesTheInjectedTimeout() {

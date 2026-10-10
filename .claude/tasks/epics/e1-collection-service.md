@@ -767,10 +767,11 @@ by Claude at Alex's word ("okay good go ahead") 2026-10-10 into `main`, merge co
 history carries the entry (tagged E1-T10). **Two observations from the review, outside the slice:** (1) nothing pins
 `Jdbc.lookupId`'s refusal of an unknown user/source ("refusing to invent one" — a fail-closed path, playbook §2.3;
 `market-data-service/src/main/java/dev/amfshr/tradebench/marketdata/store/Jdbc.java`) — a pre-existing gap → backlog **B10** (small:
-one Testcontainers test per store; mutation: return 0 instead of throwing); (2) Alex's spread-bet account id `Z6CS3E` appears in
+one Testcontainers test per store; mutation: return 0 instead of throwing); (2) Alex's real IG account ids (now redacted) sat in
 pre-existing test literals (`ig-client` and `market-data-service` tests) and the wire fixture
-`ig-client/src/test/resources/wire/login-response.json` on main — G1's text does not call an account id a credential and slice C did
-not add it — **open for Alex**, his call whether it stays in a public repo; not a finding. **T10 closes with this merge: every finding
+`ig-client/src/test/resources/wire/login-response.json` on main — G1's text did not then call an account id a credential and slice C
+did not add it — surfaced as open for Alex, not a finding; **closed by PR #21 the same day** (merge `5735640`: both ids replaced
+with the synthetic pair `AB12CD`/`AB12CE`; the rule — everything in `.env` is sensitive — now in G1, `27e30d0`). **T10 closes with this merge: every finding
 of the PR #14 review is resolved** (A1 #1, #2 · A2 twelve · B nine — #15 and #16 counted apart, fixed together · T11 two, #23 and #27 · C eight — 33 findings,
 four slices plus the harness). **Next:** E1-T12 → the belt's single cloud re-review, now gated only on T12 (the close-out ruling below) → E1-T6.
 
