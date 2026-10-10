@@ -82,7 +82,9 @@ Static `npm run build` snapshotting content at build time; CI job keyed on `web/
 (tech-notes §6); local preview story. Hosting ruled by Alex 2026-09-28: **GitHub Pages**
 (public — same content as the public repo, no new exposure). `pages.yml` (main-push deploy:
 test → build with `VITE_BASE` → 404.html SPA fallback → deploy-pages) + `web-ci.yml` (PR
-lane). Custom domain **docs.tradebench.amfshr.dev** live (Cloudflare CNAME + `PAGES_BASE=/`,
+lane; **2026-10-10, E1-T10 C / PR #20:** its paths widened beyond `web/**` to `docs/**`, `.claude/tasks/**`,
+`README.md`, `CLAUDE.md` so the new dead-link check `web/docs/src/deadLinks.test.ts` runs on docs-only PRs —
+still not a required check). Custom domain **docs.tradebench.amfshr.dev** live (Cloudflare CNAME + `PAGES_BASE=/`,
 HTTPS enforced — 2026-09-29). **DoD:** one command produces the static site; CI builds it green.
 
 ## T4 — Docs polish & structure (the final E2 sweep) ✅

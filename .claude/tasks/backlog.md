@@ -263,3 +263,12 @@ further once both apps are deployed and past v0 —
   budget).
 
 Not scheduled. Trigger: after E1 (T6, T7) and E9's platform app are deployed and off v0 — Alex's call when.
+
+## B10 — `Jdbc.lookupId`'s fail-closed refusal of an unknown user/source is unpinned
+
+**Captured** 2026-10-10 (an observation of E1-T10 slice C's doctrine review, outside the slice — a pre-existing gap) · **Likely home** a small E1 test ticket, or folded into E1-T12's acceptance-mode work (the same Testcontainers rig) · **Trigger** the next time a store test is touched, or when E1-T12 stands up the acceptance rig — Alex's call; not scheduled · **Relates to** `market-data-service/src/main/java/dev/amfshr/tradebench/marketdata/store/Jdbc.java` (`lookupId` — E1-T10 #10's shared helper) · engineering playbook §2.3 (fail-closed paths get failure-mode tests) · P9 (fail closed, fail loud) · the seeded `users`/`sources` rows (`V1__baseline.sql` — "schema seeds are the source of truth")
+
+`Jdbc.lookupId` throws `IllegalStateException("unknown <kind> '<name>' — schema seeds are the source of truth; refusing to
+invent one")` when a user or source name has no row. That is the fail-closed path the stores lean on, and nothing pins it:
+no test asserts the throw. **Small:** one Testcontainers test per store that looks up an unseeded name and expects the
+`IllegalStateException`; mutation to verify it — make `lookupId` return `0` instead of throwing → red.
