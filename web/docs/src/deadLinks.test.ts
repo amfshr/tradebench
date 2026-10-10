@@ -50,7 +50,8 @@ describe('dead links', () => {
         .map((href) => `${relative(ROOT, file)} -> ${href}`),
     );
 
-    expect(files.length).toBeGreaterThan(50); // the walk found the book, not an empty directory
+    expect(files).toContain(join(ROOT, 'docs/README.md')); // the walk found the book, not an empty tree
+    expect(files).toContain(join(ROOT, 'CLAUDE.md'));
     expect(dead).toEqual([]);
   });
 });

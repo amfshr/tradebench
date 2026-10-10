@@ -23,12 +23,12 @@ import dev.amfshr.tradebench.ig.session.IgSessionManager;
 import dev.amfshr.tradebench.ig.session.LoginRateGate;
 import dev.amfshr.tradebench.ig.stream.LightstreamerTransport;
 import dev.amfshr.tradebench.ig.time.Sleeper;
+import dev.amfshr.tradebench.marketdata.store.BestEffortEventLog;
 import dev.amfshr.tradebench.marketdata.store.Database;
 import dev.amfshr.tradebench.marketdata.store.PostgresStore;
 import dev.amfshr.tradebench.marketdata.store.SingleInstanceLock;
 
 import org.jspecify.annotations.Nullable;
-import dev.amfshr.tradebench.marketdata.store.BestEffortEventLog;
 import dev.amfshr.tradebench.marketdata.store.JsonlStore;
 import dev.amfshr.tradebench.marketdata.store.CaptureStore;
 import dev.amfshr.tradebench.marketdata.store.EventLog;
@@ -151,6 +151,8 @@ public final class Main {
         pumpThread.start();
         supervisorThread.start();
         eventsThread.start();
+        // Log-only: discovery runs once, here at boot, so a refused breadcrumb is a console line,
+        // never a heartbeat term (doctrine review 2026-10-10, finding 3).
         new PacerDiscovery(rest::applicationAllowance, pacer::setPerMinute,
                 new BestEffortEventLog(eventLog, message -> log(instance, message)),
                 message -> log(instance, message), clock).discover(sessions.current());

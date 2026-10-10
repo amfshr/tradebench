@@ -404,8 +404,9 @@ written best-effort before a terminal exit, so the console learns why capture di
 `Main` exits 1 from its own thread at once — never on a deliberate stop, since an exit from inside
 the shutdown hook would deadlock. **(6) The shared pool's `connectionTimeout` is 5s**
 (`Database.CONNECTION_TIMEOUT`): the heartbeat is held at most 5s per market during an outage and
-`recover()` fails fast into the backoff; no dedicated Tier-2 pool. Field Manual ch. 10 "When the
-database fails" carries the full argument.
+`recover()` fails fast into the backoff; no dedicated Tier-2 pool. *Amended 2026-10-10 (E1-T10 #22):
+per heartbeat, not per market — every market's row goes as one batch on one pooled connection.*
+Field Manual ch. 10 "When the database fails" carries the full argument.
 
 ## D29 — Belt hardening rulings from the PR #14 review: a bounded CLOSED stand-down, a JDBC socket timeout, Tier-2 writes off the sweep thread, the hush retired — **Accepted** (2026-10-05, Alex)
 

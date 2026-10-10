@@ -736,15 +736,20 @@ belt's single cloud re-review once every T10 finding is resolved (the close-out 
 decisions accepted at the nod:** **#26** the decorator is `BestEffortEventLog` — the codebase's own term, not the review's
 `CountingEventLog`: a refused write is counted and logged, never thrown; one per producer (pump, supervisor, pacer); the heartbeat
 line keeps its D27 vocabulary — `obsFailures=` stays the pump's Tier-2 total (the gap store + its events), `eventWriteFailures=`
-the belt's (the supervisor's decorator + the queue writer); **#9** every event the Supervisor records is also one console line,
-plus a line on the Retry verdict (a superset of the four lines the review names); **#22** the batch, not the short-circuit — the
-status store takes the list of rows, one pooled connection, one statement, so a failed publish counts once (one acquire timeout
-per heartbeat, not one per market); **#25** the three links fixed plus a real dead-link check — a vitest test in the docs site
-walks the repo's docs and board on disk and fails on any relative markdown link whose target is missing (a census on 2026-10-10
-found exactly the three review-named links dead), and the web PR lane's paths widened to `docs/**` and `.claude/tasks/**` so it
-runs on docs-only PRs; **#28** test fidelity only — the flaky sink holds a failed tick and replays it in `recover`, as the real
-store does; **#31** `onMalformed(epic, itemName)` as the review wrote; `Buffers` charges the market by epic. **Next:** this
-slice's PR → E1-T12 → the belt's single cloud re-review once every T10 finding is resolved (the close-out ruling below) → E1-T6.
+the belt's (the supervisor's decorator + the queue writer); the pacer's decorator is log-only — discovery runs once at boot,
+before the heartbeat exists, so its one possible refusal is a console line, not a heartbeat term (doctrine review 2026-10-10,
+finding 3: recorded, not summed); **#9** every event the Supervisor records is also one console line, plus a line on the Retry
+verdict (a superset of the four lines the review names); **#22** the batch, not the short-circuit — the status store takes the
+list of rows, one pooled connection, one statement, so a failed publish counts once (one acquire timeout per heartbeat, not one
+per market); **#25** the three links fixed plus a real dead-link check — a vitest test in the docs site walks the repo's docs and
+board on disk and fails on any relative markdown link whose target is missing (a census on 2026-10-10 found exactly the three
+review-named links dead), and the web PR lane's paths widened to `docs/**` and `.claude/tasks/**` so it runs on docs-only PRs;
+**#28** test fidelity only — the flaky sink holds a failed tick and replays it in `recover`, as the real store does — the faithful
+fake exposed `anIdleFlushAfterAProvisionalRecoveryProvesNothing` as pinning a state the real store cannot reach (a tick failure is
+never a provisional recovery: the store holds the tick); replaced by
+`aProvisionalRecoveryIsProvenByTheBarThatLandsNotByTheReconnect`, which also pins #6's rule; **#31** `onMalformed(epic, itemName)`
+as the review wrote; `Buffers` charges the market by epic. **Next:** this slice's PR → E1-T12 → the belt's single cloud re-review
+once every T10 finding is resolved (the close-out ruling below) → E1-T6.
 
 **The A2/B backlog on the harness (E1-T11 — merged 2026-10-08, PR #16; written 2026-10-08, the tenth, #4's window-lapse arm, added at T11's
 doctrine review; each verified red for its finding's reason):** the ten `@Disabled` scenarios in `BeltScenariosTest` —

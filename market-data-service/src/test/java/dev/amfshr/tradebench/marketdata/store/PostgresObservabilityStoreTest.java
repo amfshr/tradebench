@@ -1,6 +1,7 @@
 package dev.amfshr.tradebench.marketdata.store;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
 
 import java.sql.Connection;
@@ -178,7 +179,7 @@ class PostgresObservabilityStoreTest extends PostgresTestBase {
             r.next();
             assertEquals("IX.D.FTSE.DAILY.IP", r.getString("epic"));
             assertEquals(22, r.getLong("ticks_total"));
-            assertEquals(false, r.next(), "two markets, two rows");
+            assertFalse(r.next(), "two markets, two rows");
         }
     }
 

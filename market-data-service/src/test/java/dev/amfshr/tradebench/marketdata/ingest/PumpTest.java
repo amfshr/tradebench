@@ -544,8 +544,6 @@ class PumpTest {
     void aProvisionalRecoveryIsProvenByTheBarThatLandsNotByTheReconnect() throws InterruptedException {
         // A bar failure holds nothing in the store (the bar stays queued), so its recovery only
         // reconnects — provisional. The episode closes when the re-sent bar lands, one cycle later.
-        // (A tick failure is never provisional: the store holds the tick and recovery lands it —
-        // E1-T10 #28 made the fake say so, and the idle-flush variant this test replaced unreachable.)
         Rig r = rig(10);
         r.queues().onSealedBar(bar(60));
         r.sink().armed.add(retryable("bar write failed"));
