@@ -9,9 +9,13 @@ on:
     - cron: '17 3 * * *' # 03:17 UTC nightly
   workflow_dispatch:
 
+permissions:
+  contents: read
+
 jobs:
   replay-acceptance:
     runs-on: ubuntu-latest
+    timeout-minutes: 30 # a hung container pull must not hold a runner for hours
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-java@v4

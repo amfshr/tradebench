@@ -9,7 +9,8 @@
 #     --modelled '<what the harness supplies because the source did not record it>' \
 #     --out market-data-service/src/test/resources/replays/<fixture>.jsonl
 #
-# prototype  — the prototype's igtrader_demo in its Docker container: set PROTOTYPE_PG_CONTAINER
+# prototype  — the prototype's igtrader_demo (the data source's own database name, not machine config) in its
+#              Docker container: set PROTOTYPE_PG_CONTAINER
 #              (the container name; psql runs inside it as its own POSTGRES_USER). G1: the exporter
 #              reads the per-market tick tables only — never strategy_events or the OMS tables.
 # tradebench — Tradebench's own market_data: set TRADEBENCH_PSQL_URL (postgres://user:pass@host/db),

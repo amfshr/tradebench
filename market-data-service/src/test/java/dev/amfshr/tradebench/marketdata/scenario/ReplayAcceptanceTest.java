@@ -65,7 +65,7 @@ class ReplayAcceptanceTest extends PostgresTestBase {
     @Test
     void theScarToTheCeilingCostsALoginEveryTenMinutesAtTheLimitAndNeverGivesUp() throws Exception {
         // Recorded: 60s of health, then both feeds dead within 584ms of the anchor (NASDAQ's last tick
-        // at 60.056s) and silent for 23 minutes; the prototype sat CONNECTED:WS-STREAMING for 2h56m.
+        // at 60.584s) and silent for 23 minutes; the prototype sat CONNECTED:WS-STREAMING for 2h56m.
         // Modelled: every rebuilt connection answers "streaming". Ruled (E1-T12 ruling 4): the session
         // ladder climbs across such rebuilds — 60s → 120 → 240 → 480 → 600 (the cap) — and the belt
         // never gives up a feed that may return.
@@ -74,7 +74,7 @@ class ReplayAcceptanceTest extends PostgresTestBase {
         Observed o = ScenarioRunner.accept(scar, database);
 
         assertEquals(List.of(0L, 151L, 271L, 511L, 991L), o.secondsOf("connect"),
-                "the first sweep 90s after the later last tick (60.056s), then +120, +240, +480; the +600 falls past the window");
+                "the first sweep 90s after the later last tick (60.584s), then +120, +240, +480; the +600 falls past the window");
         assertEquals(4, o.events(EventType.WATCHDOG_STALE).size(), "one session verdict row per rebuild");
         assertTrue(o.events(EventType.FEED_DEAD).isEmpty(), "never given up");
         assertTrue(o.exits.isEmpty());
@@ -82,6 +82,7 @@ class ReplayAcceptanceTest extends PostgresTestBase {
                 "every tick of the healthy minute is a row");
         assertEquals(0, o.barsDelivered, "no minute closed with the feed alive at its end — the fixture holds no candle");
         assertTrue(o.events(EventType.BAR_GAP).isEmpty());
+        assertEquals(0, rows("bar_gaps"));
     }
 
     @Test
@@ -100,6 +101,7 @@ class ReplayAcceptanceTest extends PostgresTestBase {
         assertTrue(o.remedies("subscribe").stream().filter(r -> r.at().toSeconds() > 0)
                 .allMatch(r -> r.item().contains(DAX)), "NASDAQ, alive throughout, is left alone");
         List<Observed.Seen> gaps = o.events(EventType.BAR_GAP);
+        assertEquals(1, rows("bar_gaps"), "the gap is a bar_gaps row, not only its event");
         assertEquals(1, gaps.size(), "one bar_gaps row");
         assertEquals(DAX, gaps.get(0).epic());
         assertEquals(2, gaps.get(0).detail().get("missingMinutes").asInt(), "05:08 and 05:09 had no DAX tick — the prototype's missing_bars 2");
@@ -127,6 +129,7 @@ class ReplayAcceptanceTest extends PostgresTestBase {
         assertTrue(o.remedies("subscribe").stream().filter(r -> r.at().toSeconds() > 0)
                 .allMatch(r -> r.item().contains(DAX)));
         assertTrue(o.events(EventType.BAR_GAP).isEmpty());
+        assertEquals(0, rows("bar_gaps"));
         assertEquals(distinctTicks(dawn), o.landed.stream().filter(l -> l.startsWith("tick@")).count());
         assertEquals(bars(dawn), o.landed.stream().filter(l -> l.startsWith("bar@")).count());
         assertTrue(o.exits.isEmpty());
@@ -147,6 +150,7 @@ class ReplayAcceptanceTest extends PostgresTestBase {
         assertEquals(1, o.events(EventType.CONNECTION_STATUS).size(), "one connection, one transition");
         assertEquals(distinctTicks(busy), o.landed.stream().filter(l -> l.startsWith("tick@")).count(), "every distinct tick a row");
         assertEquals(bars(busy), o.landed.stream().filter(l -> l.startsWith("bar@")).count(), "every candle a row");
+        assertEquals(0, rows("bar_gaps"));
         assertEquals(2, rows("capture_status"));
         assertTrue(o.exits.isEmpty());
     }

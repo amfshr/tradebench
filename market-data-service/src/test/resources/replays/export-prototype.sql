@@ -5,9 +5,10 @@
 -- indicators) and sealed only where the feed was still alive at the minute's end. The prototype
 -- stored no Lightstreamer statuses, so the header asks the harness to answer as a healthy server.
 --
---   docker exec -i <postgres> psql -U <user> -d igtrader_demo -At \
---     -v anchor='2026-08-04 12:38:08.916+00' -v before_secs=360 -v until_secs=460 \
---     -v name='2026-08-04 silent while connected' -f - < export-prototype.sql > <fixture>.jsonl
+--   PROTOTYPE_PG_CONTAINER=<container> scripts/export-replay.sh prototype \
+--     --anchor '2026-08-04 12:38:08.916+00' --before 360 --until 460 \
+--     --name '2026-08-04 silent while connected' --recorded '…' --modelled '…' --out <fixture>.jsonl
+--   (every variable below reaches psql through \getenv; the SQL alone needs them all set)
 --
 -- anchor: the instant placed at offset before_secs (here the last DAX tick before the silence);
 -- the window runs from anchor - before_secs to anchor + until_secs - before_secs.

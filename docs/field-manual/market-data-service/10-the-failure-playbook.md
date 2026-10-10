@@ -112,6 +112,7 @@ Every number, where it lives, and what it means:
 | 90s / 210s | `Tuning.tickSilent` / `barSilentWhileTicksFlow` | a quiet-but-open market is dead / a dead CHART leg while PRICE lives |
 | 120s / 300s | `willRetryRebuild` / `tryingRecoveryRebuild` | how long a stuck substate is tolerated — less for the one where the server has given up |
 | 60s → 30 min | `watchdogGraceBase` / `watchdogGraceCap`, `watchdogMaxResubscribes` 2 | per-market remedy episodes: doubling grace so a genuinely quiet market decays to one remedy per half hour |
+| 10 min | `sessionGraceCap` | the session ladder's own cap: a session that answers "streaming" and sends nothing earns one login per cap at the limit, and a recovery that needs a rebuild is caught within it (E1-T12 ruling 4, D29 (5)) |
 | 5s floor, 1s·2ⁿ, 60s cap | `rebuildFloor` / `backoffBase` / `backoffCap` | rebuild pacing — the floor is IG's login cache lesson (§3.2); the cap keeps the ladder responsive |
 | **10 min** | `giveUpAfter` | the recovery budget — the number an operator can actually reason about |
 | 10 | `maxConsecutiveFailures` | belt-and-braces cap behind the budget — rebuilds that connected, never failed attempts |
@@ -357,7 +358,7 @@ the heartbeat reading `CONNECTED_STREAMING` through the first minute of its sile
 asserted. A scenario for a promise the code does not yet keep is written to this chapter and
 marked `@Disabled("E1-T10 <slice> — finding #n")`; its fix enables it as the exposing test.
 
-**The replay library (E1-T12).** Five captured windows live beside the scar in
+**The replay library (E1-T12).** Four captured windows live beside the scar in
 `market-data-service/src/test/resources/replays/` (the README's table says what each is): the scar
 extended to the ceiling, two dawn silences of DAX while NASDAQ ticks, a busy ten minutes. Each header
 carries two curator sections — `recorded`, what the source recorded and the expectations may anchor on,

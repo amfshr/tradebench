@@ -1046,7 +1046,7 @@ residuals 2 and 3 (the composed-loop test; the suspend → wake → `WILL-RETRY`
 by it; the subsumed `SupervisorTest` scenarios removed, the pure-core unit tests kept, `IgStreamControlTest` on
 the extended fake.
 
-## T12 — Replay acceptance: the captured-outage library and the rig in acceptance mode 🔶 (ticketed 2026-10-08; unblocked 2026-10-08 — E1-T11 merged, PR #16; design nod ruled and started 2026-10-10, amended with ruling 4 the same day — increments 1 and 2 ✅ 2026-10-10 (`9a2b3c0` · `8b07cb9`), increment 3 built 2026-10-10 and staged for Alex's review — one open `Decision: (TBD)`, finding 1)
+## T12 — Replay acceptance: the captured-outage library and the rig in acceptance mode 🔶 (ticketed 2026-10-08; unblocked 2026-10-08 — E1-T11 merged, PR #16; design nod ruled and started 2026-10-10, amended with ruling 4 the same day — increments 1, 2 and 3 ✅ 2026-10-10 (`9a2b3c0` · `8b07cb9` · `2dddbdc`); finding 1 ruled and fixed 2026-10-10 (`318df94`); doctrine review 2026-10-10 pass-with-findings — two `Decision: (TBD)` for Alex, the small findings being fixed on the branch; PR to follow)
 
 **Type** build · **Branch** `e1-t12-replay-acceptance` (cut from main `1d09cc4`) · **Started** 2026-10-10 · **Blocked by** —
 
@@ -1160,7 +1160,9 @@ same day — an amendment from increment 2's probe:
    second belt change, beside ruling 3's raw-status event; the extended-scar fixture's acceptance expectations anchor on
    the fixed behaviour; a scenario on the harness is its exposing test (increment 3). The probe's second observation — a
    boot into a quiet but open pair costs one session rebuild at 90s — **accepted by Alex as fine** ("the market is dead so
-   we are not missing anything"); the dawn fixture's expectation states it.
+   we are not missing anything"). The acceptance stands as Alex's ruling, but no fixture exercises it now: the dawn window as
+   landed starts as NASDAQ wakes, so the final quiet-dawn test asserts no session verdict at all (`connect == [0]`, one DAX
+   pair re-ask at 90s) — corrected 2026-10-10 at the doctrine review (finding 6).
 
 **Increments — three, one PR:** **1 the rig in acceptance mode ✅ 2026-10-10 (commit `9a2b3c0`)** — the scar replay through
 the real `Pump`, `PostgresStore` and `PostgresObservabilityStore` into a Testcontainers Postgres instead of the scripted
@@ -1181,9 +1183,11 @@ without network inside the gaps, and its `offline_seconds` do not match the tick
 slept) and the weekend CLOSED → open transition (neither source stored the deal flag; our `MARKET_STATE_CHANGE` events do,
 so a future exporter can join them). The `tradebench` branch of the script is unexercised until our own capture holds an
 outage. The probe of each fixture surfaced ruling 4 (above) and the accepted boot-into-a-quiet-pair observation. ·
-**3 expectations, the lane, the note, the status event, the session-ladder fix — built 2026-10-10, staged for Alex's review**
-(on the branch, not yet committed — Alex commits) — planned as per-fixture expectations from the recorded events (the extended
-scar's anchored on the fixed ladder; the dawn fixture's stating the one rebuild at 90s), both modes green, a nightly/on-demand
+**3 expectations, the lane, the note, the status event, the session-ladder fix ✅ committed 2026-10-10 (commit `2dddbdc`)**
+— planned as per-fixture expectations from the recorded events (the extended
+scar's anchored on the fixed ladder; the dawn fixture's stating the one rebuild at 90s — as landed it does not: the window
+starts as NASDAQ wakes and the test asserts no session verdict, `connect == [0]`; the accepted observation has no fixture, ruling 4
+above), both modes green, a nightly/on-demand
 CI lane, the field-manual note, the raw-status event (ruling 3) and the session-ladder fix with its harness scenario as the
 exposing test (ruling 4). Built:
 
@@ -1207,7 +1211,8 @@ exposing test (ruling 4). Built:
   resubscribe at 233s (the prototype's own 05:08:53.662Z), `bar_gaps` 2 minutes from 05:08Z (the prototype's `missing_bars`
   2), NASDAQ untouched; a busy ten minutes (`aBusyTenMinutesLandsExactlyOnceWithNothingRemediedAndNothingRecorded`) — exactly
   once, nothing remedied, only the boot's status row and the two DEAL flags recorded; DAX quiet at dawn
-  (`daxQuietAtDawnIsMarketSurgeryWhileNasdaqIsLeftAlone`) — written, but `@Disabled` pending finding 1 (below).
+  (`daxQuietAtDawnIsMarketSurgeryWhileNasdaqIsLeftAlone`) — written `@Disabled` at `2dddbdc` pending finding 1; re-enabled
+  and green on the real data by finding 1's fix `318df94` (below): subscribes at 90, 90 — one DAX pair re-ask, none at 210.
 - **The CI lane** `.github/workflows/replay-acceptance.yml`: nightly 03:17 UTC and on demand (`workflow_dispatch`); runs
   `./gradlew :market-data-service:replayAcceptance` and uploads the results.
 - **Docs:** chapter 10 gains "The replay library (E1-T12)" (where it lives, the recorded/modelled rule, the exporter,
@@ -1219,22 +1224,57 @@ Estimate unchanged at ≈ two sessions (the ticket's own), possibly three with t
 plus 2–3 MB of fixture data (the library landed at ~1 MB).
 
 **Findings from the first acceptance runs (2026-10-10)** — both observed by probes in acceptance mode, not inferred:
-1. **Finding 1 — open, `Decision: (TBD)` for Alex: a market returning from a long tick silence is judged bar-silent the
-   instant its ticks resume.** `StalenessWatchdog`'s bar stopwatch (`lastBar`) runs from boot, and the
+1. **Finding 1 — ruled and fixed 2026-10-10 (`318df94`) — Alex: "proceed": a market returning from a long tick silence was
+   judged bar-silent the instant its ticks resumed.** `StalenessWatchdog`'s bar stopwatch (`lastBar`) ran from boot, and the
    `BAR_SILENT_TICKS_FLOWING` rule fires when ticks flow and no candle has closed for 210s — so in the 2026-08-10 dawn
    replay DAX, silent 207s into the window, earned a second pair resubscribe at 210s, two seconds after its ticks returned
    (observed in acceptance mode: subscribes at 90, 90, 210, 210 against an expectation of 90, 90). With the real SDK that is
-   a pair dropped and re-asked right as data returns — the first ticks after resumption are at risk. **Recommendation
-   (Claude):** when a tick-silence episode heals (ticks resume), rebase the market's bar stopwatch to now, so the CHART leg
-   gets its own 210s from the resumption. A small change; a harness scenario is its exposing test; the `@Disabled`
-   acceptance test `daxQuietAtDawnIsMarketSurgeryWhileNasdaqIsLeftAlone` re-enables with it. **Not implemented — awaiting
-   Alex's ruling.**
+   a pair dropped and re-asked right as data returns — the first ticks after resumption are at risk. Claude's recommendation
+   — rebase the bar stopwatch when a tick silence heals — was put to Alex as "fix it now in this increment, or leave the test
+   disabled"; **ruled "proceed" (Alex, 2026-10-10)**, the recommendation taken. **The fix (`318df94`):** when a `TICK_SILENT`
+   episode heals, `StalenessWatchdog.onTick` rebases the market's `lastBar` to the returning tick — no candle was owed while
+   the ticks were gone — so a market back from a judged silence gets its own 210s before `BAR_SILENT_TICKS_FLOWING` can fire.
+   Tests: one `StalenessWatchdogTest` unit test, `aMarketReturningFromAJudgedSilenceIsNotJudgedBarSilentAsItReturns` (DAX
+   silent 29s → 230s, NASDAQ alive; the only remedy is the tick one at 119s), and the dawn fixture's acceptance expectation
+   `daxQuietAtDawnIsMarketSurgeryWhileNasdaqIsLeftAlone` re-enabled and green on the real data (subscribes at 90, 90 — one
+   DAX pair re-ask, none at 210). Mutation (no restart) turns both red; restored byte-identical. Chapter 08's healing rule
+   carries the clause. The `Decision: (TBD)` is closed.
 2. **Finding 2 — harness, fixed in this increment: a clock-ended run landed one tick short.** A replay whose last tick falls
    inside the pump's final idle sleep before the window's end landed one tick short (the busy and thin-dawn fixtures: written
    4400, landed 4399 — the busy fixture's 4,384 ticks and 16 candles). The pump wrote it, but a clock-ended run never gave the
    pump the flush its next idle cycle would have done. `ScenarioRunner.finish()` now gives the pump its last turn — drain,
    then flush, without that cycle's sleep so no sweep falls due past the window; a sink still down keeps its batch held.
    Mutation: no flush → both fixtures red. The T11 scar escaped it only because its window ends in silence.
+
+**Doctrine review (2026-10-10) — pass-with-findings**, the pre-PR review over the whole branch (`1d09cc4..318df94`): one medium
+(pre-existing on main, outside T12's DoD), six low, four nits. The small ones are being fixed on the branch: the acceptance lane
+pins `bar_gaps` rows; the exporter's no-statuses test gains its missing mutation; chapter 10's tuning table gains the
+`sessionGraceCap` row; the workflow gets `permissions: contents: read` and `timeout-minutes: 30`; the stale anchor comment
+60.056 → 60.584s; the exporter header's example command and the script's comment trued; finding 6 — stale board and plan text
+("staged, not yet committed", "one open `Decision: (TBD)`", the dawn fixture "stating" observation 2) — is trued by this record.
+Two findings are decisions for Alex — **surfaced, not enacted**:
+1. **Decision: (TBD) — a market leaving a CLOSED/SUSPEND stand-down is judged bar-silent on the first sweep after its first
+   tick** (review finding 1, medium; pre-existing on main — surfaced by the boundary question on T12's finding 1 above). The
+   finding-1 fix rebases the CHART clock only when a `TICK_SILENT` episode heals; a stood-down market has no episode by design
+   (its verdicts are suppressed), and `onDealFlag` rebases nothing when the flag turns to DEAL — so every daily DAX break and
+   every weekend open earns a spurious pair resubscribe exactly as the data returns, plus a `WATCHDOG_STALE` row per open.
+   Observed by the reviewer with a scratch driver: DAX's last tick flagged CLOSED at 10s, NASDAQ alive, reopen at 3610s →
+   `RESUBSCRIBE BAR_SILENT_TICKS_FLOWING` at 3610s. Fix: one line and one unit test — in `onTick`, also rebase `lastBar` when
+   the market is stood down (the Supervisor feeds the tick before the flag, so the old flag is still in place), or rebase both
+   clocks in `onDealFlag` on the suppressing → open transition. **Claude's recommendation:** fix it as finding 1 was, in this
+   PR — the same defect family, and the epic's mission is that no streaming opportunity is missed; it is beyond the T12 DoD
+   (G3), so Alex rules.
+2. **Decision: (TBD) — ruling 4 with three or more markets** (review finding 4, low). `fedSinceVerdict` is set by any market's
+   tick; after a rebuild a live third market's first tick closes the session ladder, so two markets dead in a live three-market
+   session would be rebuilt every ~95s for ever — the storm ruling 4 fixed, in a configuration not yet deployed (two markets
+   today). Within the ruling's letter ("the first tick after a rebuild"), against its intent. Candidate: close the ladder only
+   on a tick from a market that was stale at the verdict. Not urgent — a TBD for the nod that adds a third market, or the
+   cloud re-review.
+
+**State (2026-10-10):** all three increments committed (`9a2b3c0` · `8b07cb9` · `2dddbdc`) and finding 1 fixed (`318df94`);
+`./gradlew build` 348 tests green (the acceptance suite out of the default lane), the acceptance lane 6/6 — no `@Disabled`
+remains — the docs site 65/65. **The doctrine review of the whole branch (2026-10-10) passed with findings — the small ones
+being fixed on the branch, two `Decision: (TBD)` for Alex (above); the PR follows.** T12 stays 🔶 until the merge.
 
 **Sequencing (Alex, 2026-10-08, standing):** T11 (✅ PR #16, merged 2026-10-08) → T10 A2 as scenarios (✅ PR #17,
 merged 2026-10-09) → T10 B as scenarios (✅ PR #19, merged 2026-10-10) → T10 C (✅ PR #20, merged 2026-10-10 — T10 ✅ complete) → **T12 — in progress (started 2026-10-10)** → the belt's single cloud re-review, now gated only on T12 — every T10 finding is resolved
