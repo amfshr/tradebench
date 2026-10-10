@@ -1046,7 +1046,7 @@ residuals 2 and 3 (the composed-loop test; the suspend → wake → `WILL-RETRY`
 by it; the subsumed `SupervisorTest` scenarios removed, the pure-core unit tests kept, `IgStreamControlTest` on
 the extended fake.
 
-## T12 — Replay acceptance: the captured-outage library and the rig in acceptance mode 🔶 (ticketed 2026-10-08; unblocked 2026-10-08 — E1-T11 merged, PR #16; design nod ruled and started 2026-10-10, amended with ruling 4 the same day — increments 1, 2 and 3 ✅ 2026-10-10 (`9a2b3c0` · `8b07cb9` · `2dddbdc`); finding 1 ruled and fixed 2026-10-10 (`318df94`); doctrine review 2026-10-10 pass-with-findings — two `Decision: (TBD)` for Alex, the small findings being fixed on the branch; PR to follow)
+## T12 — Replay acceptance: the captured-outage library and the rig in acceptance mode 🔶 (ticketed 2026-10-08; unblocked 2026-10-08 — E1-T11 merged, PR #16; design nod ruled and started 2026-10-10, amended with ruling 4 the same day — increments 1, 2 and 3 ✅ 2026-10-10 (`9a2b3c0` · `8b07cb9` · `2dddbdc`); finding 1 ruled and fixed 2026-10-10 (`318df94`); doctrine review 2026-10-10 pass-with-findings — the small findings fixed on the branch (`7ebc19e`), its two decisions ruled and fixed 2026-10-11 (`df028d1`); PR #23 open, CI green — Alex merges)
 
 **Type** build · **Branch** `e1-t12-replay-acceptance` (cut from main `1d09cc4`) · **Started** 2026-10-10 · **Blocked by** —
 
@@ -1154,7 +1154,8 @@ same day — an amendment from increment 2's probe:
    session that reports streaming and sends nothing the ladder never climbs; the playbook's "nothing retries forever" is
    broken in this one case. Not a rate-limit risk — the 61s `LoginRateGate` and the 5s floor hold, and IG's allowances are
    per-minute REST — but a design defeated by its reset condition. **Ruled:** the session ladder resets on the first tick
-   after a rebuild, not on the connection reporting streaming or the rebaseline; the session ladder gets its own cap,
+   after a rebuild (refined 2026-10-11: a tick from a market that was stale at the verdict — the doctrine review's finding 4,
+   ruled and fixed below), not on the connection reporting streaming or the rebaseline; the session ladder gets its own cap,
    **10 minutes** (`Tuning.sessionGraceCap`, new); the per-market ladder keeps its 30-minute cap. Consequence: over the
    scar's 2h56m about 18 logins instead of ~117, and a recovery that needs a rebuild is caught within 10 minutes. T12's
    second belt change, beside ruling 3's raw-status event; the extended-scar fixture's acceptance expectations anchor on
@@ -1247,34 +1248,47 @@ plus 2–3 MB of fixture data (the library landed at ~1 MB).
    Mutation: no flush → both fixtures red. The T11 scar escaped it only because its window ends in silence.
 
 **Doctrine review (2026-10-10) — pass-with-findings**, the pre-PR review over the whole branch (`1d09cc4..318df94`): one medium
-(pre-existing on main, outside T12's DoD), six low, four nits. The small ones are being fixed on the branch: the acceptance lane
+(pre-existing on main, outside T12's DoD), six low, four nits. The small ones fixed on the branch (`7ebc19e`): the acceptance lane
 pins `bar_gaps` rows; the exporter's no-statuses test gains its missing mutation; chapter 10's tuning table gains the
 `sessionGraceCap` row; the workflow gets `permissions: contents: read` and `timeout-minutes: 30`; the stale anchor comment
 60.056 → 60.584s; the exporter header's example command and the script's comment trued; finding 6 — stale board and plan text
 ("staged, not yet committed", "one open `Decision: (TBD)`", the dawn fixture "stating" observation 2) — is trued by this record.
-Two findings are decisions for Alex — **surfaced, not enacted**:
-1. **Decision: (TBD) — a market leaving a CLOSED/SUSPEND stand-down is judged bar-silent on the first sweep after its first
-   tick** (review finding 1, medium; pre-existing on main — surfaced by the boundary question on T12's finding 1 above). The
-   finding-1 fix rebases the CHART clock only when a `TICK_SILENT` episode heals; a stood-down market has no episode by design
-   (its verdicts are suppressed), and `onDealFlag` rebases nothing when the flag turns to DEAL — so every daily DAX break and
-   every weekend open earns a spurious pair resubscribe exactly as the data returns, plus a `WATCHDOG_STALE` row per open.
-   Observed by the reviewer with a scratch driver: DAX's last tick flagged CLOSED at 10s, NASDAQ alive, reopen at 3610s →
-   `RESUBSCRIBE BAR_SILENT_TICKS_FLOWING` at 3610s. Fix: one line and one unit test — in `onTick`, also rebase `lastBar` when
-   the market is stood down (the Supervisor feeds the tick before the flag, so the old flag is still in place), or rebase both
-   clocks in `onDealFlag` on the suppressing → open transition. **Claude's recommendation:** fix it as finding 1 was, in this
-   PR — the same defect family, and the epic's mission is that no streaming opportunity is missed; it is beyond the T12 DoD
-   (G3), so Alex rules.
-2. **Decision: (TBD) — ruling 4 with three or more markets** (review finding 4, low). `fedSinceVerdict` is set by any market's
-   tick; after a rebuild a live third market's first tick closes the session ladder, so two markets dead in a live three-market
-   session would be rebuilt every ~95s for ever — the storm ruling 4 fixed, in a configuration not yet deployed (two markets
-   today). Within the ruling's letter ("the first tick after a rebuild"), against its intent. Candidate: close the ladder only
-   on a tick from a market that was stale at the verdict. Not urgent — a TBD for the nod that adds a third market, or the
-   cloud re-review.
+Two findings were decisions for Alex — surfaced 2026-10-10, not enacted; **both ruled and fixed 2026-10-11** (`df028d1`, one
+commit; `./gradlew build` 348 tests green, the acceptance lane 6/6; chapter 08 and D29 (5) carry both):
+1. **Ruled and fixed 2026-10-11 — a market leaving a CLOSED/SUSPEND stand-down is judged bar-silent on the first sweep after
+   its first tick** (review finding 1, medium; pre-existing on main — surfaced by the boundary question on T12's finding 1
+   above). The finding-1 fix rebases the CHART clock only when a `TICK_SILENT` episode heals; a stood-down market has no
+   episode by design (its verdicts are suppressed), and `onDealFlag` rebased nothing when the flag turned to DEAL — so every
+   daily DAX break and every weekend open earned a spurious pair resubscribe exactly as the data returned, plus a
+   `WATCHDOG_STALE` row per open. Observed by the reviewer with a scratch driver: DAX's last tick flagged CLOSED at 10s, NASDAQ
+   alive, reopen at 3610s → `RESUBSCRIBE BAR_SILENT_TICKS_FLOWING` at 3610s. Fix: one line and one unit test — in `onTick`,
+   also rebase `lastBar` when the market is stood down (the Supervisor feeds the tick before the flag, so the old flag is
+   still in place), or rebase both clocks in `onDealFlag` on the suppressing → open transition. **Claude's recommendation:**
+   fix it as finding 1 was, in this PR — the same defect family, and the epic's mission is that no streaming opportunity is
+   missed; it is beyond the T12 DoD (G3), so Alex rules. **Ruled (Alex, 2026-10-11): "i take ur recommendation" → fixed.**
+   `StalenessWatchdog.onDealFlag` starts the market's CHART clock (`lastBar`) at the suppressing → open transition — no
+   candle was owed while it was closed, so its first tick back is no longer judged bar-silent and its pair re-asked for as the
+   data returns. Unit test `aMarketLeavingItsStandDownIsNotJudgedBarSilentAsItReopens` (DAX CLOSED from 10s, reopening at
+   3610s, NASDAQ alive — no remedy at all); mutation (the opening does not restart the clock) → red; restored byte-identical.
+2. **Ruled and fixed 2026-10-11 — ruling 4 with three or more markets** (review finding 4, low). `fedSinceVerdict` was set by
+   any market's tick; after a rebuild a live third market's first tick closed the session ladder, so two markets dead in a live
+   three-market session would have been rebuilt every ~95s for ever — the storm ruling 4 fixed, in a configuration not yet
+   deployed (two markets today). Within the ruling's letter ("the first tick after a rebuild"), against its intent. Candidate:
+   close the ladder only on a tick from a market that was stale at the verdict; offered as not urgent — a TBD for the nod that
+   adds a third market, or the cloud re-review. **Ruled (Alex, 2026-10-11):** he asked for a recommendation ("when there are
+   several users, it will be easy to have sessions with more than two markets, i only run dax, but i know dad wants nasdaq and
+   richard could run 3-5 or even more markets at once"); recommended fix now — the three-market session is the deployed case
+   soon and the change is small — and taken. The session ladder closes only on data from a market that was stale at the
+   verdict (`staleAtVerdict`): a live third market's ticks say nothing about the dead two; ruling 4's text above carries the
+   refinement. Unit test `aLiveThirdMarketsTicksDoNotCloseTheSessionLadder` (DAX and NASDAQ dead, FTSE alive through every
+   rebuild — verdicts at 90, 210, 450, 930, 1530s); mutation (any market's tick closes the ladder) → red; restored
+   byte-identical.
 
-**State (2026-10-10):** all three increments committed (`9a2b3c0` · `8b07cb9` · `2dddbdc`) and finding 1 fixed (`318df94`);
+**State (2026-10-11):** all three increments committed (`9a2b3c0` · `8b07cb9` · `2dddbdc`), finding 1 fixed (`318df94`), the
+doctrine review's small findings fixed (`7ebc19e`) and its two decisions ruled and fixed (`df028d1`, 2026-10-11 — above);
 `./gradlew build` 348 tests green (the acceptance suite out of the default lane), the acceptance lane 6/6 — no `@Disabled`
-remains — the docs site 65/65. **The doctrine review of the whole branch (2026-10-10) passed with findings — the small ones
-being fixed on the branch, two `Decision: (TBD)` for Alex (above); the PR follows.** T12 stays 🔶 until the merge.
+remains. **All review findings fixed; PR #23 (`e1-t12-replay-acceptance` → `main`) open, CI green (`build` · `web` ·
+GitGuardian, verified 2026-10-11) — Alex merges.** T12 stays 🔶 until the merge.
 
 **Sequencing (Alex, 2026-10-08, standing):** T11 (✅ PR #16, merged 2026-10-08) → T10 A2 as scenarios (✅ PR #17,
 merged 2026-10-09) → T10 B as scenarios (✅ PR #19, merged 2026-10-10) → T10 C (✅ PR #20, merged 2026-10-10 — T10 ✅ complete) → **T12 — in progress (started 2026-10-10)** → the belt's single cloud re-review, now gated only on T12 — every T10 finding is resolved
