@@ -3,6 +3,7 @@ package dev.amfshr.tradebench.marketdata.supervise;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -42,6 +43,12 @@ public final class StalenessWatchdog {
     private boolean connectionDown;
     private long lastSessionVerdict;
     private long sessionGraceNanos;
+    // The session ladder closes on data, never on a connection that merely says it streams: a
+    // rebuilt session that sends nothing would otherwise reset it every 90s (E1-T12 ruling 4) —
+    // and only data from a market that was stale at the verdict: a live third market's ticks say
+    // nothing about the dead two (the T12 review, ruled 2026-10-10).
+    private boolean fedSinceVerdict;
+    private final Set<String> staleAtVerdict = new HashSet<>();
 
     /** {@code sweepInterval} is the shell's cadence, not a tunable: "stale together" (§3.4) means
      * within one sweep of each other (E1-T10 #33). */
@@ -80,6 +87,7 @@ public final class StalenessWatchdog {
 
     public void forget(String epic) {
         markets.remove(epic);
+        staleAtVerdict.remove(epic);
     }
 
     public void onTick(String epic, long monotonicNanos) {
@@ -88,6 +96,14 @@ public final class StalenessWatchdog {
             return;
         }
         m.lastTick = monotonicNanos;
+        fed(epic);
+        if (m.episode != null && m.episode.signal == Signal.TICK_SILENT) {
+            // Ticks are back after a silence long enough to have been judged: no candle was owed while
+            // they were gone, so the CHART leg's clock restarts with them — else the market is judged
+            // bar-silent the instant it returns and its pair re-asked for as the data arrives
+            // (E1-T12 finding 1, the 2026-08-10 dawn replay).
+            m.lastBar = monotonicNanos;
+        }
         healIf(m, Signal.TICK_SILENT);
     }
 
@@ -97,7 +113,14 @@ public final class StalenessWatchdog {
             return;
         }
         m.lastBar = monotonicNanos;
+        fed(epic);
         healIf(m, Signal.BAR_SILENT_TICKS_FLOWING);
+    }
+
+    private void fed(String epic) {
+        if (staleAtVerdict.isEmpty() || staleAtVerdict.contains(epic)) {
+            fedSinceVerdict = true;
+        }
     }
 
     /** The market's latest DLG_FLAG; a closing flag starts (or continues) its stand-down. */
@@ -105,6 +128,12 @@ public final class StalenessWatchdog {
         Market m = markets.get(epic);
         if (m == null) {
             return;
+        }
+        if (isStoodDown(m) && !SUPPRESSING_FLAGS.contains(flag)) {
+            // The market opened: no candle was owed while it was closed, so its CHART clock starts
+            // now — else the first tick back is judged bar-silent and the pair re-asked for as the
+            // data returns (the T12 review's finding 1, ruled 2026-10-10).
+            m.lastBar = monotonicNanos;
         }
         m.dealFlag = flag;
         if (!SUPPRESSING_FLAGS.contains(flag)) {
@@ -126,7 +155,8 @@ public final class StalenessWatchdog {
 
     /** The connection's state: down (any retry substate, the handshake, a rebuild in flight) means
      * no verdicts — silence is the connection's, not a market's; streaming again means every
-     * stopwatch and episode starts afresh, so the new session gets its full window. */
+     * stopwatch and market episode starts afresh, so the new session gets its full window. The
+     * session ladder is not reset here: only data closes it (E1-T12 ruling 4). */
     public void onConnection(boolean streaming, long monotonicNanos) {
         if (!streaming) {
             connectionDown = true;
@@ -138,7 +168,6 @@ public final class StalenessWatchdog {
             for (Market m : markets.values()) {
                 m.episode = null;
             }
-            sessionGraceNanos = 0;
         }
     }
 
@@ -160,19 +189,30 @@ public final class StalenessWatchdog {
         }
         if (stale.size() >= 2) {
             // Session-shaped: several markets stale together is never market noise (§3.4).
-            // Same storm-guard as per-market episodes: verdicts don't re-fire every round.
+            // Same storm-guard as per-market episodes: verdicts don't re-fire every round — and
+            // the ladder climbs across rebuilds until data flows, capped at sessionGraceCap, so a
+            // session that answers "streaming" and sends nothing earns a login every 10 minutes,
+            // not every 90s (E1-T12 ruling 4; the playbook's "nothing retries forever" in spirit).
             if (sessionGraceNanos == 0) {
                 sessionGraceNanos = tuning.watchdogGraceBase().toNanos();
             } else if (monotonicNanos - lastSessionVerdict < sessionGraceNanos) {
                 return List.of();
             }
             lastSessionVerdict = monotonicNanos;
+            fedSinceVerdict = false;
+            staleAtVerdict.clear();
+            for (Map.Entry<String, Signal> e : stale) {
+                staleAtVerdict.add(e.getKey());
+            }
             sessionGraceNanos = Math.min(sessionGraceNanos * 2,
-                    tuning.watchdogGraceCap().toNanos());
+                    tuning.sessionGraceCap().toNanos());
             return List.of(new Remedy(stale.getFirst().getKey(), Action.REBUILD,
                     stale.getFirst().getValue()));
         }
-        sessionGraceNanos = 0;
+        if (fedSinceVerdict) {
+            sessionGraceNanos = 0; // the session delivered to a market that was dead: a new episode next
+            staleAtVerdict.clear();
+        }
         List<Remedy> remedies = teachingRemedies(monotonicNanos);
         if (stale.size() == 1 && anotherWithinASweep(stale.getFirst().getKey(), monotonicNanos)) {
             return remedies; // hold: next round they are stale together, and that is one verdict

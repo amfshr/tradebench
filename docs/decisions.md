@@ -330,7 +330,10 @@ a `timeframe` dimension added then. **Why:** the first `service_events` was a pr
 designing v2 before E1-T5 slice B builds the event log means the collector writes the right shape
 once, and the console reads a data product built for it — not one worked around. **Feeds:**
 E1-T5 slice B (writes `service_events` v2 + `bar_gaps` + `capture_status`), E1-T6 (writes
-`archives` + `heal_outcome`), E9-T2/T3 (read model + SPA).
+`archives` + `heal_outcome`), E9-T2/T3 (read model + SPA). *Amended 2026-10-10 (E1-T12 ruling 3):
+the catalogue gains `connection_status` (resilience, info) — every raw Lightstreamer status transition as
+the SDK said it — so an outage Tradebench lives through replays with its real connection sequence; the
+classified outcomes (`reconnect`, `connection_dead`, …) were all the record held before.*
 
 ## D26 — Field Manual organised in Parts: a Foundations part + one per subsystem, formed organically — **Accepted** (2026-10-02, Alex)
 
@@ -432,4 +435,12 @@ re-admitted by its twin-leg rejection, and a bare `DISCONNECTED`/`onServerError`
 triggering no rebuild — implement no new policy and are fixed first (E1-T10 slice A1). Sequencing
 (Alex): the two highs → the harness → the remaining findings as scenarios → E1-T6. **Also ruled:**
 AI review records live in `.claude/reviews/` (dated `YYYY-MM-DD-<scope>.md`), never in `docs/` — a
-review is transient evidence, the docs are the product (framework §4).
+review is transient evidence, the docs are the product (framework §4). *Amended 2026-10-10 (E1-T12
+ruling 4, Alex): **(5) the watchdog's session ladder closes on data, not on the connection.** The replay of
+the 2026-08-04 scar showed a session that answers `CONNECTED:WS-STREAMING` and sends nothing being rebuilt
+every 90s for as long as the silence lasts — the ladder (60s doubling) was reset whenever the rebuilt
+connection reported streaming or the rebaselined markets read non-stale. Now only the first tick after a
+rebuild from a market that was stale at the verdict closes it (a live third market's ticks say nothing
+about the dead two — the T12 review, ruled the same day), and it has its own cap, `Tuning.sessionGraceCap` = 10 minutes (the per-market ladder
+keeps 30): a login every ten minutes at the limit, a recovery that needs a rebuild caught within ten,
+and the belt never gives up a feed that may return.*

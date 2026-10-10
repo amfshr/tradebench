@@ -351,6 +351,10 @@ public final class Supervisor implements StreamObserver, BeltView, Runnable {
     }
 
     private void applyStatus(Observation.Status status) {
+        // The raw transition first, before any classification: the record a future replay is cut from
+        // (E1-T12 ruling 3) — and, through record(), the status line on the console.
+        record(ServiceEvent.of(EventType.CONNECTION_STATUS, Instant.ofEpochMilli(status.wallMillis()))
+                .withDetail(MAPPER.createObjectNode().put("status", status.status())));
         if (reconnects.noteFor(status.status()) == ReconnectClassifier.Note.TRANSPORT_DOWNGRADED) {
             record(ServiceEvent.of(EventType.TRANSPORT_DOWNGRADED,
                     Instant.ofEpochMilli(status.wallMillis())));

@@ -199,7 +199,7 @@ class SupervisorTest {
         supervisor.sweep(); // must not throw — the sweep thread must survive
 
         assertEquals(1, stream.rebuilds, "the remedy still happens; observability is downstream");
-        assertEquals(1, beltEvents.failures(), "counted — loud, not silent");
+        assertEquals(2, beltEvents.failures(), "counted — loud, not silent: the raw status row and the rebuild's reason row");
     }
 
     @Test
@@ -221,6 +221,21 @@ class SupervisorTest {
         assertEquals(List.of(DAX), stream.resubscribed);
         assertEquals(List.of("belt RETRY " + DAX
                 + " — re-asking for the pair in place after its PRICE leg was rejected (40)"), log);
+    }
+
+    @Test
+    void everyRawStatusTransitionIsRecordedAsItWasSaid() {
+        // E1-T12 ruling 3: the classified outcome (RECONNECT, CONNECTION_DEAD…) was all the record held;
+        // a replay cut from it had to model the connection. Now the raw sequence is a row per transition.
+        supervisor.onStatusChange(stream.generation, TRYING_RECOVERY);
+        supervisor.onStatusChange(stream.generation, STREAMING);
+        supervisor.sweep();
+
+        List<ServiceEvent> raw = events.ofType(EventType.CONNECTION_STATUS);
+        assertEquals(List.of(TRYING_RECOVERY, STREAMING),
+                raw.stream().map(e -> e.detail().get("status").asText()).toList(), "as the SDK said it, in order");
+        assertEquals(Severity.INFO, raw.get(0).severity(), "low-severity: a record, not an alarm");
+        assertEquals(Instant.parse("2026-09-28T09:00:00Z"), raw.get(0).eventTimeUtc(), "dated by the callback's wall clock");
     }
 
     @Test

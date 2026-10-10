@@ -271,4 +271,119 @@ class StalenessWatchdogTest {
         assertEquals(List.of(new Fired(90, new Remedy(DAX, Action.RESUBSCRIBE, Signal.TICK_SILENT))), fired,
                 "not within a sweep: DAX gets its own remedy");
     }
+
+    @Test
+    void aSessionThatAnswersAndSendsNothingClimbsTheLadderToItsCap() {
+        // E1-T12 ruling 4 (from the extended scar replay): every rebuilt connection says it streams
+        // and nothing follows. The connection does not reset the session ladder — only data does —
+        // so it doubles from 60s to the 10-minute session cap instead of re-firing every 90s.
+        dog.track(NDX, 0);
+        List<Long> verdicts = new ArrayList<>();
+        while (clockSecond < 2200) {
+            clockSecond++;
+            for (Remedy r : dog.evaluate(clockSecond * S, clockSecond * 1000)) {
+                assertEquals(Action.REBUILD, r.action());
+                verdicts.add(clockSecond);
+                dog.onConnection(false, clockSecond * S); // the rebuild tears the session down
+                dog.onConnection(true, clockSecond * S + 1); // and the new one answers at once
+            }
+        }
+        assertEquals(List.of(90L, 210L, 450L, 930L, 1530L, 2130L), verdicts,
+                "grace 60s → 120 → 240 → 480 → 600 (the cap): a login every ten minutes at the limit");
+    }
+
+    @Test
+    void aMarketReturningFromAJudgedSilenceIsNotJudgedBarSilentAsItReturns() {
+        // E1-T12 finding 1 (the 2026-08-10 dawn replay): DAX silent long enough for the tick verdict,
+        // NASDAQ alive throughout. When DAX's ticks return, no candle was owed for the silent stretch
+        // — the CHART leg's clock restarts with the ticks, so the only remedy is the tick one.
+        dog.track(NDX, 0);
+        while (clockSecond < 400) {
+            clockSecond++;
+            dog.onTick(NDX, clockSecond * S);
+            if (clockSecond <= 29 || clockSecond >= 230) { // back before the tick ladder's second remedy (239)
+                dog.onTick(DAX, clockSecond * S);
+            }
+            if (clockSecond % 60 == 0) {
+                dog.onSealedBar(NDX, clockSecond * S);
+                if (clockSecond == 300 || clockSecond == 360) {
+                    dog.onSealedBar(DAX, clockSecond * S); // the first candle after the return seals at 300
+                }
+            }
+            for (Remedy r : dog.evaluate(clockSecond * S, clockSecond * 1000)) {
+                fired.add(new Fired(clockSecond, r));
+            }
+        }
+        assertEquals(List.of(new Fired(119, new Remedy(DAX, Action.RESUBSCRIBE, Signal.TICK_SILENT))), fired,
+                "one tick remedy 90s after DAX's last tick (29s) — and nothing at 230, when DAX returns with no candle yet");
+    }
+
+    @Test
+    void aMarketLeavingItsStandDownIsNotJudgedBarSilentAsItReopens() {
+        // The T12 review's finding 1 (ruled 2026-10-10): DAX reads CLOSED from 10s and stands down
+        // for an hour while NASDAQ trades; at 3610s it reopens with ticks flagged DEAL. No candle
+        // was owed while closed — its CHART clock starts at the opening, not at boot.
+        dog.track(NDX, 0);
+        while (clockSecond < 3700) {
+            clockSecond++;
+            dog.onTick(NDX, clockSecond * S);
+            if (clockSecond <= 10) {
+                dog.onTick(DAX, clockSecond * S);
+                dog.onDealFlag(DAX, "CLOSED", clockSecond * S);
+            } else if (clockSecond >= 3610) {
+                dog.onTick(DAX, clockSecond * S); // the Supervisor feeds the tick, then its flag
+                dog.onDealFlag(DAX, "DEAL", clockSecond * S);
+            }
+            if (clockSecond % 60 == 0) {
+                dog.onSealedBar(NDX, clockSecond * S);
+                if (clockSecond >= 3660) {
+                    dog.onSealedBar(DAX, clockSecond * S);
+                }
+            }
+            for (Remedy r : dog.evaluate(clockSecond * S, clockSecond * 1000)) {
+                fired.add(new Fired(clockSecond, r));
+            }
+        }
+        assertEquals(List.of(), fired, "a daily break ends with no remedy — not a bar-silent re-ask as the data returns");
+    }
+
+    @Test
+    void aLiveThirdMarketsTicksDoNotCloseTheSessionLadder() {
+        // Ruling 4 with three markets (the T12 review, ruled 2026-10-10): DAX and NASDAQ dead, FTSE
+        // alive through every rebuild. FTSE's ticks say nothing about the dead two, so the ladder
+        // keeps climbing — not a rebuild every ~95s for as long as the two stay silent.
+        String ftse = "IX.D.FTSE.DAILY.IP";
+        dog.track(NDX, 0);
+        dog.track(ftse, 0);
+        List<Long> verdicts = new ArrayList<>();
+        while (clockSecond < 1600) {
+            clockSecond++;
+            dog.onTick(ftse, clockSecond * S);
+            if (clockSecond % 60 == 0) {
+                dog.onSealedBar(ftse, clockSecond * S);
+            }
+            for (Remedy r : dog.evaluate(clockSecond * S, clockSecond * 1000)) {
+                assertEquals(Action.REBUILD, r.action(), "a session verdict, never a remedy for FTSE");
+                verdicts.add(clockSecond);
+                dog.onConnection(false, clockSecond * S);
+                dog.onConnection(true, clockSecond * S + 1);
+            }
+        }
+        assertEquals(List.of(90L, 210L, 450L, 930L, 1530L), verdicts, "the ladder, as with two markets");
+    }
+
+    @Test
+    void theSessionLadderClosesOnTheFirstTickAfterARebuild() {
+        dog.track(NDX, 0);
+        runTo(90); // the session verdict
+        dog.onConnection(false, 90 * S);
+        dog.onConnection(true, 90 * S + 1);
+        dog.onTick(DAX, 100 * S); // the new session delivers — the episode is over
+        dog.onTick(NDX, 100 * S);
+
+        runTo(300);
+
+        assertEquals(List.of(90L, 190L), fired.stream().map(Fired::second).toList(),
+                "the next silence is a fresh episode, judged 90s after its last tick — not held to the doubled 120s grace");
+    }
 }

@@ -93,14 +93,23 @@ Around the signals, seven pieces of judgment, each visible in the code:
   escalation to `REBUILD` at T+450s (two resubscribes, then rebuild). A
   genuinely-quiet-but-open market decays to about one remedy per half hour — never a
   storm. Healing (`healIf`) is **same-signal-kind only**: flowing ticks must never reset
-  a dead-CHART episode, or the failure mode this signal exists for becomes undetectable.
+  a dead-CHART episode, or the failure mode this signal exists for becomes undetectable. One
+  exception runs the other way: when a tick-silence episode heals, the market's CHART clock
+  restarts with its ticks — no candle was owed while they were gone — so a market returning from
+  a judged silence is not judged bar-silent as it returns (E1-T12 finding 1, the 2026-08-10
+  dawn replay: a spurious pair resubscribe two seconds after DAX came back) — and a market leaving its CLOSED/SUSPEND stand-down starts its CHART clock at
+  the opening, for the same reason (the T12 review's finding 1, ruled 2026-10-10).
 - *Session-shaped verdict*: ≥2 markets stale together is never market noise — one
   `REBUILD`, not N remedies. "Together" means within one sweep of each other
   (`anotherWithinASweep`, E1-T10 #33): a lone stale market whose neighbour is one sweep from its
   own threshold waits a round, so two feeds dying 584ms apart earn one verdict, not a stray
   resubscribe the sweep before it. It carries its own doubling grace
   (`lastSessionVerdict`/`sessionGraceNanos`), added after the test harness caught the
-  verdict re-firing every round.
+  verdict re-firing every round — and since E1-T12 (ruling 4, D29 (5)) that ladder closes only on
+  data from a market that was stale at the verdict — a rebuilt connection that reports streaming
+  and sends nothing does not reset it, nor do a live third market's ticks — so the
+  verdicts space out 60s → 120 → 240 → 480 → `sessionGraceCap` (10 minutes) instead of re-firing
+  every 90s for the whole silence, as the 2026-08-04 scar's replay showed they did.
 - *Clock-anomaly immunity*: chapter 7's discriminator; anomalous rounds re-baseline every
   stopwatch and return nothing. The contract is a **~1s evaluation cadence** — the freeze
   detector *defines* coarser jumps as anomalies, which is why the tests advance

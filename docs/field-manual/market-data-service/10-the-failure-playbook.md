@@ -112,6 +112,7 @@ Every number, where it lives, and what it means:
 | 90s / 210s | `Tuning.tickSilent` / `barSilentWhileTicksFlow` | a quiet-but-open market is dead / a dead CHART leg while PRICE lives |
 | 120s / 300s | `willRetryRebuild` / `tryingRecoveryRebuild` | how long a stuck substate is tolerated — less for the one where the server has given up |
 | 60s → 30 min | `watchdogGraceBase` / `watchdogGraceCap`, `watchdogMaxResubscribes` 2 | per-market remedy episodes: doubling grace so a genuinely quiet market decays to one remedy per half hour |
+| 10 min | `sessionGraceCap` | the session ladder's own cap: a session that answers "streaming" and sends nothing earns one login per cap at the limit, and a recovery that needs a rebuild is caught within it (E1-T12 ruling 4, D29 (5)) |
 | 5s floor, 1s·2ⁿ, 60s cap | `rebuildFloor` / `backoffBase` / `backoffCap` | rebuild pacing — the floor is IG's login cache lesson (§3.2); the cap keeps the ladder responsive |
 | **10 min** | `giveUpAfter` | the recovery budget — the number an operator can actually reason about |
 | 10 | `maxConsecutiveFailures` | belt-and-braces cap behind the budget — rebuilds that connected, never failed attempts |
@@ -355,9 +356,24 @@ prototype's `igtrader` tables and our own `ticks`/`bars_1m` — in
 `market-data-service/src/test/resources/replays/`). The 2026-08-04 scar is the first replay, and
 the heartbeat reading `CONNECTED_STREAMING` through the first minute of its silence is the scar,
 asserted. A scenario for a promise the code does not yet keep is written to this chapter and
-marked `@Disabled("E1-T10 <slice> — finding #n")`; its fix enables it as the exposing test. The
-full captured-outage library, and the same replays through the real `Pump` and `PostgresStore`,
-are E1-T12.
+marked `@Disabled("E1-T10 <slice> — finding #n")`; its fix enables it as the exposing test.
+
+**The replay library (E1-T12).** Four captured windows live beside the scar in
+`market-data-service/src/test/resources/replays/` (the README's table says what each is): the scar
+extended to the ceiling, two dawn silences of DAX while NASDAQ ticks, a busy ten minutes. Each header
+carries two curator sections — `recorded`, what the source recorded and the expectations may anchor on,
+and `modelled`, what the harness supplies because the source did not record it (the prototype stored no
+Lightstreamer statuses, so its replays are greeted by our own healthy-server answers, named as ours).
+The rule (the T12 nod, 2026-10-10): replay what was recorded; model what was not and label it; never
+pass a reconstructed connection sequence off as IG's. A new outage becomes a fixture with
+`scripts/export-replay.sh` (one command, database → JSONL, both schemas); since E1-T12 the belt records
+every raw status transition as a `connection_status` event, so an outage Tradebench itself lives through
+replays with its real sequence. **Acceptance mode** runs the same replays through the real `Pump`,
+`PostgresStore` and `PostgresObservabilityStore` into a Testcontainers Postgres and reads the rows back
+as the observables (`ReplayAcceptanceTest`, tag `acceptance`): `./gradlew
+:market-data-service:replayAcceptance`, nightly and on demand in the `replay-acceptance` workflow, out of
+the default `test` run. Red there is a finding about the belt against real life — the first run found
+two (T12 §).
 
 ## The scars this chapter answers
 

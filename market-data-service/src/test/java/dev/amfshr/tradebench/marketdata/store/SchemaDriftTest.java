@@ -1,5 +1,7 @@
 package dev.amfshr.tradebench.marketdata.store;
 
+import dev.amfshr.tradebench.marketdata.testutil.PostgresTestBase;
+
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 import java.io.IOException;

@@ -15,20 +15,18 @@ import dev.amfshr.tradebench.ig.stream.FakeStreamTransport;
 import dev.amfshr.tradebench.ig.stream.Ohlc;
 import dev.amfshr.tradebench.ig.stream.StreamTransport;
 import dev.amfshr.tradebench.marketdata.app.CaptureAssembly;
-import dev.amfshr.tradebench.marketdata.events.ServiceEvent;
 import dev.amfshr.tradebench.marketdata.ingest.Buffers;
+import dev.amfshr.tradebench.marketdata.store.Database;
+import dev.amfshr.tradebench.marketdata.store.PersistenceException;
 import dev.amfshr.tradebench.marketdata.supervise.Tuning;
 import dev.amfshr.tradebench.marketdata.testutil.FakeClock;
 import dev.amfshr.tradebench.marketdata.testutil.FakeSessions;
 import dev.amfshr.tradebench.marketdata.testutil.FakeSleeper;
-import dev.amfshr.tradebench.marketdata.testutil.RecordingEventLog;
-import dev.amfshr.tradebench.marketdata.testutil.RecordingGapStore;
-import dev.amfshr.tradebench.marketdata.testutil.RecordingStatusStore;
-import dev.amfshr.tradebench.marketdata.testutil.ScriptedCaptureStore;
 
 /**
  * Drives the production composition ({@link CaptureAssembly}) through a {@link Scenario} with no
- * threads and no real waiting. Time is the fake clock's and passes only when the pump sleeps —
+ * threads and no real waiting — over scripted stores ({@link #run}) or, in acceptance mode, the
+ * real ones into a Postgres ({@link #accept}, E1-T12). Time is the fake clock's and passes only when the pump sleeps —
  * an idle wait, or a hold during a database outage — so between sleeps the pump cycles as fast as
  * it would on a real thread, until it has nothing left to drain. Each time the clock moves, the
  * same hook gives the other threads their turn in one deterministic order: the events now due go
@@ -55,10 +53,7 @@ public final class ScenarioRunner {
     private final FakeSleeper sleeper;
     private final FakeStreamTransport transport = new FakeStreamTransport();
     private final FakeSessions sessions = new FakeSessions();
-    private final ScriptedCaptureStore sink = new ScriptedCaptureStore();
-    private final RecordingEventLog events = new RecordingEventLog();
-    private final RecordingGapStore gaps = new RecordingGapStore();
-    private final RecordingStatusStore status = new RecordingStatusStore();
+    private final Stores stores;
     private final Observed observed = new Observed();
     private final CaptureAssembly capture;
     private final Instant start;
@@ -75,20 +70,28 @@ public final class ScenarioRunner {
     private final Set<StreamTransport.SubscriptionHandle> inactiveRecorded = new HashSet<>();
     private final Set<FakeStreamTransport.FakeConnection> closedRecorded = new HashSet<>();
 
+    /** The policy scenarios' mode: scripted stores, database weather on cue. */
     public static Observed run(Scenario scenario) throws InterruptedException {
-        return new ScenarioRunner(scenario).run();
+        return new ScenarioRunner(scenario, new ScriptedStores()).run();
     }
 
-    private ScenarioRunner(Scenario scenario) {
+    /** Acceptance mode (E1-T12): the same replay through the real stores into {@code database}
+     * (migrated, empty); what landed and what was recorded are read back as rows. */
+    public static Observed accept(Scenario scenario, Database database) throws InterruptedException {
+        return new ScenarioRunner(scenario, new PostgresStores(database)).run();
+    }
+
+    private ScenarioRunner(Scenario scenario, Stores stores) {
         this.scenario = scenario;
+        this.stores = stores;
         this.clock = new FakeClock(scenario.origin != null ? scenario.origin : FakeClock.DEFAULT_START);
         this.sleeper = new FakeSleeper(clock);
         // one idle wait is 250ms; a scenario that stands down for twelve hours sleeps 170 000 times
         sleeper.maxSleeps = (int) Math.max(FakeSleeper.RUNAWAY, scenario.until.toMillis() / 50);
         this.start = clock.wallInstant();
         capture = CaptureAssembly.compose(new CaptureAssembly.Ports("scenario", scenario.epics,
-                clock, sleeper, () -> 1.0, Tuning.playbook(), sessions, transport, sink, events, gaps,
-                status, observed.log::add,
+                clock, sleeper, () -> 1.0, Tuning.playbook(), sessions, transport, stores.sink(),
+                stores.events(), stores.gaps(), stores.status(), observed.log::add,
                 () -> exitAsked = "FEED_DEAD → exit(1)",
                 cause -> exitAsked = "pump died → exit(1): " + cause,
                 Buffers.DEFAULT_TICK_CAPACITY));
@@ -203,21 +206,7 @@ public final class ScenarioRunner {
                         FakeStreamTransport.Wire.sealedBar(start.toEpochMilli(), ohlc(bid), ohlc(ask), ltv));
                 observed.barsDelivered++;
             }
-            case Event.DbDown() -> {
-                sink.down = true;
-                events.failWrites = true;
-                gaps.down = true;
-                status.down = true;
-            }
-            case Event.DbUp() -> {
-                sink.down = false;
-                sink.rejectWrites = false;
-                events.failWrites = false;
-                gaps.down = false;
-                status.down = false;
-            }
-            case Event.DbBroken() -> sink.terminal = true;
-            case Event.DbWritesRefused() -> sink.rejectWrites = true;
+            case Event.DbDown(), Event.DbUp(), Event.DbBroken(), Event.DbWritesRefused() -> stores.apply(event);
             case Event.HostSleep(Duration by) -> clock.advanceWallOnly(by);
             case Event.IgDown() -> {
                 transport.refuseConnects = true;
@@ -286,20 +275,26 @@ public final class ScenarioRunner {
         }
     }
 
-    private Observed finish() {
+    private Observed finish() throws InterruptedException {
         observeWire();
         if (!stopped) {
+            // The pump's last turn (E1-T12): what the final sleep's hook delivered is drained, and the
+            // batch flushed as its next idle cycle would have — without that cycle's sleep, so no time
+            // passes and no sweep falls due past the window. A sink still down keeps its batch held.
+            if (capture.queues.pendingWrites() > 0) {
+                capture.pump.cycle();
+            }
+            try {
+                stores.sink().flush();
+            } catch (PersistenceException e) {
+                // reported by ticksHeldAtEnd
+            }
             capture.events.drainOnce(); // a run that ended by the clock: the writer catches up
         }
-        for (ServiceEvent event : events.written) {
-            observed.events.add(new Observed.Seen(Duration.between(start, event.eventTimeUtc()),
-                    event.type(), event.epic(), event.detail()));
-        }
-        observed.landed.addAll(sink.landed);
+        stores.collect(observed, start);
         observed.statusFailures = capture.probe.statusFailures();
-        observed.sinkRecoveries = sink.recoveries;
-        observed.ticksHeldAtEnd = sink.held();
         observed.summary = capture.summary();
+        stores.close();
         return observed;
     }
 

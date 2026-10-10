@@ -16,6 +16,10 @@ public record Tuning(
         Duration tryingRecoveryRebuild,
         Duration watchdogGraceBase,
         Duration watchdogGraceCap,
+        /** The session ladder's own cap: how long a session that answers "streaming" and sends
+         * nothing is left alone between rebuilds — one login per cap at the limit, a recovery that
+         * needs a rebuild caught within it (E1-T12 ruling 4, Alex 2026-10-10). */
+        Duration sessionGraceCap,
         int watchdogMaxResubscribes,
         Duration backoffBase,
         Duration backoffCap,
@@ -46,6 +50,7 @@ public record Tuning(
                 Duration.ofSeconds(300),
                 Duration.ofSeconds(60),
                 Duration.ofMinutes(30),
+                Duration.ofMinutes(10),
                 2,
                 Duration.ofSeconds(1),
                 Duration.ofSeconds(60),
@@ -63,7 +68,7 @@ public record Tuning(
      * (or the budget) in isolation. */
     public Tuning withGiveUpAfter(Duration giveUpAfter) {
         return new Tuning(tickSilent, barSilentWhileTicksFlow, willRetryRebuild,
-                tryingRecoveryRebuild, watchdogGraceBase, watchdogGraceCap,
+                tryingRecoveryRebuild, watchdogGraceBase, watchdogGraceCap, sessionGraceCap,
                 watchdogMaxResubscribes, backoffBase, backoffCap, rebuildFloor,
                 maxConsecutiveFailures, giveUpAfter, subscriptionStrikes, subscribeConfirmWindow,
                 hostSleepSkew, processFreezeJump, standDownTeach);

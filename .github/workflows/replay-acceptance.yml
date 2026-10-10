@@ -1,0 +1,31 @@
+# The replay acceptance lane (E1-T12): captured outages through the real stores into a
+# Testcontainers Postgres — minutes, not seconds — so it runs nightly and on demand, not on every
+# push. Red here is a real finding about the belt against real life, or a fixture that moved.
+#   locally: ./gradlew :market-data-service:replayAcceptance
+name: replay-acceptance
+
+on:
+  schedule:
+    - cron: '17 3 * * *' # 03:17 UTC nightly
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  replay-acceptance:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30 # a hung container pull must not hold a runner for hours
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 25
+      - uses: gradle/actions/setup-gradle@v4
+      - run: ./gradlew :market-data-service:replayAcceptance
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: replay-acceptance-results
+          path: market-data-service/build/test-results/replayAcceptance

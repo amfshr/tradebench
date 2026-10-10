@@ -1,5 +1,7 @@
 package dev.amfshr.tradebench.marketdata.store;
 
+import dev.amfshr.tradebench.marketdata.testutil.PostgresTestBase;
+
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
