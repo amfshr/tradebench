@@ -32,3 +32,13 @@ the lines compact.
 | Fixture | What it is | Scenario |
 |---|---|---|
 | `2026-08-04-silent-while-connected.jsonl` | The 2h56m scar: both markets' feeds died within 584ms of each other at 12:38:08.916Z while the session stayed `CONNECTED:WS-STREAMING`; six minutes of healthy ticks and candles, then the first 100s of the silence. Anchor = the last DAX tick, at offset 360s. | `BeltScenariosTest` — the scar replay |
+
+## Acceptance mode (E1-T12)
+
+The same replay through the real `Pump`, `PostgresStore` and `PostgresObservabilityStore` into a
+Testcontainers Postgres, the rows read back as the observables (`ScenarioRunner.accept`,
+`ReplayAcceptanceTest`, tag `acceptance`). Excluded from the default `test` run; run it with
+`./gradlew :market-data-service:replayAcceptance`. Database weather (`dbDown`, `dbUp`, …) is the
+scripted stores' to enact — a replay that asks for it in acceptance mode is refused as a harness
+error. Expectations are anchored on what the source recorded; a connection answer the capture did
+not record is the harness's healthy-server mode speaking, named as such (the T12 nod, 2026-10-10).

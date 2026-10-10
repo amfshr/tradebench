@@ -1046,9 +1046,9 @@ residuals 2 and 3 (the composed-loop test; the suspend → wake → `WILL-RETRY`
 by it; the subsumed `SupervisorTest` scenarios removed, the pure-core unit tests kept, `IgStreamControlTest` on
 the extended fake.
 
-## T12 — Replay acceptance: the captured-outage library and the rig in acceptance mode ⬜ (ticketed 2026-10-08; unblocked 2026-10-08 — E1-T11 merged, PR #16)
+## T12 — Replay acceptance: the captured-outage library and the rig in acceptance mode 🔶 (ticketed 2026-10-08; unblocked 2026-10-08 — E1-T11 merged, PR #16; design nod ruled and started 2026-10-10 — increment 1 in progress)
 
-**Type** build · **Branch** `e1-t12-replay-acceptance` (planned) · **Started** — · **Blocked by** —
+**Type** build · **Branch** `e1-t12-replay-acceptance` (cut from main `1d09cc4`) · **Started** 2026-10-10 · **Blocked by** —
 
 **Goal:** the belt proven against real captured outages — the gold standard short of the real IG socket: real
 parsers, buffers, pump, store and database under a replayed stream. The re-review that closes T10 should judge a
@@ -1071,7 +1071,9 @@ three are on main since T11's merge (PR #16, 2026-10-08), so this ticket is unbl
   each reconnect's `offline_seconds` and says so. *(T11's loader: a replay header's `serverAnswers` flag makes the
   harness answer as a healthy server — `CONNECTED:WS-STREAMING`, every subscription confirmed — when the source stored
   no statuses; that is the scar fixture's case. Reconstructing a reconnect's status transitions from `offline_seconds`
-  is this ticket's (b).)*
+  was this ticket's (b) at ticketing — **superseded by the design nod's ruling 1 (Alex, 2026-10-10, below): a connection
+  answer the capture did not record is modelled and labelled as our rig speaking, never reconstructed and passed off as
+  IG's.**)*
 - Tick rate ≈ 10–15k/hour on a busy day — a day is ~140k ticks (~12 MB) — so fixtures are windows of minutes
   around an event.
 
@@ -1084,25 +1086,70 @@ three are on main since T11's merge (PR #16, 2026-10-08), so this ticket is unbl
 - **(b) A curated fixture set**, each with expectations written from `service_events`/`bar_gaps` independently
   of the code: the 2026-08-04 scar; three or four `host_slept` host-suspend outages (the prototype ran on a laptop);
   two days with bar gaps; a weekend CLOSED → open transition; one busy hour with no events, expecting "no remedy, no
-  event, every tick and bar landed exactly once".
+  event, every tick and bar landed exactly once". **Shaped by the design nod (Alex, 2026-10-10, below), rulings 1 and 2:**
+  each fixture's header carries a *recorded* and a *modelled* section; expectations are anchored on recorded facts only;
+  where a connection answer is needed the harness's `serverAnswers` healthy-server mode speaks, named as our rig — the
+  status reconstruction from `offline_seconds` noted above is superseded, never done; a fixture whose value depends mainly
+  on the status sequence is dropped, not faked.
 - **(c) The rig in acceptance mode** — the same replay through the real `Pump` and `PostgresStore` into a
   Testcontainers Postgres instead of the scripted stores, asserting the data invariants as rows: every replayed
   tick/bar landed exactly once; `bar_gaps` matches the known gaps; no spurious remedies in healthy windows.
 - **(d) Packaging** as a tagged suite excluded from the default unit run, with its own Gradle task and a CI lane
   (nightly or on demand) — the way ig-client's `ig-demo` smoke is gated (`@Tag("ig-demo")`, `excludeTags` on
   `test`, `includeTags` on the registered `demoSmoke` task — `ig-client/build.gradle.kts`).
+- **(e) The raw-status event** (added at the nod, ruling 3): every raw Lightstreamer status transition recorded as a
+  low-severity event — today the belt records only the classified outcome of a status change (RECONNECT,
+  TRANSPORT_DOWNGRADED, CONNECTION_DEAD), not the raw string — so each outage Tradebench itself lives through becomes a
+  complete fixture through the existing `export-tradebench.sql`. T12's one change to belt code; the cloud re-review after
+  T12 will see it.
 
 **Not in scope:** real threads (ruled at T11's nod); the live tier — the live outage drill (T9 §), T8's
 shadow-diff week, T7's staging soak.
 
 **DoD:** the curated set green in both modes (scripted stores and acceptance); expectations anchored on the
 prototype's recorded events; the exporter documented; the suite runnable on demand and in its CI lane; a
-field-manual note on the replay library (where it lives, how a new outage becomes a fixture).
+field-manual note on the replay library (where it lives, how a new outage becomes a fixture); raw status transitions
+recorded as events from this ticket on (added at the 2026-10-10 nod, ruling 3).
 
-**Estimate:** ≈ two sessions.
+**Estimate:** ≈ two sessions (the ticket's own; reaffirmed at the nod 2026-10-10 — possibly three with the export session;
+roughly 1,000 lines of code plus 2–3 MB of fixture data).
+
+**Design nod — ruled (Alex, 2026-10-10: "okay record that as the t12 nod and start increment 1"); started 2026-10-10** on
+`e1-t12-replay-acceptance` (branched from main at `1d09cc4`). Raised by Alex's concern that the prototype never stored the
+Lightstreamer status sequence, so a reconstructed sequence "won't be real life". Three rulings:
+1. **Replay what was recorded; model what was not, and label it.** A fixture's header carries two sections — *recorded*
+   (ticks, bars, `DLG_FLAG` transitions, the prototype's `service_events` and `bar_gaps`, `offline_seconds`) and *modelled*
+   (any connection answer). Expectations are anchored on recorded facts only: every replayed tick and bar landed exactly
+   once; `bar_gaps` equal the recorded gaps; remedies fire within the recorded outage window. Where a connection answer is
+   needed, the harness's existing healthy-server mode (T11's `serverAnswers` flag — our own fake transport answering
+   `CONNECTED:WS-STREAMING`, every subscription confirmed) is used and named as our rig speaking — never a reconstructed
+   sequence passed off as IG's.
+2. **The fixture set leans to what the captures can prove.** The silent-while-connected family (the 2026-08-04 scar —
+   status said connected throughout, so its sequence would have proved nothing) is the gold fixture and needs no status
+   sequence; gap days, the weekend CLOSED → open transition and the busy healthy hour are pure data invariants;
+   host-suspend outages carry real clock divergence and real silence, with only the status at wake modelled and labelled.
+   A fixture whose value depends mainly on the status sequence is dropped, not faked — the status-driven detectors
+   (`ReconnectClassifier`, `StuckSubstateEscalator`, `CONNECTION_DEAD`) stay proven by the 23-scenario harness, which is
+   what it was built for.
+3. **Record raw status transitions from now on.** Today the belt records the classified outcome of a status change
+   (RECONNECT, TRANSPORT_DOWNGRADED, CONNECTION_DEAD), not the raw string. T12 adds every raw Lightstreamer status
+   transition as a low-severity event, so each outage Tradebench itself lives through becomes a complete fixture through
+   the existing `export-tradebench.sql` — the first real outage our own service survives is the first fully real one.
+   T12's one change to belt code; the cloud re-review after T12 will see it.
+
+**Increments — three, one PR:** **1 the rig in acceptance mode** — the scar replay through the real `Pump`, `PostgresStore`
+and `PostgresObservabilityStore` into a Testcontainers Postgres instead of the scripted stores; the data invariants asserted
+as rows (exactly once; `bar_gaps` as recorded; no spurious remedy); gated behind a JUnit tag and its own Gradle task, the
+`demoSmoke` pattern — built alone, proven on the scar before any export. *(In progress from 2026-10-10.)* · **2 the fixture
+library** — the one-command exporter wrapper and six or seven captured windows from the prototype database (a session with
+Alex present: read-only selects over market data and the event log, never strategy or OMS tables — G1); each fixture's
+header with its recorded/modelled sections. · **3 expectations, the lane, the note, the status event** — per-fixture
+expectations from the recorded events; both modes green; a nightly/on-demand CI lane; the field-manual note (where the
+library lives, how a new outage becomes a fixture); the raw-status event. Estimate unchanged at ≈ two sessions (the
+ticket's own), possibly three with the export session; roughly 1,000 lines of code plus 2–3 MB of fixture data.
 
 **Sequencing (Alex, 2026-10-08, standing):** T11 (✅ PR #16, merged 2026-10-08) → T10 A2 as scenarios (✅ PR #17,
-merged 2026-10-09) → T10 B as scenarios (✅ PR #19, merged 2026-10-10) → T10 C (✅ PR #20, merged 2026-10-10 — T10 ✅ complete) → **T12 — next** → the belt's single cloud re-review, now gated only on T12 — every T10 finding is resolved
+merged 2026-10-09) → T10 B as scenarios (✅ PR #19, merged 2026-10-10) → T10 C (✅ PR #20, merged 2026-10-10 — T10 ✅ complete) → **T12 — in progress (started 2026-10-10)** → the belt's single cloud re-review, now gated only on T12 — every T10 finding is resolved
 (T10 § close-out ruling; Alex's 2026-10-09 clarification named only T10 — T12 before the re-review confirmed by Alex 2026-10-10)
 → T6 (a re-review pass gates T6).
 

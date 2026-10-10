@@ -34,6 +34,26 @@ dependencies {
     testRuntimeOnly(libs.junit.platform.launcher)
 }
 
-tasks.withType<Test> {
-    useJUnitPlatform()
+// Default tests run on fakes and a throwaway Postgres in seconds. The replay acceptance suite
+// (tag "acceptance", E1-T12) runs captured outages through the real stores into Testcontainers
+// Postgres — minutes — so it is excluded from `test`/CI's default run and has its own task and lane.
+tasks.test {
+    useJUnitPlatform {
+        excludeTags("acceptance")
+    }
+}
+
+tasks.register<Test>("replayAcceptance") {
+    group = "verification"
+    description = "Replays captured outages through the real stores into a Testcontainers Postgres (E1-T12)."
+    testClassesDirs = sourceSets.test.get().output.classesDirs
+    classpath = sourceSets.test.get().runtimeClasspath
+    useJUnitPlatform {
+        includeTags("acceptance")
+    }
+    failOnNoDiscoveredTests = true // a lane must never pass vacuously (P9)
+    outputs.upToDateWhen { false }
+    testLogging {
+        events("passed", "skipped", "failed")
+    }
 }

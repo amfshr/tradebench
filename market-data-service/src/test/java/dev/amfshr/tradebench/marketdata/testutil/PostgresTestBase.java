@@ -1,17 +1,19 @@
-package dev.amfshr.tradebench.marketdata.store;
+package dev.amfshr.tradebench.marketdata.testutil;
 
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.testcontainers.containers.PostgreSQLContainer;
 
-/** One container + migrated pool per test class (manual lifecycle — no extension dep). */
-abstract class PostgresTestBase {
+import dev.amfshr.tradebench.marketdata.store.Database;
 
-    static PostgreSQLContainer<?> postgres;
-    static Database database;
+/** One container + migrated pool per test class (manual lifecycle — no extension dep). */
+public abstract class PostgresTestBase {
+
+    protected static PostgreSQLContainer<?> postgres;
+    protected static Database database;
 
     @BeforeAll
-    static void startPostgres() {
+    protected static void startPostgres() {
         postgres = new PostgreSQLContainer<>("postgres:16-alpine");
         postgres.start();
         database = Database.connect(postgres.getJdbcUrl(), postgres.getUsername(),
@@ -19,7 +21,7 @@ abstract class PostgresTestBase {
     }
 
     @AfterAll
-    static void stopPostgres() {
+    protected static void stopPostgres() {
         database.close();
         postgres.stop();
     }

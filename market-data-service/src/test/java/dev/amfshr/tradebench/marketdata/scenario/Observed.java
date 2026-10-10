@@ -44,6 +44,8 @@ public final class Observed {
     public int ticksDelivered;
     public int barsDelivered;
     public long statusFailures;
+    /** The scripted store's own counters; in acceptance mode (a real Postgres) they stay 0 — what
+     * landed is read back as rows, and that is the claim. */
     public int sinkRecoveries;
     public int ticksHeldAtEnd;
     public String summary = "";
