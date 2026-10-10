@@ -14,7 +14,6 @@ import java.util.List;
 import java.util.Set;
 
 import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
@@ -111,15 +110,13 @@ class ReplayAcceptanceTest extends PostgresTestBase {
     }
 
     @Test
-    @Disabled("E1-T12 finding 1 — a market returning from a long tick silence is judged bar-silent the"
-            + " instant its ticks resume (the bar stopwatch runs from boot), earning a spurious pair"
-            + " resubscribe at 210s; awaiting Alex's ruling on rebasing the bar stopwatch when ticks return")
     void daxQuietAtDawnIsMarketSurgeryWhileNasdaqIsLeftAlone() throws Exception {
         // Recorded (2026-08-10): NASDAQ wakes at the anchor (10s) and ticks ~200/min; DAX, silent since
         // before the window, stays silent 207s into it with the flag reading DEAL; the prototype
         // resubscribed DAX twice on a flat 90s grace. Ours doubles the grace, so the second re-ask
         // (not before 210s) is overtaken by DAX's return at 207.5s: one resubscribe, no session verdict.
-        // No bar_gaps row: the window holds no DAX candle before the silence to measure the gap from.
+        // Finding 1 (fixed here): DAX's return must not be judged bar-silent at 210s — its CHART clock
+        // restarts with its ticks. No bar_gaps row: the window holds no DAX candle before the silence.
         Scenario dawn = Replays.load("/replays/2026-08-10-dax-quiet-at-dawn.jsonl").build();
 
         Observed o = ScenarioRunner.accept(dawn, database);

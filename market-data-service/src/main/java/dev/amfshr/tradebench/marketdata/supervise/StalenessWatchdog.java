@@ -92,6 +92,13 @@ public final class StalenessWatchdog {
         }
         m.lastTick = monotonicNanos;
         fedSinceVerdict = true;
+        if (m.episode != null && m.episode.signal == Signal.TICK_SILENT) {
+            // Ticks are back after a silence long enough to have been judged: no candle was owed while
+            // they were gone, so the CHART leg's clock restarts with them — else the market is judged
+            // bar-silent the instant it returns and its pair re-asked for as the data arrives
+            // (E1-T12 finding 1, the 2026-08-10 dawn replay).
+            m.lastBar = monotonicNanos;
+        }
         healIf(m, Signal.TICK_SILENT);
     }
 

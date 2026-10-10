@@ -293,6 +293,32 @@ class StalenessWatchdogTest {
     }
 
     @Test
+    void aMarketReturningFromAJudgedSilenceIsNotJudgedBarSilentAsItReturns() {
+        // E1-T12 finding 1 (the 2026-08-10 dawn replay): DAX silent long enough for the tick verdict,
+        // NASDAQ alive throughout. When DAX's ticks return, no candle was owed for the silent stretch
+        // — the CHART leg's clock restarts with the ticks, so the only remedy is the tick one.
+        dog.track(NDX, 0);
+        while (clockSecond < 400) {
+            clockSecond++;
+            dog.onTick(NDX, clockSecond * S);
+            if (clockSecond <= 29 || clockSecond >= 230) { // back before the tick ladder's second remedy (239)
+                dog.onTick(DAX, clockSecond * S);
+            }
+            if (clockSecond % 60 == 0) {
+                dog.onSealedBar(NDX, clockSecond * S);
+                if (clockSecond == 300 || clockSecond == 360) {
+                    dog.onSealedBar(DAX, clockSecond * S); // the first candle after the return seals at 300
+                }
+            }
+            for (Remedy r : dog.evaluate(clockSecond * S, clockSecond * 1000)) {
+                fired.add(new Fired(clockSecond, r));
+            }
+        }
+        assertEquals(List.of(new Fired(119, new Remedy(DAX, Action.RESUBSCRIBE, Signal.TICK_SILENT))), fired,
+                "one tick remedy 90s after DAX's last tick (29s) — and nothing at 230, when DAX returns with no candle yet");
+    }
+
+    @Test
     void theSessionLadderClosesOnTheFirstTickAfterARebuild() {
         dog.track(NDX, 0);
         runTo(90); // the session verdict

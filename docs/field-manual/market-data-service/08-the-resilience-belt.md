@@ -93,7 +93,11 @@ Around the signals, seven pieces of judgment, each visible in the code:
   escalation to `REBUILD` at T+450s (two resubscribes, then rebuild). A
   genuinely-quiet-but-open market decays to about one remedy per half hour — never a
   storm. Healing (`healIf`) is **same-signal-kind only**: flowing ticks must never reset
-  a dead-CHART episode, or the failure mode this signal exists for becomes undetectable.
+  a dead-CHART episode, or the failure mode this signal exists for becomes undetectable. One
+  exception runs the other way: when a tick-silence episode heals, the market's CHART clock
+  restarts with its ticks — no candle was owed while they were gone — so a market returning from
+  a judged silence is not judged bar-silent as it returns (E1-T12 finding 1, the 2026-08-10
+  dawn replay: a spurious pair resubscribe two seconds after DAX came back).
 - *Session-shaped verdict*: ≥2 markets stale together is never market noise — one
   `REBUILD`, not N remedies. "Together" means within one sweep of each other
   (`anotherWithinASweep`, E1-T10 #33): a lone stale market whose neighbour is one sweep from its
