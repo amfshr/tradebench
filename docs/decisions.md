@@ -440,6 +440,7 @@ ruling 4, Alex): **(5) the watchdog's session ladder closes on data, not on the 
 the 2026-08-04 scar showed a session that answers `CONNECTED:WS-STREAMING` and sends nothing being rebuilt
 every 90s for as long as the silence lasts — the ladder (60s doubling) was reset whenever the rebuilt
 connection reported streaming or the rebaselined markets read non-stale. Now only the first tick after a
-rebuild closes it, and it has its own cap, `Tuning.sessionGraceCap` = 10 minutes (the per-market ladder
+rebuild from a market that was stale at the verdict closes it (a live third market's ticks say nothing
+about the dead two — the T12 review, ruled the same day), and it has its own cap, `Tuning.sessionGraceCap` = 10 minutes (the per-market ladder
 keeps 30): a login every ten minutes at the limit, a recovery that needs a rebuild caught within ten,
 and the belt never gives up a feed that may return.*

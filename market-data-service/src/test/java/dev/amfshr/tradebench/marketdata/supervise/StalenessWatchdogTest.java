@@ -319,6 +319,60 @@ class StalenessWatchdogTest {
     }
 
     @Test
+    void aMarketLeavingItsStandDownIsNotJudgedBarSilentAsItReopens() {
+        // The T12 review's finding 1 (ruled 2026-10-10): DAX reads CLOSED from 10s and stands down
+        // for an hour while NASDAQ trades; at 3610s it reopens with ticks flagged DEAL. No candle
+        // was owed while closed — its CHART clock starts at the opening, not at boot.
+        dog.track(NDX, 0);
+        while (clockSecond < 3700) {
+            clockSecond++;
+            dog.onTick(NDX, clockSecond * S);
+            if (clockSecond <= 10) {
+                dog.onTick(DAX, clockSecond * S);
+                dog.onDealFlag(DAX, "CLOSED", clockSecond * S);
+            } else if (clockSecond >= 3610) {
+                dog.onTick(DAX, clockSecond * S); // the Supervisor feeds the tick, then its flag
+                dog.onDealFlag(DAX, "DEAL", clockSecond * S);
+            }
+            if (clockSecond % 60 == 0) {
+                dog.onSealedBar(NDX, clockSecond * S);
+                if (clockSecond >= 3660) {
+                    dog.onSealedBar(DAX, clockSecond * S);
+                }
+            }
+            for (Remedy r : dog.evaluate(clockSecond * S, clockSecond * 1000)) {
+                fired.add(new Fired(clockSecond, r));
+            }
+        }
+        assertEquals(List.of(), fired, "a daily break ends with no remedy — not a bar-silent re-ask as the data returns");
+    }
+
+    @Test
+    void aLiveThirdMarketsTicksDoNotCloseTheSessionLadder() {
+        // Ruling 4 with three markets (the T12 review, ruled 2026-10-10): DAX and NASDAQ dead, FTSE
+        // alive through every rebuild. FTSE's ticks say nothing about the dead two, so the ladder
+        // keeps climbing — not a rebuild every ~95s for as long as the two stay silent.
+        String ftse = "IX.D.FTSE.DAILY.IP";
+        dog.track(NDX, 0);
+        dog.track(ftse, 0);
+        List<Long> verdicts = new ArrayList<>();
+        while (clockSecond < 1600) {
+            clockSecond++;
+            dog.onTick(ftse, clockSecond * S);
+            if (clockSecond % 60 == 0) {
+                dog.onSealedBar(ftse, clockSecond * S);
+            }
+            for (Remedy r : dog.evaluate(clockSecond * S, clockSecond * 1000)) {
+                assertEquals(Action.REBUILD, r.action(), "a session verdict, never a remedy for FTSE");
+                verdicts.add(clockSecond);
+                dog.onConnection(false, clockSecond * S);
+                dog.onConnection(true, clockSecond * S + 1);
+            }
+        }
+        assertEquals(List.of(90L, 210L, 450L, 930L, 1530L), verdicts, "the ladder, as with two markets");
+    }
+
+    @Test
     void theSessionLadderClosesOnTheFirstTickAfterARebuild() {
         dog.track(NDX, 0);
         runTo(90); // the session verdict
