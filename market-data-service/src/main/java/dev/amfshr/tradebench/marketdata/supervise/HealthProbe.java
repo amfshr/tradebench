@@ -44,9 +44,8 @@ public final class HealthProbe {
 
     /** UPSERT every market's row, in one batch; a failing publish is counted once, never thrown. */
     public void publish() {
-        List<CaptureStatus> rows = epics.stream().map(this::snapshot).toList();
         try {
-            store.upsert(rows);
+            store.upsert(epics.stream().map(this::snapshot).toList());
         } catch (RuntimeException e) {
             failures.incrementAndGet();
         }
