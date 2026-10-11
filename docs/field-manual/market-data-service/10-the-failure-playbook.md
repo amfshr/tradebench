@@ -38,7 +38,7 @@ re-serves them).
 | What breaks | How we notice | What we do | Cost | Who finds out | Heals |
 |---|---|---|---|---|---|
 | The server stops talking but the socket stays up (*silent while connected*, the 2h56m scar) | `StalenessWatchdog`: no tick for **90s** while the market's `DLG_FLAG` says open; or ticks flowing but no sealed bar for **210s** (a dead CHART leg); no verdict while the connection itself is down — that silence is the escalator's; a market reading CLOSED/SUSPEND for **12h** gets one teaching resubscribe, so a zombie cannot hide behind a weekend (D29) | per-market **resubscribe** ×2 (T+90s, then T+210s — the grace doubles before each wait: 120s, 240s), then a session **rebuild** (T+450s); ≥2 markets stale together (within one sweep of each other) → rebuild at once | ticks from the stop to the resume; a bar gap | `WATCHDOG_STALE` events; `RECONNECT{replayed=false}` on resume; `BAR_GAP` | heal backfills the bars |
-| The SDK hangs in `DISCONNECTED:WILL-RETRY` (it gave up without saying so) | `StuckSubstateEscalator`: **120s** in WILL-RETRY, **300s** in TRYING-RECOVERY (the server may still replay there) | **rebuild**, paced by backoff | as above | `STUCK_SUBSTATE_ESCALATED` | heal |
+| The SDK hangs in `DISCONNECTED:WILL-RETRY` (it gave up without saying so); or cycles `WILL-RETRY → CONNECTING → …` against a stale endpoint; or a handshake sits in `CONNECTING`/`STREAM-SENSING` from boot | `StuckSubstateEscalator`: **120s** not streaming (**300s** when the last retry substate seen was TRYING-RECOVERY — the server may still replay there); the stopwatch runs across every non-streaming status, so nothing the SDK calls the wait launders it (E1-T13 ruling 2) | **rebuild**, paced by backoff | as above | `STUCK_SUBSTATE_ESCALATED` | heal |
 | The client gives up for good — a bare `DISCONNECTED` (the server's refusal follows it as `onServerError`) | `ReconnectClassifier.isTerminal`: exactly `DISCONNECTED`, never the two retry substates | **rebuild now**, paced by backoff, the budget starts — no substate will ever escalate this, and the watchdog stands down on closed markets | the outage | `CONNECTION_DEAD{status | code, message}` + `IG_API_ERROR{code, message}` (both set one latch: one death, one rebuild — asked again every sweep until a rebuild runs, this one or any other's) | heal |
 | A normal drop and reconnect | `ReconnectClassifier` on any streaming substate | nothing — report | none if the server replayed (no WILL-RETRY seen); otherwise the outage's data | `RECONNECT{replayed, wallOutage, awakeOutage, hostSlept}` | heal when `replayed=false` |
 | One market's subscription is rejected three attempts running (a pair's two legs are one strike) while another market's pair is confirmed — a verdict due while that witness is still inside its 30s confirm window waits, and is rendered the moment it confirms or the window lapses | `WitnessQuarantine` (§3.5) | **quarantine** that market — unsubscribe its pair, leave it off, and ignore its later rejections (the pair's other leg, a late one — never re-admitted, never re-subscribed); exit is restart-only | that market until the next restart | `MARKET_QUARANTINED` | restart |
@@ -110,7 +110,7 @@ Every number, where it lives, and what it means:
 | Number | Where | Meaning |
 |---|---|---|
 | 90s / 210s | `Tuning.tickSilent` / `barSilentWhileTicksFlow` | a quiet-but-open market is dead / a dead CHART leg while PRICE lives |
-| 120s / 300s | `willRetryRebuild` / `tryingRecoveryRebuild` | how long a stuck substate is tolerated — less for the one where the server has given up |
+| 120s / 300s | `willRetryRebuild` / `tryingRecoveryRebuild` | how long a connection may sit not streaming — less when the last retry substate seen says the server has given up (or none was seen), more when it may still replay |
 | 60s → 30 min | `watchdogGraceBase` / `watchdogGraceCap`, `watchdogMaxResubscribes` 2 | per-market remedy episodes: doubling grace so a genuinely quiet market decays to one remedy per half hour |
 | 10 min | `sessionGraceCap` | the session ladder's own cap: a session that answers "streaming" and sends nothing earns one login per cap at the limit, and a recovery that needs a rebuild is caught within it (E1-T12 ruling 4, D29 (5)) |
 | 5s floor, 1s·2ⁿ, 60s cap | `rebuildFloor` / `backoffBase` / `backoffCap` | rebuild pacing — the floor is IG's login cache lesson (§3.2); the cap keeps the ladder responsive |
@@ -255,6 +255,22 @@ on 2026-10-04 and are logged as **D28**. **Proven in anger on 2026-10-05:** a 15
 5 / 5 / 5 / 11 / 13 / 43 / 39 s, `sink recovered after 152s and 7 attempt(s); 303 queued writes to
 drain`, every minute's bars and ticks present afterwards, one `sink_failure` row, no `bar_gaps` row.
 The drill routine, the log and the verification queries live in the E1 plan (T9 §).
+
+**The lock across a held outage (2026-10-11, E1-T13 — the re-review's finding 1).** The
+single-instance advisory lock (foundations ch. 06) is session-scoped and rides its own dedicated
+connection; a Postgres restart ends every session, and an idle connection learns nothing until it
+is next asked. Pre-belt that could not matter — the database failure killed the pump and the
+restart re-ran `acquire`. Now the sink holds through exactly that restart, so the process would
+have streamed on for the rest of its life holding no lock, and a second launch would have been
+let in (P9's fail-open). So the heartbeat re-verifies it — `SingleInstanceLock.verify()`, every
+60s beside the status rows: a live session still holds its lock (nothing but session end releases
+one), a dead session is replaced by a fresh one that takes the lock again (`advisory lock
+re-acquired on a fresh session`), a refusal — another instance took it while ours was gone — is a
+`FATAL` and `exit(1)`: whoever holds the lock runs, and the newcomer does; and while the database is
+unreachable the lock is *unverifiable*, reported every heartbeat and asked again — never an exit,
+which would drop what the sink is holding, and nobody else can take the lock from a database that is
+down either. The exposure that remains is one heartbeat: a second launch in the minute after the
+database returns streams beside us until our next check finds the lock taken and we leave.
 
 ## Giving up, loudly
 

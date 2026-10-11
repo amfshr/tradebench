@@ -138,13 +138,21 @@ stateDiagram-v2
 
 **`StuckSubstateEscalator`** — the 2h56m scar (§3.3): the SDK hung in
 `DISCONNECTED:WILL-RETRY`, which trips no disconnect handler — it had given up without
-saying so. The escalator times the substate on the monotonic clock and declares
-`rebuildDue` past a threshold — **120s for WILL-RETRY, 300s for TRYING-RECOVERY**. The
-asymmetry is informed patience: in TRYING-RECOVERY the server may still complete a
-*lossless replay*, so waiting can win back data; in WILL-RETRY the server has abandoned
-recovery, so every waited second is pure loss. One subtle line: `onStatus` only restarts
-the stopwatch when the substate *changes* — a chattily re-fired identical status must not
-launder the elapsed time.
+saying so. The escalator measures **time-not-streaming** on the monotonic clock — the D27
+one-streaming rule applied here (E1-T13, the re-review's finding 2, ruled 2026-10-11): the
+stopwatch starts at the first status that is not streaming and runs across every non-streaming
+status the connection reports — `CONNECTING`, the `STREAM-SENSING` handshake, `STALLED`, the two
+retry substates — until one streams; a chattily re-fired status, or the SDK's own retry cycle
+`WILL-RETRY → CONNECTING → WILL-RETRY`, cannot launder the elapsed time. It declares
+`rebuildDue` past a threshold set by the retry substate most recently seen — **120s for
+WILL-RETRY, 300s for TRYING-RECOVERY**, and WILL-RETRY's for a connection that never reached
+one (a handshake that hangs at boot). The asymmetry is informed patience: in TRYING-RECOVERY
+the server may still complete a *lossless replay*, so waiting can win back data; in WILL-RETRY
+the server has abandoned recovery, so every waited second is pure loss. Before the ruling the
+escalator timed the *substate*: each `CONNECTING` between retries reset it, the watchdog stands
+down while not streaming, no death is latched and the budget is inert before the first rebuild —
+so a stale endpoint cycling every few seconds, or a boot into a hung handshake, was watched by
+nothing. A bare `DISCONNECTED` clears the stopwatch: the Supervisor's death latch owns that path.
 
 **`BackoffPolicy`** — `base·2^(attempt−1)`, jittered ±50% (injectable `DoubleSupplier`,
 so tests are exact), capped at 60s — then the part IG taught us: a **5s floor on every

@@ -177,6 +177,43 @@ class BeltScenariosTest {
     }
 
     @Test
+    void aRetryCycleThroughConnectingIsRebuiltByTheEscalatorNotLeftToNothing() throws Exception {
+        // Re-review 2 (ruling: the escalator measures time-not-streaming). The streaming endpoint
+        // refuses: the SDK cycles WILL-RETRY → CONNECTING → WILL-RETRY every few seconds. Each
+        // CONNECTING used to reset the escalator, the watchdog stands down while not streaming, no
+        // death is latched and no rebuild has run so the budget is inert — a connection watched by
+        // nothing. Now the stopwatch runs from the first non-streaming status: a rebuild 120s on.
+        Scenario cycling = Scenario.named("retry cycle through CONNECTING").markets(DAX)
+                .at(s(0), streaming()).at(s(0), subscribed(DAX))
+                .every(s(1), s(1), s(10), t -> tick(DAX))
+                .every(s(4), s(10), s(300), t -> status((t.toSeconds() - 10) / 4 % 2 == 0 ? WILL_RETRY : "CONNECTING"))
+                .until(s(300)).build();
+
+        Observed o = ScenarioRunner.run(cycling);
+
+        assertEquals(List.of(0L, 130L, 254L), o.secondsOf("connect"),
+                "120s after the first non-streaming status at 10; then 120s after the rebuilt connection's first, at 134");
+        assertEquals(2, o.events(EventType.STUCK_SUBSTATE_ESCALATED).size());
+        assertTrue(o.events(EventType.WATCHDOG_STALE).isEmpty(), "stood down while not streaming");
+        assertTrue(o.exits.isEmpty());
+    }
+
+    @Test
+    void aBootIntoAHandshakeThatNeverStreamsIsRebuiltAtTheEscalatorsThreshold() throws Exception {
+        // The boot specimen: start() returns once connect is issued; a connection sitting in
+        // CONNECTED:STREAM-SENSING was never rebuilt and never declared dead. Rebuilt at 120s now.
+        Scenario hung = Scenario.named("boot into a hung handshake").markets(DAX)
+                .at(s(0), status("CONNECTED:STREAM-SENSING"))
+                .until(s(300)).build();
+
+        Observed o = ScenarioRunner.run(hung);
+
+        assertEquals(List.of(0L, 120L), o.secondsOf("connect"), "the handshake's 120s, no retry substate ever seen");
+        assertEquals(1, o.events(EventType.STUCK_SUBSTATE_ESCALATED).size());
+        assertTrue(o.events(EventType.WATCHDOG_STALE).isEmpty());
+    }
+
+    @Test
     void aHostSuspendIsAnnotatedNotTreatedAsAnOutage() throws Exception {
         // Chapter 7's discriminator at the shell: the host is suspended (a paused VM, a hibernated
         // instance) — the socket dies, the wall clock jumps sixteen minutes, the monotonic clock does

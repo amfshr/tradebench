@@ -409,7 +409,13 @@ the shutdown hook would deadlock. **(6) The shared pool's `connectionTimeout` is
 (`Database.CONNECTION_TIMEOUT`): the heartbeat is held at most 5s per market during an outage and
 `recover()` fails fast into the backoff; no dedicated Tier-2 pool. *Amended 2026-10-10 (E1-T10 #22):
 per heartbeat, not per market — every market's row goes as one batch on one pooled connection.*
-Field Manual ch. 10 "When the database fails" carries the full argument.
+*Amended 2026-10-11 (E1-T13, the re-review's finding 1): the single-instance advisory lock is
+re-verified every heartbeat — its session dies with the restart the sink holds through, and an idle
+connection never learns it. A live session still holds the lock; a dead one is replaced by a fresh
+session that takes it again; a refusal (another instance took it meanwhile) exits loud, the newcomer
+runs; an unreachable database leaves the lock unverifiable — reported and asked again, never an exit,
+since nobody can take the lock from a database that is down and an exit would drop what the sink
+holds.* Field Manual ch. 10 "When the database fails" carries the full argument.
 
 ## D29 — Belt hardening rulings from the PR #14 review: a bounded CLOSED stand-down, a JDBC socket timeout, Tier-2 writes off the sweep thread, the hush retired — **Accepted** (2026-10-05, Alex)
 
