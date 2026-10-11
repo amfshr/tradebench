@@ -26,7 +26,7 @@ flowchart LR
     IG["IG Markets\nREST + Lightstreamer"]
     DB2["Databento\n(platform datasets, E4-era)"]
     OS["Object storage\n(Parquet archive, R2/B2 — T6)"]
-    MAIL["Email\n(digest + serious alerts)"]
+    MAIL["Email\n(digest + serious alerts — sent by the\noperator console, E9; D30)"]
     A & R & B --> TB
     TB <--> IG
     DB2 -.-> TB
@@ -133,9 +133,9 @@ flowchart LR
     CONS --> W["Writer\nbatch upserts, idempotent by key,\nack-after-apply"]
     W --> PG[(Postgres)]
     SUP["Supervisor + watchdog (T5)\nreconnect ladder, staleness,\ngap rows"] -.-> LS
-    HEAL["EOD job (T6, D6)\nheal → Parquet → digest"] --> PG
+    HEAL["EOD job (T6, D6 amended)\nheal → Parquet archive\n+ an audited job_runs row"] --> PG
     HEAL --> OS["Object storage"]
-    HEAL --> MAILX["Digest email\n(absence = alarm, P9)"]
+    PG -.-> CONSOLE["Operator console (E9, D30)\nreads capture_status, bar_gaps, job_runs;\nsends the digest + alerts (absence = alarm, P9)"]
 ```
 
 Startup takes the single-instance **advisory lock** before any IG contact (no persistence ⇒
@@ -229,8 +229,11 @@ logic on injectable clocks returning *values* the service executes.
 
 `@Scheduled` end-of-day: scan-first gap detection (anti-join, contiguous runs) → REST v3
 heal, window-clipped and allowance-aware (ticks are stream-only, never "healed") → day's
-Parquet to object storage → digest email. An audited `job_runs` row every run, clean or not
-— **the absence of the digest is itself the alarm** (P9).
+Parquet to object storage. An audited `job_runs` row every run, clean or not. **No email from
+this service** (D30, 2026-10-11): the digest and every alert are the operator console's (E9), read
+from `job_runs`, `capture_status` and `bar_gaps` — the digest's content proves the collector lived,
+its own absence alarms the reporter (P9). Until E9 is deployed, the row and the heartbeat are
+checked by hand each evening.
 
 ## 5. Frontend (shape reserved)
 

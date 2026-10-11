@@ -54,6 +54,10 @@ as a Spring `@Scheduled` task writing an audited `job_runs` row on every run, cl
 multi-step ETL; this is "find gaps, call REST paced, write a file, send an email." The audit row
 carries the D29-style doctrine: the *absence* of the row/digest is itself the alarm. Quartz is
 the middle step if persistent cron scheduling is ever needed; Batch is not on the path.
+*Amended 2026-10-11 (D30): the digest leaves this job. The EOD cycle is heal → Parquet archive, each
+run writing its audited `job_runs` row; the digest email and every alert belong to the operator
+console (E9), which reads those rows. Until E9 is deployed there is no email: the `job_runs` rows
+and the heartbeat are checked by hand each evening (Alex's ruling).*
 
 ## D7 — One DSL grammar; declarative; predicates are boolean indicators — **Accepted** (2026-09-27)
 
@@ -461,3 +465,26 @@ passed with no further verdict, so a thin-but-open pair converges to one rebuild
 subscribe snapshot cannot restart it, and a market's own episode survives the rebuild it earned; and it has its own cap, `Tuning.sessionGraceCap` = 10 minutes (the per-market ladder
 keeps 30): a login every ten minutes at the limit, a recovery that needs a rebuild caught within ten,
 and the belt never gives up a feed that may return.*
+
+## D30 — The collection service streams and stores; reporting, alerts and the digest belong to the operator console (E9) — **Accepted** (2026-10-11, Alex)
+
+The market-data service's responsibility is the data: stream it, store it, and in time publish its
+streams to other sinks and captures (P7 — the service stands alone as a deployable artefact). It
+runs its own data jobs — the daily 1m-bar heal and the Parquet archive (D6, amended) — from
+configuration, and writes what each run did. It does **not** email, alert or report: the capture
+digest, the stale-heartbeat alarm and every other notification are the **operator console's** (E9),
+which reads what the service wrote — `capture_status`, `bar_gaps`, `job_runs`, the archive rows —
+and is also where jobs are configured, performance is viewed and exports are downloaded.
+**Why:** the digest is a report over stored data, so a reader should produce it; mail transport,
+templates and credentials are a configuration surface unrelated to streaming and would widen the
+collector's deploy and its secrets for no data benefit; and the boundary is the one that lets the
+same service feed future consumers without carrying their reporting. **The P9 proof-of-life
+moves with it:** the digest's content proves the collector lived (heartbeat freshness over the day,
+the heal's and archive's `job_runs` rows, open gaps), and the digest's own absence alarms the
+reporter — two loud layers in place of one. **Accepted cost, ruled explicitly:** there is no email
+until E9 is deployed. From the first deploy (E1-T7) until then Alex checks the service by hand each
+evening — the heartbeat line, `capture_status` freshness and the day's `job_runs` row. The
+alternative, a thin reporter pulled forward before E9, was declined: it would widen the collection
+service's scope, and the sooner E9 is up the better. Supersedes the PRD's placement of the digest in
+the EOD job (§ "capture digest … the absence of the daily email is itself the alarm") and D6's third
+phase; E1-T6 is re-scoped to heal + archive; E9 gains the digest and alerts.

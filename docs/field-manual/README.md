@@ -75,6 +75,10 @@ follow that journey and the resilience that keeps it honest.
   what breaks, what the belt does, what each outage costs, who finds out, how it heals; every
   clock and how they interact; the threads and the one race a fence can't cover; the three
   database tiers; the dated rulings behind every number.
+- [The resilience belt, end to end](market-data-service/11-the-belt-end-to-end.md) — the
+  walk-through: what the running service does second to second — the threads, the one streaming
+  rule, a sweep step by step, every detector with its clock and numbers, the remedies and their
+  pacing, a day in the life as worked timelines, and the evening check run by hand until E9.
 
 ## How to read it
 
