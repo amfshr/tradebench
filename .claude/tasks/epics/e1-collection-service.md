@@ -503,8 +503,8 @@ sweep thread via a bounded queue drained by one writer thread, drops counted in 
 
 **Slices (Alex's sequencing, 2026-10-08, standing: A1 first with targeted tests — ✅ PR #15 → E1-T11 the harness — ✅ PR #16,
 merged 2026-10-08 → A2 as scenarios on it — ✅ PR #17, merged 2026-10-09 → B as scenarios — ✅ PR #19, merged 2026-10-10 → C,
-the last slice, one PR — ✅ PR #20, merged 2026-10-10; T10 complete → E1-T12 replay acceptance — ✅ PR #23, merged 2026-10-11 → the belt's single cloud re-review, both its gates met — every T10 finding is resolved, T12 green and merged
-(the close-out ruling, below) → E1-T6):**
+the last slice, one PR — ✅ PR #20, merged 2026-10-10; T10 complete → E1-T12 replay acceptance — ✅ PR #23, merged 2026-10-11 → the belt's single cloud re-review, both its gates met — ✅ run 2026-10-11, PASS-WITH-FINDINGS
+(the close-out ruling, below) → E1-T13 the re-review's fixes (🔶 started 2026-10-11; T13 §) → E1-T6):**
 
 - **A1 — the two highs, targeted tests, first.** **#1** a quarantined market's twin-leg rejection re-admits it:
   gate `SubscriptionError`s for epics in `quarantinedMarkets` in `Supervisor.sweep()`;
@@ -654,7 +654,7 @@ the merged head (`build` 52s, GitGuardian pass); the local branch deleted. Commi
 · `6e0a82d` (3/4) · `ba7fe45` (4/4) · `3e7ca9a` (the review fixes) · `fb24eb5` (board). The board's Done history carries the
 entry (tagged E1-T10); T5 § residual 3 is closed, final. **Next:** slice B as scenarios on the harness (#6, #20 ×2 — the three
 `@Disabled`; with #7, #12, #15/#16, #17, #24, #30) → C, one PR per slice — the next build work → E1-T12 (✅ PR #23, merged 2026-10-11) → the belt's single cloud
-re-review, both its gates met (the close-out ruling below) → E1-T6.
+re-review (✅ run 2026-10-11, PASS-WITH-FINDINGS — the close-out ruling below) → E1-T13 the re-review's fixes → E1-T6.
 
 **B — merged (PR #19, 2026-10-10).** **Started 2026-10-09** on `e1-t10-b-sink-and-database-edge` (branched from main at `034a9ea`);
 design nod posted and accepted by Alex 2026-10-09 ("pls proceed with your recommendations"). **Four increments, one PR
@@ -728,7 +728,7 @@ merge 2026-10-09T23:31Z); CI green on the merged head (`build` 48s, GitGuardian 
 board's Done history carries the entry (tagged E1-T10). **Open for Alex:** whether the `boolean recover()` mechanism (review
 finding 3) stands as taken — noted, not a blocker. **Next:** **slice C — the last slice of T10, one PR; T10 closes with it** (#9,
 #10, #22, #25, #26, #28, #31, #32; #27 done at T11; **started 2026-10-10, merged 2026-10-10 — PR #20; the record in "C — merged", below**) → E1-T12 (✅ PR #23, merged 2026-10-11) → the
-belt's single cloud re-review, both its gates met (the close-out ruling below) → E1-T6.
+belt's single cloud re-review (✅ run 2026-10-11, PASS-WITH-FINDINGS — the close-out ruling below) → E1-T13 the re-review's fixes → E1-T6.
 
 **C — merged (PR #20, 2026-10-10).** **Started 2026-10-10** on `e1-t10-c-loudness-reuse-docs` (branched from main at `897fb99`); design nod posted and accepted by Alex
 2026-10-10 ("okay fab proceed"). **Three increments, one PR for the slice — the last slice of T10; T10 closes with it:** **1 loudness**
@@ -773,7 +773,7 @@ pre-existing test literals (`ig-client` and `market-data-service` tests) and the
 did not add it — surfaced as open for Alex, not a finding; **closed by PR #21 the same day** (merge `5735640`: both ids replaced
 with the synthetic pair `AB12CD`/`AB12CE`; the rule — everything in `.env` is sensitive — now in G1, `27e30d0`; the check's two further hits, the IG login identifier and the instance name, redacted by PR #22, merge `200ca52`). **T10 closes with this merge: every finding
 of the PR #14 review is resolved** (A1 #1, #2 · A2 twelve · B nine — #15 and #16 counted apart, fixed together · T11 two, #23 and #27 · C eight — 33 findings,
-four slices plus the harness). **Next:** E1-T12 (✅ PR #23, merged 2026-10-11) → the belt's single cloud re-review, both its gates met (the close-out ruling below) → E1-T6.
+four slices plus the harness). **Next:** E1-T12 (✅ PR #23, merged 2026-10-11) → the belt's single cloud re-review (✅ run 2026-10-11, PASS-WITH-FINDINGS — the close-out ruling below) → E1-T13 the re-review's fixes → E1-T6.
 
 **The A2/B backlog on the harness (E1-T11 — merged 2026-10-08, PR #16; written 2026-10-08, the tenth, #4's window-lapse arm, added at T11's
 doctrine review; each verified red for its finding's reason):** the ten `@Disabled` scenarios in `BeltScenariosTest` —
@@ -849,7 +849,15 @@ re-raise (B's `boolean recover()`, B10, the accepted boot-into-quiet-pair rebuil
 `tradebench` exporter unexercised in anger, the lane not a required check); how to run things; and what to hand back — ranked
 findings in the first review's shape plus a one-line gate verdict PASS / PASS-WITH-FINDINGS / FAIL. Alex runs `/code-review ultra 24`
 in the cloud review session; the local session saves the result as `.claude/reviews/2026-10-11-belt-re-review.md` and triages it
-(Alex rules). Not yet run as of this record.
+(Alex rules). **Run 2026-10-11 — gate verdict PASS-WITH-FINDINGS** (the record at that path, committed `45ffb46`): 20 findings — 2 high
+(1, 2), 10 medium (3–12), 8 low (13–20); CONFIRMED unless marked PLAUSIBLE; every verdict by trace with lines quoted — the review
+environment could not provision the Java 25 toolchain, so no mutation was executed there; the 33 fixes of this ticket re-traced and
+found sound, letter and risk (the one place a fix answered the letter but opened a sibling path: #4 → finding 4; #5's stand-down →
+findings 2 and 3). The gate's conditions — findings 1, 3, 4, 5, 7, 8 and the policy-table docs lines in 12 fixed before T6; rulings on
+2 and 6 (with 3 and 5 as one family) — are **E1-T13** (T13 §, below; ruled 2026-10-11, Alex: "proceed with your recommendations… make
+the ticket and do the fixes"; both rulings taken as recommended and recorded there); the deferred findings are backlog B11–B15. PR #24
+closed 2026-10-11 and its two branches deleted once the record was saved. **Sequencing stands as T13 before T6:** the re-review is a
+pass with conditions, and T6 starts on T13's merge.
 
 ## T11 — The belt's scenario harness ✅ (PR #16, 2026-10-08 — complete; ticketed 2026-10-05, started 2026-10-08, design nod ruled 2026-10-08)
 
@@ -1319,11 +1327,100 @@ session ladder on data from a market stale at the verdict, capped at 10 minutes 
 history carries the entry (tagged E1-T12). **T12 ✅ complete 2026-10-11.**
 
 **Sequencing (Alex, 2026-10-08, standing):** T11 (✅ PR #16, merged 2026-10-08) → T10 A2 as scenarios (✅ PR #17,
-merged 2026-10-09) → T10 B as scenarios (✅ PR #19, merged 2026-10-10) → T10 C (✅ PR #20, merged 2026-10-10 — T10 ✅ complete) → **T12 (✅ PR #23, merged 2026-10-11 — T12 ✅ complete)** → **the belt's single cloud re-review — next**: both its gates are met
+merged 2026-10-09) → T10 B as scenarios (✅ PR #19, merged 2026-10-10) → T10 C (✅ PR #20, merged 2026-10-10 — T10 ✅ complete) → **T12 (✅ PR #23, merged 2026-10-11 — T12 ✅ complete)** → **the belt's single cloud re-review — ✅ run 2026-10-11, PASS-WITH-FINDINGS**: both its gates were met
 (T10 § close-out ruling — every T10 finding resolved, T12's replay acceptance green and merged; Alex's 2026-10-09 clarification named only T10 — T12 before the re-review confirmed by Alex 2026-10-10);
-a review-only PR with base pinned at `ee35f9b` and head = main, as PR #14 was — opened 2026-10-11 as draft **PR #24** (`review/belt-after-t12` → `review-base/ee35f9b`); the brief at `.claude/reviews/2026-10-11-belt-re-review-brief.md`; Alex runs `/code-review ultra 24` in the cloud review session
-→ T6 (a re-review pass gates T6).
+a review-only PR with base pinned at `ee35f9b` and head = main, as PR #14 was — draft **PR #24** (`review/belt-after-t12` → `review-base/ee35f9b`; closed 2026-10-11, branches deleted); the brief at `.claude/reviews/2026-10-11-belt-re-review-brief.md`; Alex ran `/code-review ultra 24` in the cloud review session; the record `.claude/reviews/2026-10-11-belt-re-review.md` — 20 findings, the 33 fixes re-traced and found sound; its ruling on the ladder family (T13 § ruling 1: the session ladder is time-decayed, not data-reset) supersedes this ticket's ruling 4 and its 2026-10-11 refinement
+→ **E1-T13 the re-review's fixes (🔶 started 2026-10-11 — the gate's conditions; T13 §)** → T6 (starts on T13's merge).
 
 **Cross-references:** G1 (market data only — never strategy content) · P8 · E1-T6 (the heal consumes these
 bar-gap windows) · E1-T8 (the live-tier acceptance this does not replace) · Field Manual ch. 10 ·
 `ig-client/build.gradle.kts` (the `demoSmoke` gating pattern).
+
+## T13 — The re-review's fixes: the ladder family, the Supervisor's latent paths, the lock across a held outage 🔶 (ticketed 2026-10-11; started 2026-10-11 — in progress)
+
+**Type** build · **Branch** `e1-t13-re-review-fixes` (cut from main `45ffb46`, 2026-10-11) · **Started** 2026-10-11 · **Blocked by** —
+
+**Goal:** every finding the belt's cloud re-review says must be fixed before E1-T6, fixed — each with an executed exposing
+test and a killed mutation, the evidence the review could only trace — and the two rulings the review needed, taken as Claude
+recommended and recorded. The belt then goes to T6, and to production, with a review record that has no open condition
+(Alex, 2026-10-11: keen to finish the belt and monitor it in production).
+
+**Source of truth per finding:** `.claude/reviews/2026-10-11-belt-re-review.md` (committed `45ffb46`) — the cloud re-review of
+**PR #24** (`review-base/ee35f9b` → `review/belt-after-t12` at `d8ca9de`; 170 files, +25,912/−749; PRs #11–#13, #15–#17,
+#19–#23), run by Alex as `/code-review ultra 24` on 2026-10-11 against the brief at
+`.claude/reviews/2026-10-11-belt-re-review-brief.md`. **Gate verdict PASS-WITH-FINDINGS.** 20 findings — 2 high (1, 2), 10 medium
+(3–12), 8 low (13–20); CONFIRMED unless marked PLAUSIBLE (2, 15, 16, 13 (e) and parts of 20 — the Java 25 toolchain could not be
+provisioned in the review environment and the Lightstreamer javadoc was unreachable, so every verdict is by trace with lines quoted
+and no mutation was executed there); the 33 fixes of the PR #14 review re-traced and found sound, letter and risk. This plan cites
+finding numbers and does not restate the file. **The gate's conditions:** fixed before T6 — 1, 3, 4, 5, 7, 8 and the policy-table
+docs lines in 12 (a)–(e), (g), (h); rulings before T6 — 2 and 6 (3, 5 and 6 as one family); everything else rides a later ticket.
+**Triage (Alex, 2026-10-11): "proceed with your recommendations… make the ticket and do the fixes"** — this ticket; the deferred
+findings are backlog B11–B15 (below). PR #24 closed 2026-10-11 and its two branches deleted once the record was saved.
+
+**Rulings (Alex, 2026-10-11, on Claude's recommendation) — two; this ticket records both in the decision log:**
+1. **The session ladder is time-decayed, not data-reset** (findings 3, 5, 6 — one decision, as the review asked). A verdict's
+   doubled grace is kept until `sessionGraceCap` (10 minutes) passes with no further verdict, then the ladder forgets; data no
+   longer resets it at all. This supersedes T12 ruling 4's "closes on the first tick after a rebuild" (2026-10-10) and its 2026-10-11
+   "stale at the verdict" refinement — both become unnecessary; D29 (5) is amended, dated. **Why not the per-data-event decay the
+   review sketched (finding 6's "halve on data"):** halving the grace on each data arrival does not reach "≤ 1 rebuild per cap" for
+   silences longer than the decayed grace — a pair ticking every 200s still earns a verdict per silence; time-decay does: a
+   thin-but-open pair converges to one rebuild per 10 minutes, a fully mute session keeps the 90 → 210 → 450 → 930 → 1530s climb
+   (`sessionGraceCap` the forgetting horizon, so a new verdict inside it climbs on), and a genuinely healthy 10 minutes resets the
+   ladder for the next real outage. Finding 5 (a sealed bar closing the ladder) and low 16 (a subscribe snapshot counting as data)
+   become moot by the same change — there is no data door left. **Finding 3, the per-market half of the family:** a market's
+   per-market episode (its grace, its `resubscribesUsed`) survives the rebuild it caused — `onConnection(true)` rebaselines the
+   stopwatches but no longer discards episodes; healing stays same-kind via `healIf` — so the per-market ladder climbs 510 → 990
+   across a rebuild, as chapter 08 promises and the review found unreachable.
+2. **The escalator accrues time-not-streaming** (finding 2 — PLAUSIBLE on the SDK's status lifecycle, confirmed line by line on our
+   code). `StuckSubstateEscalator`'s substate clock is cleared only by a streaming status (D27 (3)'s one-streaming rule,
+   `ReconnectClassifier.isStreaming`) or a bare `DISCONNECTED`, so `CONNECTING` / `CONNECTED:STREAM-SENSING` / `STALLED` cycles and
+   a boot hang are rebuilt by the 120s rung instead of being watched by nothing before the first rebuild. Cheap, and it closes the
+   boot specimen too; the `CONNECTION_STATUS` rows the belt now records will show the real cadence at the first endpoint outage.
+
+**Increments — four, one PR:**
+1. **The ladder family** (findings 3, 5, 6 — ruling 1). `StalenessWatchdog`: the session grace decays by time, not by data; the data
+   door (`fedSinceVerdict` / `staleAtVerdict`, the bar's `fed()`) is no longer a reset path; per-market episodes kept across
+   `onConnection(true)`. Tests — watchdog unit tests: the thin pair (ticks every ~200s → one rebuild per cap, not one per silence);
+   the mute session unchanged (90 → 210 → 450 → 930 → 1530s); the per-market ladder climbing 510 → 990 across a rebuild (finding 3's
+   exposing shape — `oneMarketGoneSilent…` run past its first rebuild with `serverAnswers`, the second REBUILD at 510 + 960, not
+   510 + 450); the 10-minute reset (a healthy 10 minutes, then a fresh outage starts at base) — and a harness scenario; the T12 tests
+   pinning the data reset (`theSessionLadderClosesOnTheFirstTickAfterARebuild`, `aLiveThirdMarketsTicksDoNotCloseTheSessionLadder`)
+   re-anchored or retired to the ruling. Chapter 08's session-ladder paragraph and D29 (5) updated.
+2. **The Supervisor's latent paths** (findings 4, 7, 8). The rejudge loop stops when a rebuild has already cleared the held verdicts
+   (a null held verdict or `gaveUp` ends the loop — no NPE → `FEED_DEAD{fatal}` crash loop); a death latch (`deadAt`/`deadDetail`) is
+   cleared by any rebuild that runs, not only the `CONNECTION_DEAD` arm (no second spurious rebuild); a paced-out witness `Rebuild` —
+   the refused-unsubscribe case included, `unsubscribe_refused` in the detail — is latched and re-asked each sweep, as the death
+   latch is. Tests in `SupervisorTest` (findings 7 and 8's mutation tests as the review wrote them) and `BeltScenariosTest` (a
+   two-bad-epics scenario — both markets rejected on every attempt — one rebuild at ~32s and no `FEED_DEAD`).
+3. **The lock across a held outage and the escalator's middle states** (findings 1, 2). `SingleInstanceLock` re-verified on each
+   heartbeat — `isValid` + `pg_try_advisory_lock` on the lock session; exit 1 loud if the session is gone — with a
+   `SingleInstanceLockTest` that restarts the Testcontainers database and asserts the loss is seen; D28 and chapter 10 "When the
+   database fails" say what happens to the lock across a held outage. The escalator per ruling 2, with two harness scenarios:
+   `WILL_RETRY`/`CONNECTING` alternating every 4s → a rebuild by 120s; a boot into `STREAM-SENSING` held 300s → a rebuild; chapter 10's
+   table gains the middle-state row.
+4. **Docs truth** (finding 12 (a)–(e), (g), (h); the nits (f), (i), (j) and 20 (g)). The named chapter lines — ch. 10, 08, 05, 04, 07,
+   foundations 02/03, `docs/design/observability-and-data-model.md`, D25's amendment — and the `StreamControl` / `IgStreamControl`
+   javadocs brought to the code as merged.
+
+**Deferred to the backlog (the review's "can ride a later ticket"):** **B11** recovery accounting — 9, 10, 17, the inputs to the open
+`boolean recover()` decision; **B12** harness hygiene — 11, 14; **B13** replay curation — 13; **B14** the session verdict's `≥ 2` for
+N > 2 markets — 15; **B15** the remaining lows — 18, 19, 20 (a)–(h) ((g) is the javadoc nit increment 4 takes as 12 (j)), and 16,
+moot once increment 1 lands. 20 (i) — the G1 note on PR #24's own diff page — is closed by the PR's closure and its branches' deletion.
+
+**Not in scope:** new policy beyond the two rulings; the detectors' numbers; anything in B11–B15.
+
+**DoD:** every finding above fixed with its exposing test and a killed mutation (G5 — the review could only trace, so this ticket
+supplies the executed evidence); the two rulings recorded (D29 (5) amended; D27/D28 touched where named); `./gradlew build` and the
+acceptance lane green; doctrine review before the PR; T6 may start on the merge.
+
+**Estimate:** ≈ one session, possibly two — the lock test (a database restart under Testcontainers) and the escalator scenarios are
+the larger pieces.
+
+**Sequencing:** T12 (✅ PR #23, merged 2026-10-11) → the belt's single cloud re-review (✅ run 2026-10-11, PASS-WITH-FINDINGS) →
+**T13 — in progress, started 2026-10-11** → E1-T6 (starts on T13's merge).
+
+**Cross-references:** `.claude/reviews/2026-10-11-belt-re-review.md` (the findings; the source of truth) ·
+`.claude/reviews/2026-10-11-belt-re-review-brief.md` (what was asked) · D27 (3) (the one-streaming rule, now the escalator's clock
+too) · D28 (Tier 1's hold — gains the lock's fate across a held outage) · D29 (5) (amended by ruling 1) · T10 § close-out ruling ·
+T12 § ruling 4 (superseded by ruling 1) · P9 (the lock is a fail-closed guard) · IG playbook §7 (single-instance discipline) · Field
+Manual ch. 08 (the ladders), ch. 10 (the failure playbook) · backlog B11–B15.
