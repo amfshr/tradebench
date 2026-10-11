@@ -504,7 +504,7 @@ sweep thread via a bounded queue drained by one writer thread, drops counted in 
 **Slices (Alex's sequencing, 2026-10-08, standing: A1 first with targeted tests — ✅ PR #15 → E1-T11 the harness — ✅ PR #16,
 merged 2026-10-08 → A2 as scenarios on it — ✅ PR #17, merged 2026-10-09 → B as scenarios — ✅ PR #19, merged 2026-10-10 → C,
 the last slice, one PR — ✅ PR #20, merged 2026-10-10; T10 complete → E1-T12 replay acceptance — ✅ PR #23, merged 2026-10-11 → the belt's single cloud re-review, both its gates met — ✅ run 2026-10-11, PASS-WITH-FINDINGS
-(the close-out ruling, below) → E1-T13 the re-review's fixes (🔶 started 2026-10-11; T13 §) → E1-T6):**
+(the close-out ruling, below) → E1-T13 the re-review's fixes (🔶 in review — PR #25 open 2026-10-11; T13 §) → E1-T6):**
 
 - **A1 — the two highs, targeted tests, first.** **#1** a quarantined market's twin-leg rejection re-admits it:
   gate `SubscriptionError`s for epics in `quarantinedMarkets` in `Supervisor.sweep()`;
@@ -1330,15 +1330,15 @@ history carries the entry (tagged E1-T12). **T12 ✅ complete 2026-10-11.**
 merged 2026-10-09) → T10 B as scenarios (✅ PR #19, merged 2026-10-10) → T10 C (✅ PR #20, merged 2026-10-10 — T10 ✅ complete) → **T12 (✅ PR #23, merged 2026-10-11 — T12 ✅ complete)** → **the belt's single cloud re-review — ✅ run 2026-10-11, PASS-WITH-FINDINGS**: both its gates were met
 (T10 § close-out ruling — every T10 finding resolved, T12's replay acceptance green and merged; Alex's 2026-10-09 clarification named only T10 — T12 before the re-review confirmed by Alex 2026-10-10);
 a review-only PR with base pinned at `ee35f9b` and head = main, as PR #14 was — draft **PR #24** (`review/belt-after-t12` → `review-base/ee35f9b`; closed 2026-10-11, branches deleted); the brief at `.claude/reviews/2026-10-11-belt-re-review-brief.md`; Alex ran `/code-review ultra 24` in the cloud review session; the record `.claude/reviews/2026-10-11-belt-re-review.md` — 20 findings, the 33 fixes re-traced and found sound; its ruling on the ladder family (T13 § ruling 1: the session ladder is time-decayed, not data-reset) supersedes this ticket's ruling 4 and its 2026-10-11 refinement
-→ **E1-T13 the re-review's fixes (🔶 started 2026-10-11 — the gate's conditions; T13 §)** → T6 (starts on T13's merge).
+→ **E1-T13 the re-review's fixes (🔶 in review — PR #25 open 2026-10-11, awaiting merge — the gate's conditions; T13 §)** → T6 (starts on T13's merge).
 
 **Cross-references:** G1 (market data only — never strategy content) · P8 · E1-T6 (the heal consumes these
 bar-gap windows) · E1-T8 (the live-tier acceptance this does not replace) · Field Manual ch. 10 ·
 `ig-client/build.gradle.kts` (the `demoSmoke` gating pattern).
 
-## T13 — The re-review's fixes: the ladder family, the Supervisor's latent paths, the lock across a held outage 🔶 (ticketed 2026-10-11; started 2026-10-11 — in progress)
+## T13 — The re-review's fixes: the ladder family, the Supervisor's latent paths, the lock across a held outage 🔶 (ticketed 2026-10-11; started 2026-10-11; in review — PR #25 open 2026-10-11, awaiting Alex's merge)
 
-**Type** build · **Branch** `e1-t13-re-review-fixes` (cut from main `45ffb46`, 2026-10-11) · **Started** 2026-10-11 · **Blocked by** —
+**Type** build · **Branch** `e1-t13-re-review-fixes` (cut from main `45ffb46`, 2026-10-11; PR #25 → `main`, open 2026-10-11) · **Started** 2026-10-11 · **Blocked by** —
 
 **Goal:** every finding the belt's cloud re-review says must be fixed before E1-T6, fixed — each with an executed exposing
 test and a killed mutation, the evidence the review could only trace — and the two rulings the review needed, taken as Claude
@@ -1359,13 +1359,14 @@ findings are backlog B11–B15 (below). PR #24 closed 2026-10-11 and its two bra
 
 **Rulings (Alex, 2026-10-11, on Claude's recommendation) — two; this ticket records both in the decision log:**
 1. **The session ladder is time-decayed, not data-reset** (findings 3, 5, 6 — one decision, as the review asked). A verdict's
-   doubled grace is kept until `sessionGraceCap` (10 minutes) passes with no further verdict, then the ladder forgets; data no
-   longer resets it at all. This supersedes T12 ruling 4's "closes on the first tick after a rebuild" (2026-10-10) and its 2026-10-11
+   doubled grace is kept until the grace and a whole `sessionGraceCap` (10 minutes) have passed with no further verdict — the
+   horizon is **grace + cap** after a verdict, as the code and D29 (5) have it (this text first read "`sessionGraceCap` passes";
+   corrected at the doctrine review, finding 6) — then the ladder forgets; data no longer resets it at all. This supersedes T12 ruling 4's "closes on the first tick after a rebuild" (2026-10-10) and its 2026-10-11
    "stale at the verdict" refinement — both become unnecessary; D29 (5) is amended, dated. **Why not the per-data-event decay the
    review sketched (finding 6's "halve on data"):** halving the grace on each data arrival does not reach "≤ 1 rebuild per cap" for
    silences longer than the decayed grace — a pair ticking every 200s still earns a verdict per silence; time-decay does: a
    thin-but-open pair converges to one rebuild per 10 minutes, a fully mute session keeps the 90 → 210 → 450 → 930 → 1530s climb
-   (`sessionGraceCap` the forgetting horizon, so a new verdict inside it climbs on), and a genuinely healthy 10 minutes resets the
+   (grace + `sessionGraceCap` the forgetting horizon, so a new verdict inside it climbs on), and a genuinely healthy 10 minutes resets the
    ladder for the next real outage. Finding 5 (a sealed bar closing the ladder) and low 16 (a subscribe snapshot counting as data)
    become moot by the same change — there is no data door left. **Finding 3, the per-market half of the family:** a market's
    per-market episode (its grace, its `resubscribesUsed`) survives the rebuild it caused — `onConnection(true)` rebaselines the
@@ -1389,13 +1390,20 @@ findings are backlog B11–B15 (below). PR #24 closed 2026-10-11 and its two bra
 2. **The Supervisor's latent paths** (findings 4, 7, 8). The rejudge loop stops when a rebuild has already cleared the held verdicts
    (a null held verdict or `gaveUp` ends the loop — no NPE → `FEED_DEAD{fatal}` crash loop); a death latch (`deadAt`/`deadDetail`) is
    cleared by any rebuild that runs, not only the `CONNECTION_DEAD` arm (no second spurious rebuild); a paced-out witness `Rebuild` —
-   the refused-unsubscribe case included, `unsubscribe_refused` in the detail — is latched and re-asked each sweep, as the death
-   latch is. Tests in `SupervisorTest` (findings 7 and 8's mutation tests as the review wrote them) and `BeltScenariosTest` (a
+   the refused-unsubscribe case included — is latched (`pendingRebuild`) and re-asked each sweep, as the death latch is. *The
+   `unsubscribe_refused` detail marker this text named was **not implemented** (recorded at the doctrine review, finding 6): the
+   Rebuild arm does not know its caller, and the `MARKET_QUARANTINED` row for the same epic in the same second already identifies
+   a refused-unsubscribe rebuild.* Tests in `SupervisorTest` (findings 7 and 8's mutation tests as the review wrote them) and `BeltScenariosTest` (a
    two-bad-epics scenario — both markets rejected on every attempt — one rebuild at ~32s and no `FEED_DEAD`).
-3. **The lock across a held outage and the escalator's middle states** (findings 1, 2). `SingleInstanceLock` re-verified on each
-   heartbeat — `isValid` + `pg_try_advisory_lock` on the lock session; exit 1 loud if the session is gone — with a
-   `SingleInstanceLockTest` that restarts the Testcontainers database and asserts the loss is seen; D28 and chapter 10 "When the
-   database fails" say what happens to the lock across a held outage. The escalator per ruling 2, with two harness scenarios:
+3. **The lock across a held outage and the escalator's middle states** (findings 1, 2). `SingleInstanceLock.verify()` on each
+   heartbeat from `Main` — **built as:** a live session still holds its lock (HELD); a dead session is replaced by a fresh one that
+   takes the lock again (REACQUIRED); exit 1 loud **only when refused** — another instance took the lock meanwhile; UNVERIFIABLE
+   while the database is unreachable **continues and is asked again** (nobody can take the lock from a database that is down; an
+   exit would drop what the sink holds) — `SessionSource` the one-method seam. *Not the "exit 1 if the session is gone" this text
+   first planned; the divergence recorded at the doctrine review (finding 6) and reasoned in D28's 2026-10-11 amendment and
+   foundations chapter 06.* The `SingleInstanceLockTest` (Testcontainers) **terminates the holder's backend with
+   `pg_terminate_backend`** rather than restarting the database, and asserts HELD → REACQUIRED, a refusal, and UNVERIFIABLE →
+   REACQUIRED; D28 and chapter 10 "When the database fails" say what happens to the lock across a held outage. The escalator per ruling 2, with two harness scenarios:
    `WILL_RETRY`/`CONNECTING` alternating every 4s → a rebuild by 120s; a boot into `STREAM-SENSING` held 300s → a rebuild; chapter 10's
    table gains the middle-state row.
 4. **Docs truth** (finding 12 (a)–(e), (g), (h); the nits (f), (i), (j) and 20 (g)). The named chapter lines — ch. 10, 08, 05, 04, 07,
@@ -1413,11 +1421,42 @@ moot once increment 1 lands. 20 (i) — the G1 note on PR #24's own diff page �
 supplies the executed evidence); the two rulings recorded (D29 (5) amended; D27/D28 touched where named); `./gradlew build` and the
 acceptance lane green; doctrine review before the PR; T6 may start on the merge.
 
+**Built — 🔶 in review, PR #25 open 2026-10-11 (`e1-t13-re-review-fixes` → `main`; GitHub stamps 16:16Z; CI green on the head —
+`build`, `web`, GitGuardian), awaiting Alex's merge; not ✅ until he merges, and T6 starts on the merge.** Commits on the branch, in
+order: `319b52c` **①** the ladder family (findings 3, 5, 16; ruling 1 closes 6 — `StalenessWatchdog`'s session grace decays on time,
+`fedSinceVerdict`/`staleAtVerdict`/`fed()` gone; `onConnection(true)` rebaselines the stopwatches but keeps each market's episode;
+scenario: a dead market's ladder climbs across the rebuild it earned, connects 0, 509, 989) · `e46f5cd` board (the ticket) ·
+`7167b36` **②** the Supervisor's latent paths (4, 7, 8 — the rejudge loop breaks at the first verdict whose held record a rebuild
+reset; `rebuild()` clears the death latch and the new `pendingRebuild` latch once pacing passes; `rebuildOrLatch` re-asks a
+paced-out Rebuild verdict; scenario: every market rejected → connects 0, 31, 63, 95, no exit) · `859ca56` **③** the escalator's
+clock and the lock (2, 1 — `StuckSubstateEscalator` measures time-not-streaming, cleared only by a streaming status or a bare
+`DISCONNECTED`, the threshold following the last retry substate seen; scenarios: the retry cycle through `CONNECTING` → connects
+0, 130, 254, a boot into `STREAM-SENSING` → 0, 120; `SingleInstanceLock.verify()` as built above, four Testcontainers tests) ·
+`9ecea0a` **④** docs (12 (a)–(j), 20 (g) — the chapters, D25's amendment and the two `rebuild()` javadocs true to the code) ·
+`4a44188` D27 (3) amended for ruling 2 · `a276b62` **⑤** the doctrine review's findings. **Doctrine review (in-session agent,
+2026-10-11): pass-with-findings — eight, none blocking, G1 leak check clean**; fixed on-branch in ⑤: (1) the escalator threshold
+pinned in its other direction (TRYING-RECOVERY → WILL-RETRY shortens to 120); (2) the ladder's decay horizon pinned at exact equality
+(stale exactly at grace + cap → judged at base, the next verdict 120 on); (3) the rejudge loop's `|| gaveUp` guard tested — it is
+behavioural, not defensive as commit ② said: the ceiling path returns before the held verdicts are cleared; (4)
+`SingleInstanceLock.lock()` closes a session whose lock query failed (before: a leaked raw connection per heartbeat of a wedged
+outage), with a proxied-connection test; (5) `connectTimeout` = `Database.CONNECTION_TIMEOUT` on every raw connect — chapter 10's
+60s row and D28 (6) updated; (6) the plan-text divergences, recorded above in rulings 1 and increments 2–3; (7) chapter 02 counts
+six threads; (8) two comment nits. Also added: a console line when a paced-out verdict is superseded by the one already latched
+(first-wins keeps the earliest ask's row — accepted as unpinned; the remedy is identical either way). The review's judgment 1 — the
+`Main.verifyLock` wiring is untested (three lines, the same shape as the thread-alive exits beside it; the lock's logic and all three
+standings plus the refusal are tested on a real Postgres) — is backlog **B15**: a testable `heartbeat()` on `CaptureAssembly` taking
+the lock as a port, to ride E1-T7. **Evidence:** every behavioural test mutation-verified (applied → red → restored byte-identical) —
+① 3 · ② 4 · ③ 6 · ⑤ 4 mutations listed in the commit messages, each with the tests it turned red; `./gradlew build` green, 372 tests
+(main 353 → +19); `replayAcceptance` 6/6 on the branch after ③; docs site 65/65 (the PR body's figures, 2026-10-11). **For Alex at
+the merge:** the one in-ticket policy choice — UNVERIFIABLE continues rather than exits while the database is down (nobody can take
+the lock from a down database; an exit would drop what the sink holds) — is logged in D28's 2026-10-11 amendment and is worth his
+conscious acceptance.
+
 **Estimate:** ≈ one session, possibly two — the lock test (a database restart under Testcontainers) and the escalator scenarios are
-the larger pieces.
+the larger pieces. *Actual: one session — ticketed, built, reviewed and PR'd 2026-10-11.*
 
 **Sequencing:** T12 (✅ PR #23, merged 2026-10-11) → the belt's single cloud re-review (✅ run 2026-10-11, PASS-WITH-FINDINGS) →
-**T13 — in progress, started 2026-10-11** → E1-T6 (starts on T13's merge).
+**T13 — 🔶 in review, PR #25 open 2026-10-11, awaiting Alex's merge** → E1-T6 (starts on T13's merge).
 
 **Cross-references:** `.claude/reviews/2026-10-11-belt-re-review.md` (the findings; the source of truth) ·
 `.claude/reviews/2026-10-11-belt-re-review-brief.md` (what was asked) · D27 (3) (the one-streaming rule, now the escalator's clock
