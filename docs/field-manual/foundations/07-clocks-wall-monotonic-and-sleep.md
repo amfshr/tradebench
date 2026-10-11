@@ -73,7 +73,7 @@ resilience cores take plain `long monotonicNanos` / `long wallMillis` parameters
 
 The discriminator lives in `StalenessWatchdog.clockAnomaly(...)`
 (`market-data-service/.../supervise/StalenessWatchdog.java`), fed both clocks each ~1s
-round by the future Supervisor:
+round by the Supervisor's sweep (the service book's chapter 8):
 
 ```java
 boolean hostSlept = wallDeltaMs - monoDeltaMs > tuning.hostSleepSkew().toMillis(); // >5s
@@ -90,7 +90,7 @@ Because everything is injected, the tests drive time as plain longs.
 `StalenessWatchdogTest.hostSleepSkipsTheRoundAndRebaselines` replays a 16-minute suspend as a
 wall clock 960 seconds ahead of monotonic; `processFreezeSkipsTheRoundAndRebaselines`
 jumps monotonic by 11s. Both assert the skipped round *and* that a full fresh 90s window
-after the anomaly does fire. The whole suite — 13 outage-shaped scenarios — runs in
+after the anomaly does fire. The whole suite — `StalenessWatchdogTest`'s 27 outage shapes — runs in
 milliseconds, deterministically, with no `Thread.sleep` anywhere. That is the entire
 payoff of the injectable-clock doctrine: timing logic tested at the speed of arithmetic.
 

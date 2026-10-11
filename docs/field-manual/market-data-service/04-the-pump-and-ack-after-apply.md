@@ -44,14 +44,17 @@ not a scheduling negotiation between threads.
 ## Our code path
 
 `market-data-service/src/main/java/dev/amfshr/tradebench/marketdata/ingest/Pump.java` —
-the whole thing is under a hundred lines. The heart is `drainOnce()`:
+the drain loop at its heart is a dozen lines (the file has grown to ~375 with the hold-and-retry,
+the gap detector and the shutdown tail — chapter 10). The heart is `drainOnce()`:
 
 ```java
 Bar1m bar;
 while ((bar = queues.peekBarNow()) != null) {
     sink.write(bar);          // apply
+    landed();                 // a bar is its own round trip — a provisional recovery is proven
     queues.removeBarNow();    // ack — strictly after
     written.incrementAndGet();
+    detectGap(bar);           // the gap detector reads an acked bar only
 }
 ```
 

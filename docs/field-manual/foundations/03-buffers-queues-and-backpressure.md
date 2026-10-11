@@ -79,7 +79,7 @@ visible in the method names.
 
 **Honest counters.** Four `AtomicLong`s (`tickCount`, `barCount`, `droppedTicks`,
 `malformedUpdates`) plus the pump's `writtenCount` feed the heartbeat line
-(`app/Main.summary`):
+(`CaptureAssembly.summary`, printed by `Main`'s heartbeat loop):
 
 ```
 ticks=22415 bars=141 written=22556 dropped=0 malformed=0

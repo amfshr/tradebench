@@ -19,10 +19,11 @@ public interface StreamControl {
     int generation();
 
     /** The session-shaped remedy: close the stream, re-establish the session, reconnect, and
-     * resubscribe the (non-quarantined) markets. Returns {@code false} only when recovery is
+     * resubscribe the (non-quarantined) markets. {@link Outcome#FATAL} only when recovery is
      * pointless — the broker rejected the configuration itself (credentials, account) — so the
-     * ladder stops at once rather than hammering a lockout; a merely failed attempt leaves the
-     * stream down and the ladder continues. */
+     * ladder stops at once rather than hammering a lockout; {@link Outcome#FAILED} when the attempt
+     * merely failed, leaving the stream down for the ladder to continue; {@link Outcome#CONNECTED}
+     * when a connection came up. */
     Outcome rebuild();
 
     /** The market-shaped remedy: re-subscribe one market's pair in place, leaving the others

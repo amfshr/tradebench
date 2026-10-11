@@ -332,7 +332,9 @@ once, and the console reads a data product built for it — not one worked aroun
 E1-T5 slice B (writes `service_events` v2 + `bar_gaps` + `capture_status`), E1-T6 (writes
 `archives` + `heal_outcome`), E9-T2/T3 (read model + SPA). *Amended 2026-10-10 (E1-T12 ruling 3):
 the catalogue gains `connection_status` (resilience, info) — every raw Lightstreamer status transition as
-the SDK said it — so an outage Tradebench lives through replays with its real connection sequence; the
+the SDK said it, that reaches the Supervisor: a superseded connection's farewell is gated out (D29 (4)), so our
+own record of a rebuild shows no `DISCONNECTED` for the torn-down connection and a replay cut from our rows
+models the teardown — so an outage Tradebench lives through replays with its real connection sequence; the
 classified outcomes (`reconnect`, `connection_dead`, …) were all the record held before.*
 
 ## D26 — Field Manual organised in Parts: a Foundations part + one per subsystem, formed organically — **Accepted** (2026-10-02, Alex)
@@ -429,8 +431,9 @@ on a closed market — so a server-side zombie cannot hide behind a weekend (fin
 socket timeout.** `socketTimeout` 30s and `tcpKeepAlive` on, on the pool and the lock's dedicated
 connection: a half-open connection must surface as a `PersistenceException` the hold can see, never a
 silent hang; our longest statement is a 500-row batch (finding 7). **(3) Tier-2 writes leave the
-sweep thread.** Service events are handed to a bounded queue drained by one writer thread, drops
-counted in `eventWriteFailures`, so the sweep never blocks on Postgres — a blocked sweep trips the
+sweep thread.** The Supervisor's service events are handed to a bounded queue drained by one writer
+thread, drops counted in `eventWriteFailures`, so the sweep never blocks on Postgres (the pump's and the
+pacer's events are written in place on their own threads, by the E1-T10 design) — a blocked sweep trips the
 process-freeze detector and rebaselines every staleness clock (finding 12). **(4) The `closing()`
 hush is retired.** The generation gate is the §3.6 hush — a torn-down connection's farewell never
 reaches the Supervisor — so `closing()`/`GRACEFUL_CLOSE` are dead code with a data race; deleted,

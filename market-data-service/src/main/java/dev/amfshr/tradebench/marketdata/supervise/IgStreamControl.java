@@ -33,7 +33,7 @@ import dev.amfshr.tradebench.ig.time.Sleeper;
  * locking. {@code start()} retries while IG is merely unreachable — within a budget — and
  * fails loud on a rejected configuration or when that budget runs out; the remedies never
  * throw — a failed rebuild is logged and leaves the stream down for the Supervisor's backoff
- * ladder, and a rejected configuration reports {@code false} so the ladder stops (ruled
+ * ladder, and a rejected configuration reports {@code Outcome.FATAL} so the ladder stops (ruled
  * 2026-10-03). Every connection's callbacks are gated by generation: once it is superseded,
  * nothing it says reaches the observer — a late farewell cannot open a phantom outage, a dead
  * leg cannot strike the new session.

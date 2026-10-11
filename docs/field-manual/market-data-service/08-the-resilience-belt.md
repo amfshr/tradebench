@@ -101,18 +101,20 @@ Around the signals, seven pieces of judgment, each visible in the code:
   a judged silence is not judged bar-silent as it returns (E1-T12 finding 1, the 2026-08-10
   dawn replay: a spurious pair resubscribe two seconds after DAX came back) — and a market leaving its CLOSED/SUSPEND stand-down starts its CHART clock at
   the opening, for the same reason (the T12 review's finding 1, ruled 2026-10-10).
-- *Session-shaped verdict*: ≥2 markets stale together is never market noise — one
-  `REBUILD`, not N remedies. "Together" means within one sweep of each other
-  (`anotherWithinASweep`, E1-T10 #33): a lone stale market whose neighbour is one sweep from its
-  own threshold waits a round, so two feeds dying 584ms apart earn one verdict, not a stray
-  resubscribe the sweep before it. It carries its own doubling grace
+- *Session-shaped verdict*: ≥2 markets stale in the same round is never market noise — one
+  `REBUILD`, not N remedies — however far apart they crossed their thresholds (DAX stale from 90,
+  NASDAQ from 390 → one session verdict at 390, pre-empting DAX's next rung and NASDAQ's surgery).
+  The one-sweep rule is the *hold* (`anotherWithinASweep`, E1-T10 #33): a lone stale market whose
+  neighbour is one sweep from its own threshold waits a round, so two feeds dying 584ms apart earn
+  one verdict, not a stray resubscribe the sweep before it. It carries its own doubling grace
   (`lastSessionVerdict`/`sessionGraceNanos`), added after the test harness caught the
   verdict re-firing every round — and since E1-T12/T13 (ruling 4, D29 (5), amended 2026-10-11) that ladder is time-decayed, never
   data-reset: a rebuilt connection that reports streaming does not reset it, nor does any tick,
   candle or snapshot — its grace stands until the grace and a whole `sessionGraceCap` have passed
   with no verdict — so the
-  verdicts space out 60s → 120 → 240 → 480 → `sessionGraceCap` (10 minutes) instead of re-firing
-  every 90s for the whole silence, as the 2026-08-04 scar's replay showed they did.
+  verdicts space out 120s → 240 → 480 → `sessionGraceCap` (10 minutes) — the base grace is doubled
+  before it first gates, so a mute session's verdicts fall at 90, 210, 450, 930, 1530, 2130 — instead of
+  re-firing every 90s for the whole silence, as the 2026-08-04 scar's replay showed they did.
 - *Clock-anomaly immunity*: chapter 7's discriminator; anomalous rounds re-baseline every
   stopwatch and return nothing. The contract is a **~1s evaluation cadence** — the freeze
   detector *defines* coarser jumps as anomalies, which is why the tests advance
@@ -337,13 +339,14 @@ or strike the new session.
 **The seams, and why they are interfaces.** The shell touches the world through exactly two
 injected ports — `StreamControl` (`rebuild()` / `resubscribe(epic)` / `quarantine(epic)`)
 and `MarketFreshness` (the pulled last-seen clocks) — plus the `onExhausted` hook and an
-injected `Clock` and `Sleeper`. In production `Main` wires `StreamControl` to
+injected `Clock` and `Sleeper`. In production `CaptureAssembly.compose` wires `StreamControl` to
 `IgStreamControl` — the one class that owns the IG session and the Lightstreamer stream,
 over the `IgSessions` and `StreamTransport` seams — and `MarketFreshness` to the pump's
 `Buffers`, which stamps each market's last arrival on the monotonic clock as it queues it.
 The control loop has one back-edge — the stream reports status and subscription outcomes to
-the Supervisor as a `StreamObserver` — and `Main` ties it off with a single `bind()` at the
-composition root. In tests they are fakes — and *that is the point*. Because every effect is
+the Supervisor as a `StreamObserver` — and `CaptureAssembly.compose` ties it off with a single
+`bind()`; `Main`, the composition root, only reads the environment and hands it the ports. In tests
+they are fakes — and *that is the point*. Because every effect is
 a seam and every core takes a `long` clock, `SupervisorTest` drives `sweep()` directly with a
 `FakeClock` and asserts on recorded events and fake rebuild/resubscribe counts: twenty whole
 outages —
