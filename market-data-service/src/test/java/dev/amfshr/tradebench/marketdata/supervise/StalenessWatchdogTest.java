@@ -437,6 +437,39 @@ class StalenessWatchdogTest {
     }
 
     @Test
+    void theLadderForgetsExactlyWhenTheGraceAndACapHavePassed() {
+        // The horizon is grace + cap after the verdict, inclusive: one verdict at 90 (grace → 120), then
+        // the pair streams until 720 and both fall silent exactly 90 + 120 + 600 = 810 later than the
+        // verdict's second. At the horizon the rung is forgotten — the outage is judged at base and its
+        // second verdict follows 120 later, not the kept rung's 240.
+        dog.track(NDX, 0);
+        runTo(90);
+        dog.onConnection(false, 90 * S);
+        dog.onConnection(true, 90 * S + 1);
+        assertEquals(List.of(90L), fired.stream().map(Fired::second).toList());
+        while (clockSecond < 720) {
+            clockSecond++;
+            dog.onTick(DAX, clockSecond * S);
+            dog.onTick(NDX, clockSecond * S);
+            if (clockSecond % 60 == 0) {
+                dog.onSealedBar(DAX, clockSecond * S);
+                dog.onSealedBar(NDX, clockSecond * S);
+            }
+            assertEquals(List.of(), dog.evaluate(clockSecond * S, clockSecond * 1000));
+        }
+        List<Long> next = new ArrayList<>();
+        while (clockSecond < 1100) {
+            clockSecond++;
+            for (Remedy r : dog.evaluate(clockSecond * S, clockSecond * 1000)) {
+                next.add(clockSecond);
+                dog.onConnection(false, clockSecond * S);
+                dog.onConnection(true, clockSecond * S + 1);
+            }
+        }
+        assertEquals(List.of(810L, 930L), next, "stale exactly at the horizon: judged at base, the next verdict 120 on");
+    }
+
+    @Test
     void aMarketsLadderSurvivesTheRebuildItEarned() {
         // E1-T13 (the re-review's finding 3): DAX dead from 0, NASDAQ alive. Resubscribe at 90 and 210,
         // REBUILD at 450 (grace now 480s). The rebuilt session streams; DAX is still dead. Its episode

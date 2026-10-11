@@ -348,7 +348,7 @@ the Supervisor as a `StreamObserver` — and `CaptureAssembly.compose` ties it o
 `bind()`; `Main`, the composition root, only reads the environment and hands it the ports. In tests
 they are fakes — and *that is the point*. Because every effect is
 a seam and every core takes a `long` clock, `SupervisorTest` drives `sweep()` directly with a
-`FakeClock` and asserts on recorded events and fake rebuild/resubscribe counts: twenty whole
+`FakeClock` and asserts on recorded events and fake rebuild/resubscribe counts: more than forty whole
 outages —
 replayed reconnect, stuck substate, backoff-then-give-up, host-sleep, open-market silence,
 two-markets-together — run as millisecond unit tests with no real sleeps and no sockets. The

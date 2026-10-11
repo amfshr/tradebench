@@ -414,7 +414,8 @@ written best-effort before a terminal exit, so the console learns why capture di
 `Main` exits 1 from its own thread at once — never on a deliberate stop, since an exit from inside
 the shutdown hook would deadlock. **(6) The shared pool's `connectionTimeout` is 5s**
 (`Database.CONNECTION_TIMEOUT`): the heartbeat is held at most 5s per market during an outage and
-`recover()` fails fast into the backoff; no dedicated Tier-2 pool. *Amended 2026-10-10 (E1-T10 #22):
+`recover()` fails fast into the backoff; no dedicated Tier-2 pool (since E1-T13 the same 5s bounds every
+raw connect too, as `connectTimeout` — the lock's heartbeat re-connect included). *Amended 2026-10-10 (E1-T10 #22):
 per heartbeat, not per market — every market's row goes as one batch on one pooled connection.*
 *Amended 2026-10-11 (E1-T13, the re-review's finding 1): the single-instance advisory lock is
 re-verified every heartbeat — its session dies with the restart the sink holds through, and an idle

@@ -39,8 +39,8 @@ published they are safe forever.
 
 ## Our code path
 
-The running capture process is **five threads of ours** — one dormant until a stop, one born
-only to exit — plus the Lightstreamer SDK's own internal pool:
+The running capture process is **six threads of ours** — four working, one dormant until a stop,
+one born only to exit — plus the Lightstreamer SDK's own internal pool:
 
 | Thread | Born where | Does |
 |---|---|---|

@@ -18,7 +18,9 @@ import com.zaxxer.hikari.HikariDataSource;
  * {@link #CONNECTION_TIMEOUT} for a connection, not Hikari's 30s: while Postgres is down a Tier-2
  * write or the sink's recovery fails fast into its caller's backoff, and the heartbeat is held at
  * most that long per market (ruled 2026-10-04, E1-T9). Every connection — pooled or dedicated —
- * carries a {@link #SOCKET_TIMEOUT} and TCP keep-alive (D29 (2)): a half-open connection must
+ * carries a {@link #SOCKET_TIMEOUT}, a {@code connectTimeout} of {@link #CONNECTION_TIMEOUT} (so a raw
+ * connect against a host that drops packets — the lock's heartbeat re-connect, E1-T13 — is bounded by
+ * us, not the driver's default) and TCP keep-alive (D29 (2)): a half-open connection must
  * surface as a {@link PersistenceException} the hold can see, never a silent hang in a socket
  * read; our longest statement is a 500-row batch.
  */
@@ -47,6 +49,7 @@ public final class Database implements AutoCloseable {
         properties.setProperty("user", user);
         properties.setProperty("password", password);
         properties.setProperty("socketTimeout", String.valueOf(socketTimeout.toSeconds()));
+        properties.setProperty("connectTimeout", String.valueOf(CONNECTION_TIMEOUT.toSeconds()));
         properties.setProperty("tcpKeepAlive", "true");
         HikariConfig config = new HikariConfig();
         config.setJdbcUrl(jdbcUrl);
@@ -55,6 +58,7 @@ public final class Database implements AutoCloseable {
         config.setMaximumPoolSize(4);
         config.setConnectionTimeout(CONNECTION_TIMEOUT.toMillis());
         config.addDataSourceProperty("socketTimeout", properties.getProperty("socketTimeout"));
+        config.addDataSourceProperty("connectTimeout", properties.getProperty("connectTimeout"));
         config.addDataSourceProperty("tcpKeepAlive", "true");
         HikariDataSource dataSource = new HikariDataSource(config);
         Flyway.configure().dataSource(dataSource).load().migrate();

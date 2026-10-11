@@ -83,6 +83,14 @@ class StuckSubstateEscalatorTest {
     }
 
     @Test
+    void theThresholdShortensWhenTheServerAbandonsRecovery() {
+        escalator.onStatus(StuckSubstateEscalator.TRYING_RECOVERY, 0);
+        escalator.onStatus(StuckSubstateEscalator.WILL_RETRY, 100 * S);
+        assertFalse(escalator.rebuildDue(119 * S));
+        assertTrue(escalator.rebuildDue(120 * S), "replay abandoned: the shorter patience, from the first non-streaming status");
+    }
+
+    @Test
     void aBareDisconnectedClearsTheStopwatchForTheDeathLatch() {
         escalator.onStatus(StuckSubstateEscalator.WILL_RETRY, 0);
         escalator.onStatus("DISCONNECTED", 60 * S);

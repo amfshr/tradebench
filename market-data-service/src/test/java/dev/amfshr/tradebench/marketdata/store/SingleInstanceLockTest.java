@@ -6,6 +6,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.lang.reflect.Proxy;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
@@ -97,6 +98,28 @@ class SingleInstanceLockTest extends PostgresTestBase {
             down.set(false);
             assertEquals(Standing.REACQUIRED, lock.verify());
         }
+    }
+
+    @Test
+    void aSessionWhoseLockQueryFailsIsClosedNotLeaked() throws Exception {
+        // Asked every heartbeat, a session opened and then left unasked would leak one raw connection
+        // per minute of a wedged outage (the server answers the connect, the lock query times out).
+        Connection real = database.dedicatedConnection();
+        AtomicBoolean closed = new AtomicBoolean();
+        Connection unanswering = (Connection) Proxy.newProxyInstance(Connection.class.getClassLoader(),
+                new Class<?>[] {Connection.class}, (proxy, method, args) -> {
+                    if (method.getName().equals("prepareStatement")) {
+                        throw new SQLException("canceling statement due to statement timeout", "57014");
+                    }
+                    if (method.getName().equals("close")) {
+                        closed.set(true);
+                    }
+                    return method.invoke(real, args);
+                });
+
+        assertThrows(PersistenceException.class, () -> SingleInstanceLock.acquire(() -> unanswering));
+
+        assertTrue(closed.get(), "the session that could not be asked is closed, not kept");
     }
 
     /** What a database restart does to the lock's session, without restarting the container: the

@@ -675,10 +675,11 @@ class BeltScenariosTest {
 
     @Test
     void aDeadMarketsLadderKeepsClimbingAcrossTheRebuildItEarned() throws Exception {
-        // E1-T13 (the re-review's finding 3): DAX dies at 60s while NASDAQ streams. Market surgery at
-        // 150 and 270, then DAX's own REBUILD at 510 (grace now 480s). The rebuilt session answers and
-        // streams NASDAQ; DAX stays dead. Its episode survives the rebuild it earned, so the next REBUILD
-        // waits the doubled grace — 990 — instead of a fresh ladder from base (601, 721, 961) every ~450s.
+        // E1-T13 (the re-review's finding 3): DAX's last tick is at 59 (the minute of ticks ends before
+        // 60) while NASDAQ streams on. Market surgery at 149 and 269, then DAX's own REBUILD at 509 (grace
+        // now 480s). The rebuilt session answers and streams NASDAQ; DAX stays dead. Its episode survives
+        // the rebuild it earned, so the next REBUILD waits the doubled grace — 989 — instead of a fresh
+        // ladder from base (600, 720, 960) every ~450s.
         Scenario oneDead = Scenario.named("one dead market across its own rebuild").markets(DAX, NASDAQ)
                 .serverAnswers()
                 .every(s(1), s(1), s(60), t -> tick(DAX))

@@ -455,6 +455,41 @@ class SupervisorTest {
     }
 
     @Test
+    void aVerdictRenderedAfterTheOneBeforeItGaveUpDoesNotAct() {
+        // #13: nothing after a give-up may act. Two held verdicts render together once their witness
+        // confirms; the first's refused unsubscribe is a Rebuild that meets the ceiling and gives up —
+        // the second must not quarantine a market on a stream the runner is already tearing down.
+        supervisor = supervisorWith(Tuning.playbook().withGiveUpAfter(Duration.ofDays(1)));
+        String ftse = "IX.D.FTSE.DAILY.IP";
+        supervisor.watch(DAX);
+        supervisor.watch(NASDAQ);
+        supervisor.watch(ftse);
+        supervisor.onStatusChange(stream.generation, WILL_RETRY);
+        supervisor.sweep();
+        for (int attempt = 0; attempt < Tuning.playbook().maxConsecutiveFailures(); attempt++) {
+            clock.advance(Duration.ofSeconds(120)); // the escalator rebuilds; each connects and hangs again
+            supervisor.sweep();
+            supervisor.onStatusChange(stream.generation, WILL_RETRY);
+        }
+        assertFalse(exhausted.get(), "ten connected: the next rebuild meets the ceiling");
+        failToTheStrikeCeiling(DAX); // both verdicts wait on FTSE, inside its window
+        failToTheStrikeCeiling(NASDAQ);
+        supervisor.sweep();
+        assertTrue(stream.quarantined.isEmpty());
+
+        clock.advance(Duration.ofSeconds(61)); // past the 60s cap: the ceiling rebuild is not paced out
+        stream.quarantineRefused = true;
+        supervisor.onSubscribed(stream.generation, ftse, WitnessQuarantine.Kind.PRICE); // the witness confirms
+        supervisor.onSubscribed(stream.generation, ftse, WitnessQuarantine.Kind.CHART);
+        supervisor.sweep();
+
+        assertTrue(exhausted.get());
+        assertEquals("ceiling", single(EventType.FEED_DEAD).detail().get("reason").asText());
+        assertEquals(1, stream.quarantined.size(), "the second verdict did not act after the give-up");
+        assertEquals(1, count(EventType.MARKET_QUARANTINED));
+    }
+
+    @Test
     void aDeathLatchedInTheSweepThatRebuildsForAnotherReasonIsServicedByThatRebuild() {
         // Re-review 7: the old connection reports a bare DISCONNECTED in the sweep that renders a held
         // verdict. The verdict's rebuild supersedes the connection the death described; the latch must

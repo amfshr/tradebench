@@ -121,7 +121,7 @@ Every number, where it lives, and what it means:
 | 5s / 10s | `hostSleepSkew` / `processFreezeJump` | the clock-divergence discriminators (chapter 7) |
 | 1s | `CaptureAssembly.SWEEP_INTERVAL` | the supervisor's cadence — the detectors assume it |
 | 30s / 10 min | `CaptureAssembly.BOOT_RETRY` / the same `giveUpAfter` | boot retry spacing and budget |
-| 60s | `CaptureAssembly.HEARTBEAT` | the `capture_status` cadence, and the backstop for a dead supervisor thread (a dead pump is reported by `onDeath` at once); a Postgres outage adds at most the pool's 5s timeout per heartbeat — every market's row on one pooled connection (E1-T10 #22) |
+| 60s | `CaptureAssembly.HEARTBEAT` | the `capture_status` cadence, and the backstop for a dead supervisor thread (a dead pump is reported by `onDeath` at once); a Postgres outage adds at most the pool's 5s timeout per heartbeat — every market's row on one pooled connection (E1-T10 #22) — plus the lock's re-verify, whose liveness check and raw re-connect are each bounded by the same 5s (`connectTimeout`, E1-T13) |
 | 5s floor → 60s cap | the belt's `BackoffPolicy`, via `Pump` | the sink's retry pacing during a hold — the floor also clears HikariCP's 500ms alive-bypass window, so the second attempt gets a validated connection |
 | 5s | `Database.CONNECTION_TIMEOUT` | how long a Tier-2 write or a sink recovery waits for a pooled connection while Postgres is down — the heartbeat's worst case per publish, one connection for every market's row (E1-T10 #22) |
 | 250ms | `Pump.HOLD_SLICE` | how quickly a hold notices `stop()` |

@@ -407,8 +407,14 @@ public final class Supervisor implements StreamObserver, BeltView, Runnable {
      * unanswered ask keeps its place — a later one is answered by the same rebuild. */
     private void rebuildOrLatch(EventType reason, Instant occurredAt, @Nullable String epic,
             @Nullable ObjectNode detail) {
-        if (!rebuild(reason, occurredAt, epic, detail) && pendingRebuild == null) {
+        if (rebuild(reason, occurredAt, epic, detail)) {
+            return;
+        }
+        if (pendingRebuild == null) {
             pendingRebuild = new PendingRebuild(reason, occurredAt, epic, detail);
+        } else {
+            log.accept("belt " + reason + (epic != null ? " " + epic : "") + " paced out — answered by the "
+                    + pendingRebuild.reason() + " rebuild already asked for"); // the record keeps the first ask
         }
     }
 

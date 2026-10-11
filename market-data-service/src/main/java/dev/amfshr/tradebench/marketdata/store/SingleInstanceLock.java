@@ -59,24 +59,36 @@ public final class SingleInstanceLock implements AutoCloseable {
      * {@link IllegalStateException} with the session closed; a session that cannot be opened or
      * asked throws {@link PersistenceException}. */
     private static Connection lock(SessionSource sessions) {
+        Connection connection;
         try {
-            Connection connection = sessions.open();
-            try (PreparedStatement statement =
-                    connection.prepareStatement("SELECT pg_try_advisory_lock(?)")) {
-                statement.setLong(1, LOCK_KEY);
-                try (ResultSet result = statement.executeQuery()) {
-                    result.next();
-                    if (!result.getBoolean(1)) {
-                        connection.close();
-                        throw new IllegalStateException(
-                                "another market-data-service instance holds the advisory"
-                                        + " lock — refusing to run (playbook §7)");
-                    }
-                }
-            }
-            return connection;
+            connection = sessions.open();
         } catch (SQLException e) {
             throw new PersistenceException("advisory-lock acquisition failed", e);
+        }
+        try (PreparedStatement statement =
+                connection.prepareStatement("SELECT pg_try_advisory_lock(?)")) {
+            statement.setLong(1, LOCK_KEY);
+            try (ResultSet result = statement.executeQuery()) {
+                result.next();
+                if (!result.getBoolean(1)) {
+                    connection.close();
+                    throw new IllegalStateException(
+                            "another market-data-service instance holds the advisory"
+                                    + " lock — refusing to run (playbook §7)");
+                }
+            }
+        } catch (SQLException e) {
+            closeQuietly(connection); // asked every heartbeat: a session it could not ask is not kept
+            throw new PersistenceException("advisory-lock acquisition failed", e);
+        }
+        return connection;
+    }
+
+    private static void closeQuietly(Connection connection) {
+        try {
+            connection.close();
+        } catch (SQLException e) {
+            // the server has already let go of it, or will
         }
     }
 
@@ -94,11 +106,7 @@ public final class SingleInstanceLock implements AutoCloseable {
         } catch (SQLException e) {
             // a dead session answers nothing: replaced below
         }
-        try {
-            connection.close(); // a dead session's close may fail too; the server has already let go
-        } catch (SQLException e) {
-            // nothing to release — the session is gone, and the lock with it
-        }
+        closeQuietly(connection); // a dead session: the server has already let go, and the lock with it
         try {
             connection = lock(sessions);
             return Standing.REACQUIRED;
