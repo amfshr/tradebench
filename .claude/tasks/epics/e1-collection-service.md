@@ -14,7 +14,7 @@
 
 **Dependency spine:** T2 (session/REST) → T3 (streaming) → T4 (persistence) → T5 (resilience)
 → T6 (EOD cycle) → T7 (deploy) → T8 (shadow-diff acceptance). Genuine parallelism: T4's
-schema/migrations can start alongside T3; T6's Parquet/email halves only need T2+T4.
+schema/migrations can start alongside T3; T6's Parquet half only needs T2+T4 (its digest left for E9 — D30).
 **Risk concentrates in T5** (the resilience belt is most of what the playbook exists to
 transfer — budget it as the long tail) and in T6's provider-allowance realities.
 **Trust arrives only at T8** — until the shadow week diffs clean, the Python appliance
@@ -224,29 +224,44 @@ rebuild at 60, not 180); its rebaseline half at T11 (PR #16, 2026-10-08).**
    from the ruling's ordering, for that reason: the host wakes with the Lightstreamer client stuck in `DISCONNECTED:WILL-RETRY`
    and the escalator rebuilds it, measured in awake time. **Residual 3 is closed, final (2026-10-09).**
 
-## T6 — Daily completeness + archive + digest (D6) ⬜ next (unblocked 2026-10-11 by E1-T13's merge, PR #25)
+## T6 — Daily completeness + archive (D6 amended, D30) ⬜ ready to start (re-scoped 2026-10-11 by D30; unblocked 2026-10-11 by E1-T13's merge, PR #25)
 
-**Type** build · **Branch** — · **Started** — · **Blocked by** —
+**Type** build · **Branch** `e1-t6-heal-and-archive` · **Started** — · **Blocked by** —
 
-**Goal:** every trading day ends healed, archived off-box, and reported — or the silence
-itself alarms (P9).
-**Approach:** one `@Scheduled` EOD job (plain task, NOT Spring Batch — D6), three phases:
+**Re-scoped 2026-10-11 (Alex — D30; D6 amended):** the collection service streams and stores; it
+does not email, alert or report. The digest phase leaves this ticket for **E9-T5** — the capture
+digest, the stale-heartbeat alarm, every notification, and the email-transport decision (SMTP vs
+API service) go with it. The P9 proof-of-life moves too: the digest's *content* proves the collector
+lived, its own *absence* alarms the reporter. What stays here is the data work and its audit trail.
+**Accepted cost (ruled explicitly):** no email until E9 is deployed — from the first deploy (T7)
+until then Alex checks the service by hand each evening: the heartbeat line, `capture_status`
+freshness, the day's `job_runs` row. A thin reporter pulled forward was declined (it would widen
+this service's scope; "the sooner the E9 service is up the better"). Alex's plan: heal + archive
+this week, deploy (T7) next weekend. Branch `e1-t6-heal-and-archive` cut from `main` 2026-10-11;
+Alex starts it next session with the design nod (D13).
+
+**Goal:** every trading day ends healed and archived off-box, with an audited `job_runs` row per
+run — or the row's absence itself alarms (P9).
+**Approach:** one `@Scheduled` EOD job (plain task, NOT Spring Batch — D6), two phases, each run
+writing its audited `job_runs` row, clean or not:
 1. **Heal**: diff expected-vs-present 1m bars; REST v3 backfill window-clipped and paced
    (the ~10k-points/week allowance is real — §4.3); outcomes classified
    `healed / tickless-at-source / failed`. **Ticks are stream-only** — provably
    unrecoverable from IG REST; the job never claims otherwise.
-2. **Archive**: day's capture → Parquet → object storage (offsite copy, backtest-ready).
    *(Ruling 2026-09-27: `IgRestClient` throws on a candle without `snapshotTimeUTC` — the
    healer catches per-request and classifies the outcome `failed`; blast-radius policy is
    the healer's, never the wire layer's.)*
-3. **Digest email**: counts, gaps, heal outcomes, archive path. Audited `job_runs` row
-   every run, clean or not — **the absence of the digest is the alarm** (runbook documents
-   the check).
-**Tests:** heal classification table-driven and exact; allowance/pacing boundary tests;
-digest-suppression failure-mode test; Parquet golden file for the day-export contract.
-**In-ticket decisions (named on the board):** object store — **R2 vs B2**; also: email
-transport (SMTP vs API service) and Parquet writer lib. Settle all three in-ticket, log any
-that grow durable consequences.
+2. **Archive**: day's capture → Parquet → object storage (offsite copy, backtest-ready); the
+   archive recorded as a row (D25's `archives`) so E9 can list and link it.
+**The alarm:** the `job_runs` row's absence — read by E9-T5's digest once it lands; until then
+checked by hand each evening (the runbook documents the check: heartbeat line ·
+`capture_status` freshness · the day's `job_runs` row).
+**Tests:** heal classification table-driven and exact; allowance/pacing boundary tests; a failed
+phase still writes its `job_runs` row (failure-mode test — the row is the audit, clean or not);
+Parquet golden file for the day-export contract.
+**In-ticket decisions (named on the board):** object store — **R2 vs B2**; also: Parquet writer
+lib. Settle both in-ticket, log any that grow durable consequences. *(Email transport — SMTP vs
+API service — moved to E9-T5 by D30.)*
 **Design item queued for this ticket's nod (Alex, 2026-09-28):** the schema/role story —
 named schema vs Postgres `public` (currently `public`; likely: dedicated schema +
 `search_path`, `public` revoked), owner-vs-app role split (D22, with the T7 ops script),
@@ -259,6 +274,9 @@ REST retry-with-backoff** on the ig-client. Decide here: hand-roll (reuse `Backo
 the error taxonomy, allowance-aware) vs standalone Resilience4j — never Spring Retry/Cloud CB
 (ig-client stays framework-free). This is the first slice of the platform-wide ig-client REST
 resilience that B2 tracks (the broad OMS/enquiries surface rolls it out at E6).
+**T5 residual 1 stays** (T5 §): the gated demo smoke (`IG_SMOKE=1 ./gradlew :ig-client:demoSmoke`,
+re-golden `application-allowance.json`) comes first if the heal budget leans on pacer discovery.
+
 
 ## T7 — Deploy
 
@@ -272,9 +290,12 @@ secrets injected via env files on the box, never committed; outbound-only networ
 (SSH/Tailscale in, IG + heartbeat out); heartbeat ping (healthchecks.io-style) so a dead box
 alerts a phone. Host: revisit the build-plan §6 analysis (Lightsail $12 vs Hetzner ~€4)
 against the ~£20/mo envelope — **decision recorded in-ticket**.
-**DoD anchor:** staging runs 24/7 for 3 consecutive unattended days with daily digests
-arriving.
-**Runbook:** deploy, rollback (re-tag), secrets rotation, digest-absence response.
+**DoD anchor:** staging runs 24/7 for 3 consecutive unattended days, each evening's hand check
+clean — the heartbeat line, `capture_status` freshness, the day's `job_runs` rows (D30: no digest
+until E9-T5 lands).
+**Runbook:** deploy, rollback (re-tag), secrets rotation, the evening check (heartbeat line ·
+`capture_status` freshness · the day's `job_runs` rows) and the `job_runs`-absence response (D30;
+the digest and its absence alarm are E9-T5's).
 
 ## T8 — Acceptance: shadow-diff week
 

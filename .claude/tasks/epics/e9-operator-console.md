@@ -8,23 +8,27 @@
 > refined when `/start-ticket` picks a ticket up; real scope changes go through the board.
 >
 > Sources: design session `docs/design/sessions/2026-09-30-collection-service-operability.md`
-> (rulings R1–R6), decisions D24 (this epic), D17 (data product), D11 (read-model pattern),
-> D16 (secrets); PRD §5.1, §8, §9; data-platform-design §6 (the coverage map).
+> (rulings R1–R6), decisions D24 (this epic), D30 (the digest and alerts are E9's, 2026-10-11),
+> D17 (data product), D11 (read-model pattern), D16 (secrets); PRD §5.1, §8, §9; data-platform-design §6 (the coverage map).
 
 ## Epic shape
 
 The collector (E1) stays outbound-only and single-purpose; it *produces* everything observable
 into its DB + R2. E9 is the **read model** over that. **Build order:** T1 (design the
 event/metric/data model — the gate) → then build tickets cut from T1's design: the read-model
-service, the SPA, the Cloudflare edge + deploy, and an optional Grafana/Prometheus metrics
-surface. **Dependency into E1:** T1 must land before E1-T5 slice B implements the event log, so
+service, the SPA, the Cloudflare edge + deploy, the digest + alerts reporter (T5 — D30), and an
+optional Grafana/Prometheus metrics surface. **Dependency into E1:** T1 must land before E1-T5 slice B implements the event log, so
 `service_events` v2 is written in the right shape the first time. **Read-only v1** — observe +
 download; control is deferred to the event/command plane (never REST-into-the-collector).
 
 The console serves **three data classes** (R6): time-series metrics (Micrometer → Prometheus →
 Grafana, *additive*), discrete events (`service_events` v2 — incl. errors/warnings), and domain
 data views (coverage map, gaps, catalogue, downloads — the SPA's core job). The push tier
-(digest + heartbeat = "serious") is unchanged and complementary.
+(digest + stale-heartbeat alarm = "serious") is **E9's too since D30** (2026-10-11): the collector
+streams and stores — it does not email, alert or report — so **T5** builds the reporter over
+`job_runs`, `capture_status`, `bar_gaps` and the archive rows; the digest's content proves the
+collector lived, its own absence alarms the reporter (P9 in two layers). Until T5 lands Alex checks
+the collector by hand each evening (the accepted cost, ruled explicitly).
 
 ---
 
@@ -102,3 +106,26 @@ Cloudflare Tunnel (`cloudflared`, outbound — no inbound ports) + Access (per-p
 fronting the console; deployed alongside the collector in the compose stack (D24). Optional
 follow-on: a Grafana/Prometheus metrics surface as a container behind the same tunnel.
 **DoD:** cut from T1 + the E1-T7 host ruling.
+
+## T5 — Digest email + alerts ⬜ (born 2026-10-11 from D30 — moved here from E1-T6)
+
+**Type** build · **Branch** `—` · **Started** — · **Blocked by** T2, E1-T6
+
+The daily **capture digest** (counts, gaps, heal outcomes, archive path) and the **stale-heartbeat
+alarm** — every notification — read from `job_runs`, `capture_status`, `bar_gaps` and the archive
+rows the collector writes (D25). **Email transport decided here** (SMTP vs API service — the decision
+E1-T6 carried until D30). **P9 in two layers (D30):** the digest's *content* proves the collector
+lived (heartbeat freshness over the day, the heal's and archive's `job_runs` rows, open gaps); the
+digest's own *absence* alarms the reporter. **Why here, not in the collector (D30):** the digest is a
+report over stored data, so a reader should produce it; mail transport, templates and credentials are
+a configuration surface unrelated to streaming and would widen the collector's deploy and its secrets
+for no data benefit. **Interim (the accepted cost, ruled explicitly):** no email until this lands —
+from the collector's first deploy (E1-T7) Alex checks it by hand each evening: the heartbeat line,
+`capture_status` freshness, the day's `job_runs` row. A thin reporter pulled forward before E9 was
+declined. **Blocked by** T2 (the natural home — a scheduled task in the read-model service, to be
+settled in-ticket) and E1-T6 (the heal/archive `job_runs` rows it reports). **In-ticket decisions:**
+email transport (SMTP vs API service); where the reporter runs (inside T2's service or beside it);
+the heartbeat alarm's staleness window (reuse D25's `capture_status` freshness). **DoD:** on staging a
+day's digest arrives built from the rows; a suppressed digest (the reporter down, or the collector
+silent) is alarmed — the failure-mode tests mutation-verified; the evening hand check retires from
+the runbook.
