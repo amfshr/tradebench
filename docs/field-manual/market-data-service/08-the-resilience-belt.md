@@ -85,8 +85,10 @@ Around the signals, seven pieces of judgment, each visible in the code:
   zombie cannot hide behind a weekend.
 - *No verdict while the connection is down* (`onConnection`, E1-T10 #5): a retry substate, the
   handshake, a rebuild in flight — that silence is the connection's, the escalator's domain; when
-  streaming resumes every stopwatch and episode starts afresh, so the new session gets its full
-  window and the watchdog never fires into a recovery.
+  streaming resumes every stopwatch starts afresh, so the new session gets its full window and the
+  watchdog never fires into a recovery — but a market's episode survives the rebuild it earned (E1-T13,
+  the re-review's finding 3): its grace keeps doubling instead of restarting at base every ~450s for as
+  long as the item is dead.
 - *Episodes with doubling grace* (`remedyFor`): first remedy at the threshold (90s tick-silent);
   the grace then doubles **before** each wait — 120s, 240s, 480s … capped at 30min (the 60s base
   is the seed, never itself waited) — so the second resubscribe lands at T+210s and the
@@ -105,9 +107,10 @@ Around the signals, seven pieces of judgment, each visible in the code:
   own threshold waits a round, so two feeds dying 584ms apart earn one verdict, not a stray
   resubscribe the sweep before it. It carries its own doubling grace
   (`lastSessionVerdict`/`sessionGraceNanos`), added after the test harness caught the
-  verdict re-firing every round — and since E1-T12 (ruling 4, D29 (5)) that ladder closes only on
-  data from a market that was stale at the verdict — a rebuilt connection that reports streaming
-  and sends nothing does not reset it, nor do a live third market's ticks — so the
+  verdict re-firing every round — and since E1-T12/T13 (ruling 4, D29 (5), amended 2026-10-11) that ladder is time-decayed, never
+  data-reset: a rebuilt connection that reports streaming does not reset it, nor does any tick,
+  candle or snapshot — its grace stands until the grace and a whole `sessionGraceCap` have passed
+  with no verdict — so the
   verdicts space out 60s → 120 → 240 → 480 → `sessionGraceCap` (10 minutes) instead of re-firing
   every 90s for the whole silence, as the 2026-08-04 scar's replay showed they did.
 - *Clock-anomaly immunity*: chapter 7's discriminator; anomalous rounds re-baseline every

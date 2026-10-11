@@ -439,8 +439,10 @@ review is transient evidence, the docs are the product (framework §4). *Amended
 ruling 4, Alex): **(5) the watchdog's session ladder closes on data, not on the connection.** The replay of
 the 2026-08-04 scar showed a session that answers `CONNECTED:WS-STREAMING` and sends nothing being rebuilt
 every 90s for as long as the silence lasts — the ladder (60s doubling) was reset whenever the rebuilt
-connection reported streaming or the rebaselined markets read non-stale. Now only the first tick after a
-rebuild from a market that was stale at the verdict closes it (a live third market's ticks say nothing
-about the dead two — the T12 review, ruled the same day), and it has its own cap, `Tuning.sessionGraceCap` = 10 minutes (the per-market ladder
+connection reported streaming or the rebaselined markets read non-stale. Now the ladder is
+time-decayed, never data-reset (E1-T13, ruled 2026-10-11 on the re-review's findings 3, 5 and 6, superseding
+the first-tick reset of 2026-10-10/11): a verdict's doubled grace stands until the grace and a whole cap have
+passed with no further verdict, so a thin-but-open pair converges to one rebuild per cap, a sealed candle or a
+subscribe snapshot cannot restart it, and a market's own episode survives the rebuild it earned; and it has its own cap, `Tuning.sessionGraceCap` = 10 minutes (the per-market ladder
 keeps 30): a login every ten minutes at the limit, a recovery that needs a rebuild caught within ten,
 and the belt never gives up a feed that may return.*

@@ -611,4 +611,27 @@ class BeltScenariosTest {
         assertEquals(5, o.events(EventType.WATCHDOG_STALE).size(), "one session verdict per rebuild");
         assertTrue(o.exits.isEmpty(), "never given up — the feed may return");
     }
+
+    @Test
+    void aDeadMarketsLadderKeepsClimbingAcrossTheRebuildItEarned() throws Exception {
+        // E1-T13 (the re-review's finding 3): DAX dies at 60s while NASDAQ streams. Market surgery at
+        // 150 and 270, then DAX's own REBUILD at 510 (grace now 480s). The rebuilt session answers and
+        // streams NASDAQ; DAX stays dead. Its episode survives the rebuild it earned, so the next REBUILD
+        // waits the doubled grace — 990 — instead of a fresh ladder from base (601, 721, 961) every ~450s.
+        Scenario oneDead = Scenario.named("one dead market across its own rebuild").markets(DAX, NASDAQ)
+                .serverAnswers()
+                .every(s(1), s(1), s(60), t -> tick(DAX))
+                .every(s(1), s(1), s(1500), t -> tick(NASDAQ))
+                .every(s(60), s(60), s(1500), t -> bar(NASDAQ))
+                .until(s(1500)).build();
+
+        Observed o = ScenarioRunner.run(oneDead);
+
+        assertEquals(List.of(0L, 509L, 989L), o.secondsOf("connect"),
+                "the first sweep 90s after DAX's last tick (59s) is 149: resubscribes at 149 and 269, REBUILD at 509, then +480 → 989");
+        assertEquals(List.of(149L, 149L, 269L, 269L), o.remedies("subscribe").stream()
+                .filter(r -> r.item().contains(DAX) && r.at().toSeconds() > 0 && r.at().toSeconds() < 500)
+                .map(r -> r.at().toSeconds()).toList(), "DAX's pair re-asked for twice before the ladder escalates");
+        assertTrue(o.exits.isEmpty());
+    }
 }
