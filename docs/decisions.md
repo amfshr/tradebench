@@ -377,7 +377,12 @@ rejected configuration (`IgFatalConfigException`, now including `error.security.
 **(3) One streaming rule.** `ReconnectClassifier.isStreaming` — any `CONNECTED:*` substate except the
 `STREAM-SENSING` handshake — is the single definition of "data flowing", shared by the reconnect
 classifier and the health view: a resume onto a polling fallback ends an outage and resets the
-ladder (the degradation is `TRANSPORT_DOWNGRADED`), and the two voices cannot disagree. **Why:** each
+ladder (the degradation is `TRANSPORT_DOWNGRADED`), and the two voices cannot disagree. *Amended
+2026-10-11 (E1-T13 ruling 2, the re-review's finding 2): the rule is the escalator's clock too —
+`StuckSubstateEscalator` measures time-not-streaming, cleared only by a streaming status or a bare
+`DISCONNECTED`, so the retry cycle through `CONNECTING` and a handshake that hangs at boot are watched by
+it; before, each non-retry status reset its substate clock and nothing watched them before the first
+rebuild.* **Why:** each
 was ruled in-ticket (E1 plan T5 §; chapter 10 "The rulings behind it"), but they are contracts other
 work depends on, and G2 says a decision lives in the log, not only in the plan that made it.
 Supersedes the 09-28 nod's "exhaustion = clean exit(0)".
