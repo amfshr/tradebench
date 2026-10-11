@@ -177,6 +177,43 @@ class BeltScenariosTest {
     }
 
     @Test
+    void aRetryCycleThroughConnectingIsRebuiltByTheEscalatorNotLeftToNothing() throws Exception {
+        // Re-review 2 (ruling: the escalator measures time-not-streaming). The streaming endpoint
+        // refuses: the SDK cycles WILL-RETRY → CONNECTING → WILL-RETRY every few seconds. Each
+        // CONNECTING used to reset the escalator, the watchdog stands down while not streaming, no
+        // death is latched and no rebuild has run so the budget is inert — a connection watched by
+        // nothing. Now the stopwatch runs from the first non-streaming status: a rebuild 120s on.
+        Scenario cycling = Scenario.named("retry cycle through CONNECTING").markets(DAX)
+                .at(s(0), streaming()).at(s(0), subscribed(DAX))
+                .every(s(1), s(1), s(10), t -> tick(DAX))
+                .every(s(4), s(10), s(300), t -> status((t.toSeconds() - 10) / 4 % 2 == 0 ? WILL_RETRY : "CONNECTING"))
+                .until(s(300)).build();
+
+        Observed o = ScenarioRunner.run(cycling);
+
+        assertEquals(List.of(0L, 130L, 254L), o.secondsOf("connect"),
+                "120s after the first non-streaming status at 10; then 120s after the rebuilt connection's first, at 134");
+        assertEquals(2, o.events(EventType.STUCK_SUBSTATE_ESCALATED).size());
+        assertTrue(o.events(EventType.WATCHDOG_STALE).isEmpty(), "stood down while not streaming");
+        assertTrue(o.exits.isEmpty());
+    }
+
+    @Test
+    void aBootIntoAHandshakeThatNeverStreamsIsRebuiltAtTheEscalatorsThreshold() throws Exception {
+        // The boot specimen: start() returns once connect is issued; a connection sitting in
+        // CONNECTED:STREAM-SENSING was never rebuilt and never declared dead. Rebuilt at 120s now.
+        Scenario hung = Scenario.named("boot into a hung handshake").markets(DAX)
+                .at(s(0), status("CONNECTED:STREAM-SENSING"))
+                .until(s(300)).build();
+
+        Observed o = ScenarioRunner.run(hung);
+
+        assertEquals(List.of(0L, 120L), o.secondsOf("connect"), "the handshake's 120s, no retry substate ever seen");
+        assertEquals(1, o.events(EventType.STUCK_SUBSTATE_ESCALATED).size());
+        assertTrue(o.events(EventType.WATCHDOG_STALE).isEmpty());
+    }
+
+    @Test
     void aHostSuspendIsAnnotatedNotTreatedAsAnOutage() throws Exception {
         // Chapter 7's discriminator at the shell: the host is suspended (a paused VM, a hibernated
         // instance) — the socket dies, the wall clock jumps sixteen minutes, the monotonic clock does
@@ -470,6 +507,30 @@ class BeltScenariosTest {
     }
 
     @Test
+    void everyMarketRejectedIsOneSessionShapedRebuildPerWindowNotACrash() throws Exception {
+        // Re-review 4: a config-shaped fault — every watched market rejected on every attempt. Each
+        // market's verdict waits on the other's 30s window; both lapse in one sweep and render
+        // together. One rebuild per lapse, the ladder left to end it — never FEED_DEAD{fatal} from
+        // the second verdict finding its record already reset by the first's rebuild. The cadence:
+        // the window is re-stamped by the second strike's retry and lapses 30s after it. Boot's
+        // strikes land at 0, 1, 2 (the first rejection is applied by the sweep that saw it), so the
+        // first lapse is at 31; a rebuild's first rejection is applied a sweep after it, so each
+        // later lapse is 32 on from the rebuild — 31, 63, 95.
+        Scenario allBad = Scenario.named("every market rejected").markets(DAX, NASDAQ)
+                .serverRejects(DAX, 40).serverRejects(NASDAQ, 40)
+                .at(s(0), streaming())
+                .until(s(120)).build();
+
+        Observed o = ScenarioRunner.run(allBad);
+
+        assertEquals(List.of(0L, 31L, 63L, 95L), o.secondsOf("connect"),
+                "one session-shaped rebuild each time the pair's windows lapse");
+        assertTrue(o.events(EventType.FEED_DEAD).isEmpty(), "a verdict, never a crash");
+        assertTrue(o.exits.isEmpty());
+        assertEquals(3, o.events(EventType.SUBSCRIPTION_REJECTED).size(), "one reason row per rebuild that ran");
+    }
+
+    @Test
     void aMarketWhoseBothLegsAreRejectedGetsItsTwoSurgicalRetries() throws Exception {
         // §3.5: initial subscribe + two surgical retries, a fresh pair each time. The server refuses
         // DAX outright, so both legs are rejected per attempt; that is one strike, not two. Each
@@ -610,5 +671,29 @@ class BeltScenariosTest {
                 "the first sweep 90s after the last tick (at 59s), then +120, +240, +480, +600, +600");
         assertEquals(5, o.events(EventType.WATCHDOG_STALE).size(), "one session verdict per rebuild");
         assertTrue(o.exits.isEmpty(), "never given up — the feed may return");
+    }
+
+    @Test
+    void aDeadMarketsLadderKeepsClimbingAcrossTheRebuildItEarned() throws Exception {
+        // E1-T13 (the re-review's finding 3): DAX's last tick is at 59 (the minute of ticks ends before
+        // 60) while NASDAQ streams on. Market surgery at 149 and 269, then DAX's own REBUILD at 509 (grace
+        // now 480s). The rebuilt session answers and streams NASDAQ; DAX stays dead. Its episode survives
+        // the rebuild it earned, so the next REBUILD waits the doubled grace — 989 — instead of a fresh
+        // ladder from base (600, 720, 960) every ~450s.
+        Scenario oneDead = Scenario.named("one dead market across its own rebuild").markets(DAX, NASDAQ)
+                .serverAnswers()
+                .every(s(1), s(1), s(60), t -> tick(DAX))
+                .every(s(1), s(1), s(1500), t -> tick(NASDAQ))
+                .every(s(60), s(60), s(1500), t -> bar(NASDAQ))
+                .until(s(1500)).build();
+
+        Observed o = ScenarioRunner.run(oneDead);
+
+        assertEquals(List.of(0L, 509L, 989L), o.secondsOf("connect"),
+                "the first sweep 90s after DAX's last tick (59s) is 149: resubscribes at 149 and 269, REBUILD at 509, then +480 → 989");
+        assertEquals(List.of(149L, 149L, 269L, 269L), o.remedies("subscribe").stream()
+                .filter(r -> r.item().contains(DAX) && r.at().toSeconds() > 0 && r.at().toSeconds() < 500)
+                .map(r -> r.at().toSeconds()).toList(), "DAX's pair re-asked for twice before the ladder escalates");
+        assertTrue(o.exits.isEmpty());
     }
 }

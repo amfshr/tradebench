@@ -4,7 +4,7 @@ Part of the Tradebench Field Manual. Chapter 8 is the *tour* of the resilience b
 core, then the `Supervisor` shell that runs them — read bottom-up, class by class. This chapter
 is its companion, read top-down: **a failure happens; what does the service do, how long does
 it take, what is lost, who finds out, and how does it heal?** It also gathers in one place the
-*policy* behind every number in `Tuning.playbook()` and `Main`, with the rulings and their
+*policy* behind every number in `Tuning.playbook()` and `CaptureAssembly`, with the rulings and their
 reasons, so the design can be judged as a whole rather than one constant at a time.
 
 Where this chapter says *pending*, the code is not built yet; where it says *ruled*, the
@@ -37,9 +37,9 @@ re-serves them).
 
 | What breaks | How we notice | What we do | Cost | Who finds out | Heals |
 |---|---|---|---|---|---|
-| The server stops talking but the socket stays up (*silent while connected*, the 2h56m scar) | `StalenessWatchdog`: no tick for **90s** while the market's `DLG_FLAG` says open; or ticks flowing but no sealed bar for **210s** (a dead CHART leg); no verdict while the connection itself is down — that silence is the escalator's; a market reading CLOSED/SUSPEND for **12h** gets one teaching resubscribe, so a zombie cannot hide behind a weekend (D29) | per-market **resubscribe** ×2 (T+90s, then T+210s — the grace doubles before each wait: 120s, 240s), then a session **rebuild** (T+450s); ≥2 markets stale together (within one sweep of each other) → rebuild at once | ticks from the stop to the resume; a bar gap | `WATCHDOG_STALE` events; `RECONNECT{replayed=false}` on resume; `BAR_GAP` | heal backfills the bars |
-| The SDK hangs in `DISCONNECTED:WILL-RETRY` (it gave up without saying so) | `StuckSubstateEscalator`: **120s** in WILL-RETRY, **300s** in TRYING-RECOVERY (the server may still replay there) | **rebuild**, paced by backoff | as above | `STUCK_SUBSTATE_ESCALATED` | heal |
-| The client gives up for good — a bare `DISCONNECTED` (the server's refusal follows it as `onServerError`) | `ReconnectClassifier.isTerminal`: exactly `DISCONNECTED`, never the two retry substates | **rebuild now**, paced by backoff, the budget starts — no substate will ever escalate this, and the watchdog stands down on closed markets | the outage | `CONNECTION_DEAD{status | code, message}` + `IG_API_ERROR{code, message}` (both set one latch: one death, one rebuild — asked again every sweep until the pacing lets it run) | heal |
+| The server stops talking but the socket stays up (*silent while connected*, the 2h56m scar) | `StalenessWatchdog`: no tick for **90s** while the market's `DLG_FLAG` says open; or ticks flowing but no sealed bar for **210s** (a dead CHART leg); no verdict while the connection itself is down — that silence is the escalator's; a market reading CLOSED/SUSPEND for **12h** gets one teaching resubscribe, so a zombie cannot hide behind a weekend (D29) | per-market **resubscribe** ×2 (T+90s, then T+210s — the grace doubles before each wait: 120s, 240s), then a session **rebuild** (T+450s); ≥2 markets stale in the same round → rebuild at once, however far apart they crossed their thresholds (a lone stale market whose neighbour is one sweep from its own threshold waits that sweep, so feeds dying together earn one verdict) | ticks from the stop to the resume; a bar gap | `WATCHDOG_STALE` events; `RECONNECT{replayed=false}` on resume; `BAR_GAP` | heal backfills the bars |
+| The SDK hangs in `DISCONNECTED:WILL-RETRY` (it gave up without saying so); or cycles `WILL-RETRY → CONNECTING → …` against a stale endpoint; or a handshake sits in `CONNECTING`/`STREAM-SENSING` from boot | `StuckSubstateEscalator`: **120s** not streaming (**300s** when the last retry substate seen was TRYING-RECOVERY — the server may still replay there); the stopwatch runs across every non-streaming status, so nothing the SDK calls the wait launders it (E1-T13 ruling 2) | **rebuild**, paced by backoff | as above | `STUCK_SUBSTATE_ESCALATED` | heal |
+| The client gives up for good — a bare `DISCONNECTED` (the server's refusal follows it as `onServerError`) | `ReconnectClassifier.isTerminal`: exactly `DISCONNECTED`, never the two retry substates | **rebuild now**, paced by backoff, the budget starts — no substate will ever escalate this, and the watchdog stands down on closed markets | the outage | `CONNECTION_DEAD{status | code, message}` + `IG_API_ERROR{code, message}` (both set one latch: one death, one rebuild — asked again every sweep until a rebuild runs, this one or any other's) | heal |
 | A normal drop and reconnect | `ReconnectClassifier` on any streaming substate | nothing — report | none if the server replayed (no WILL-RETRY seen); otherwise the outage's data | `RECONNECT{replayed, wallOutage, awakeOutage, hostSlept}` | heal when `replayed=false` |
 | One market's subscription is rejected three attempts running (a pair's two legs are one strike) while another market's pair is confirmed — a verdict due while that witness is still inside its 30s confirm window waits, and is rendered the moment it confirms or the window lapses | `WitnessQuarantine` (§3.5) | **quarantine** that market — unsubscribe its pair, leave it off, and ignore its later rejections (the pair's other leg, a late one — never re-admitted, never re-subscribed); exit is restart-only | that market until the next restart | `MARKET_QUARANTINED` | restart |
 | The same, but no healthy witness | `WitnessQuarantine` | treat as session-shaped: **rebuild** | the outage | `SUBSCRIPTION_REJECTED` | heal |
@@ -110,7 +110,7 @@ Every number, where it lives, and what it means:
 | Number | Where | Meaning |
 |---|---|---|
 | 90s / 210s | `Tuning.tickSilent` / `barSilentWhileTicksFlow` | a quiet-but-open market is dead / a dead CHART leg while PRICE lives |
-| 120s / 300s | `willRetryRebuild` / `tryingRecoveryRebuild` | how long a stuck substate is tolerated — less for the one where the server has given up |
+| 120s / 300s | `willRetryRebuild` / `tryingRecoveryRebuild` | how long a connection may sit not streaming — less when the last retry substate seen says the server has given up (or none was seen), more when it may still replay |
 | 60s → 30 min | `watchdogGraceBase` / `watchdogGraceCap`, `watchdogMaxResubscribes` 2 | per-market remedy episodes: doubling grace so a genuinely quiet market decays to one remedy per half hour |
 | 10 min | `sessionGraceCap` | the session ladder's own cap: a session that answers "streaming" and sends nothing earns one login per cap at the limit, and a recovery that needs a rebuild is caught within it (E1-T12 ruling 4, D29 (5)) |
 | 5s floor, 1s·2ⁿ, 60s cap | `rebuildFloor` / `backoffBase` / `backoffCap` | rebuild pacing — the floor is IG's login cache lesson (§3.2); the cap keeps the ladder responsive |
@@ -119,9 +119,9 @@ Every number, where it lives, and what it means:
 | 3 / 30s | `subscriptionStrikes` / `subscribeConfirmWindow` | the witness rule's strikes and confirm window (§3.5) |
 | 12h | `standDownTeach` | the CLOSED/SUSPEND stand-down's bound: one teaching resubscribe per period (D29 (1)) |
 | 5s / 10s | `hostSleepSkew` / `processFreezeJump` | the clock-divergence discriminators (chapter 7) |
-| 1s | `Main.SWEEP_INTERVAL` | the supervisor's cadence — the detectors assume it |
-| 30s / 10 min | `Main.BOOT_RETRY` / the same `giveUpAfter` | boot retry spacing and budget |
-| 60s | `Main.HEARTBEAT` | the `capture_status` cadence, and the backstop for a dead supervisor thread (a dead pump is reported by `onDeath` at once); a Postgres outage adds at most the pool's 5s timeout per heartbeat — every market's row on one pooled connection (E1-T10 #22) |
+| 1s | `CaptureAssembly.SWEEP_INTERVAL` | the supervisor's cadence — the detectors assume it |
+| 30s / 10 min | `CaptureAssembly.BOOT_RETRY` / the same `giveUpAfter` | boot retry spacing and budget |
+| 60s | `CaptureAssembly.HEARTBEAT` | the `capture_status` cadence, and the backstop for a dead supervisor thread (a dead pump is reported by `onDeath` at once); a Postgres outage adds at most the pool's 5s timeout per heartbeat — every market's row on one pooled connection (E1-T10 #22) — plus the lock's re-verify, whose liveness check and raw re-connect are each bounded by the same 5s (`connectTimeout`, E1-T13) |
 | 5s floor → 60s cap | the belt's `BackoffPolicy`, via `Pump` | the sink's retry pacing during a hold — the floor also clears HikariCP's 500ms alive-bypass window, so the second attempt gets a validated connection |
 | 5s | `Database.CONNECTION_TIMEOUT` | how long a Tier-2 write or a sink recovery waits for a pooled connection while Postgres is down — the heartbeat's worst case per publish, one connection for every market's row (E1-T10 #22) |
 | 250ms | `Pump.HOLD_SLICE` | how quickly a hold notices `stop()` |
@@ -208,7 +208,7 @@ Three kinds of write, three answers — decided by *what the write protects*:
 | Tier | Writes | Policy | Why |
 |---|---|---|---|
 | 1 — the product | ticks, bars (`PostgresStore`, pump thread, one pooled connection kept for the store's life — swapped by `recover()` after a blip) | **fail closed, by holding**: a retryable failure keeps bars queued and the tick batch held, backs off 5s → 60s, recovers the connection, resumes — no time budget; anything not known-transient stops the pump and the process exits 1 at once | irreplaceable data must never be silently dropped — and a restart would drop exactly what the hold protects; a broken sink must never be written into, so only a *recovered* one is |
-| 2 — observability | events (queued; one writer thread hands them on — D29 (3)), gaps, status (observability store, a pooled connection per write) | **best-effort, counted, continue** | breadcrumbs; the store self-heals on the next write; coverage truth is recomputed from `bars_1m` |
+| 2 — observability | the Supervisor's events (queued; one writer thread hands them on — D29 (3)); the pump's `BAR_GAP` / `MARKET_STATE_CHANGE` / `SINK_FAILURE` / `DB_ERROR` and the pacer's one event, written in place on their own threads by design (the pump may wait up to the pool's 5s on one — bounded, and the bar is acked before `detectGap` runs); gaps; status (observability store, a pooled connection per write) | **best-effort, counted, continue** | breadcrumbs; the store self-heals on the next write; coverage truth is recomputed from `bars_1m` |
 | 3 — decisions | none | never touch the DB | principle 1 |
 
 **The Tier-1 ruling (2026-10-04, E1-T9).** Stop-and-restart was *a* fail-closed answer but a
@@ -249,12 +249,28 @@ inside which the pool hands a just-returned dead connection out unvalidated (the
 tests had to evict the pool by hand to see what backoff gives production for free). The shared
 pool's `connectionTimeout` is **5s** (`Database.CONNECTION_TIMEOUT`): a Tier-2 write or a sink
 recovery waits at most that long while Postgres is down, so the heartbeat's worst case is 5s per
-market and `recover()` fails fast into the backoff instead of hanging. All six choices were ruled
+publish — one batch for every market's row (E1-T10 #22) — and `recover()` fails fast into the backoff instead of hanging. All six choices were ruled
 on 2026-10-04 and are logged as **D28**. **Proven in anger on 2026-10-05:** a 152-second
 `docker stop` of the dev Postgres mid-capture — the failure fired on the idle flush, seven retries at
 5 / 5 / 5 / 11 / 13 / 43 / 39 s, `sink recovered after 152s and 7 attempt(s); 303 queued writes to
 drain`, every minute's bars and ticks present afterwards, one `sink_failure` row, no `bar_gaps` row.
 The drill routine, the log and the verification queries live in the E1 plan (T9 §).
+
+**The lock across a held outage (2026-10-11, E1-T13 — the re-review's finding 1).** The
+single-instance advisory lock (foundations ch. 06) is session-scoped and rides its own dedicated
+connection; a Postgres restart ends every session, and an idle connection learns nothing until it
+is next asked. Pre-belt that could not matter — the database failure killed the pump and the
+restart re-ran `acquire`. Now the sink holds through exactly that restart, so the process would
+have streamed on for the rest of its life holding no lock, and a second launch would have been
+let in (P9's fail-open). So the heartbeat re-verifies it — `SingleInstanceLock.verify()`, every
+60s beside the status rows: a live session still holds its lock (nothing but session end releases
+one), a dead session is replaced by a fresh one that takes the lock again (`advisory lock
+re-acquired on a fresh session`), a refusal — another instance took it while ours was gone — is a
+`FATAL` and `exit(1)`: whoever holds the lock runs, and the newcomer does; and while the database is
+unreachable the lock is *unverifiable*, reported every heartbeat and asked again — never an exit,
+which would drop what the sink is holding, and nobody else can take the lock from a database that is
+down either. The exposure that remains is one heartbeat: a second launch in the minute after the
+database returns streams beside us until our next check finds the lock taken and we leave.
 
 ## Giving up, loudly
 
@@ -368,7 +384,9 @@ The rule (the T12 nod, 2026-10-10): replay what was recorded; model what was not
 pass a reconstructed connection sequence off as IG's. A new outage becomes a fixture with
 `scripts/export-replay.sh` (one command, database → JSONL, both schemas); since E1-T12 the belt records
 every raw status transition as a `connection_status` event, so an outage Tradebench itself lives through
-replays with its real sequence. **Acceptance mode** runs the same replays through the real `Pump`,
+replays with its real sequence — every transition *that reaches the Supervisor*: a superseded connection's
+farewell is gated out (D29 (4)), so our own record of a rebuild shows the reason row and the new connection's
+statuses with no `DISCONNECTED` for the torn-down one, and a replay cut from our rows models the teardown. **Acceptance mode** runs the same replays through the real `Pump`,
 `PostgresStore` and `PostgresObservabilityStore` into a Testcontainers Postgres and reads the rows back
 as the observables (`ReplayAcceptanceTest`, tag `acceptance`): `./gradlew
 :market-data-service:replayAcceptance`, nightly and on demand in the `replay-acceptance` workflow, out of

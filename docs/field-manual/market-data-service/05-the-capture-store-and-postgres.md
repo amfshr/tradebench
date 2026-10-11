@@ -54,8 +54,9 @@ it exists — not a config decision.
 
 The write methods split by criticality, mirroring the queues:
 
-- **Bars and state changes apply immediately** — `barUpsert.executeUpdate()` inside
-  `write(Bar1m)`. No batching, because batching would break the ack chain: chapter 4's
+- **Bars apply immediately** — `barUpsert.executeUpdate()` inside `write(Bar1m)`. (Market-state
+  changes left the store at E1-T10: they are Tier-2 `MARKET_STATE_CHANGE` events the pump writes
+  best-effort, droppable by policy, never acked writes.) No batching, because batching would break the ack chain: chapter 4's
   `remove` happens when `write` *returns*, so `write` returning must mean "the database
   has it". The bar statement is the upsert above — `ON CONFLICT (user_id, source_id,
   instrument_id, start_utc) DO UPDATE` — so a redelivered bar (Lightstreamer replays
@@ -74,7 +75,9 @@ The write methods split by criticality, mirroring the queues:
   nothing: `recover()` re-acquires a pooled connection, re-prepares, re-binds every held
   tick and **executes the batch** — recovered means a write landed, so a database that answers
   connections but refuses writes fails to recover (E1-T10 #6) — and only then discards the dead
-  objects
+  objects. With nothing held the batch is empty and proves nothing: `recover()` returns `false` and
+  the pump keeps the episode *provisional* until its next write lands (chapter 4). The round trip is
+  pinned by
   (`PostgresStoreTest.aKilledConnectionIsRetryableAndRecoverLandsEveryHeldTick`). The dedupe
   constraint makes a re-sent batch idempotent.
 

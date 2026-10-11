@@ -5,7 +5,6 @@ import java.time.Instant;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
-import java.util.Objects;
 import java.util.Queue;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
@@ -85,6 +84,9 @@ public final class Supervisor implements StreamObserver, BeltView, Runnable {
     // status will ever re-fire — the latch is what re-asks past the pacing floor (E1-T10 #2).
     private @Nullable Instant deadAt;
     private @Nullable ObjectNode deadDetail;
+    // A rebuild verdict the pacing floor refused, latched until a rebuild runs for any reason: the
+    // cores consume a verdict as they render it, so nothing else would ever re-ask (re-review 8).
+    private @Nullable PendingRebuild pendingRebuild;
     private volatile boolean running = true;
     // The connection generation the sweep listens to: a superseded connection's word, enqueued
     // before its gate closed, is applied to nothing (E1-T10 #11).
@@ -214,9 +216,11 @@ public final class Supervisor implements StreamObserver, BeltView, Runnable {
             return; // ended inside the drain: nothing after it may act (#13)
         }
         for (WitnessQuarantine.Judgment verdict : witness.rejudge(clock.monotonicNanos())) {
-            String epic = epicOf(verdict);
-            applyJudgment(verdict, Objects.requireNonNull(heldVerdicts.remove(epic),
-                    () -> "no held rejection for " + epic)); // a witness confirmed, or its window lapsed
+            Observation.SubscriptionError held = heldVerdicts.remove(epicOf(verdict));
+            if (held == null || gaveUp) {
+                break; // a rebuild inside this loop reset every held verdict: the rest were rendered against a session that is gone
+            }
+            applyJudgment(verdict, held); // a witness confirmed, or its window lapsed
         }
         if (gaveUp) {
             return;
@@ -226,9 +230,11 @@ public final class Supervisor implements StreamObserver, BeltView, Runnable {
             giveUp("budget", clock.wallInstant());
             return;
         }
-        if (deadAt != null && rebuild(EventType.CONNECTION_DEAD, deadAt, null, deadDetail)) {
-            deadAt = null; // cleared only by a rebuild that ran — a paced-out one is asked again next sweep
-            deadDetail = null;
+        if (deadAt != null) {
+            rebuild(EventType.CONNECTION_DEAD, deadAt, null, deadDetail); // cleared by the rebuild that runs — a paced-out one is asked again next sweep
+        }
+        if (pendingRebuild != null) {
+            rebuild(pendingRebuild.reason(), pendingRebuild.occurredAt(), pendingRebuild.epic(), pendingRebuild.detail());
         }
         if (streamDown && downReason != null) {
             rebuild(downReason, clock.wallInstant()); // the last attempt left no connection: ask again, paced
@@ -288,7 +294,7 @@ public final class Supervisor implements StreamObserver, BeltView, Runnable {
             witness.onSubscribeStarted(remedy.epic(), clock.monotonicNanos()); // a fresh pair, a fresh confirm window
             stream.resubscribe(remedy.epic());
         } else {
-            rebuild(EventType.WATCHDOG_STALE, occurredAt); // backoff-paced session rebuild
+            rebuildOrLatch(EventType.WATCHDOG_STALE, occurredAt, null, null); // backoff-paced session rebuild
         }
     }
 
@@ -317,7 +323,7 @@ public final class Supervisor implements StreamObserver, BeltView, Runnable {
                 // quarantined, or a leg of an attempt already struck or replaced; nothing to do
             }
             case WitnessQuarantine.Judgment.Quarantine(String epic) -> quarantineMarket(epic, error);
-            case WitnessQuarantine.Judgment.Rebuild(String epic) -> rebuild(EventType.SUBSCRIPTION_REJECTED,
+            case WitnessQuarantine.Judgment.Rebuild(String epic) -> rebuildOrLatch(EventType.SUBSCRIPTION_REJECTED,
                     clock.wallInstant(), epic, rejection(error));
         }
     }
@@ -397,6 +403,24 @@ public final class Supervisor implements StreamObserver, BeltView, Runnable {
         return rebuild(reason, occurredAt, null, null);
     }
 
+    /** A verdict's rebuild: when paced out, latched so the sweep re-asks until one runs. The first
+     * unanswered ask keeps its place — a later one is answered by the same rebuild. */
+    private void rebuildOrLatch(EventType reason, Instant occurredAt, @Nullable String epic,
+            @Nullable ObjectNode detail) {
+        if (rebuild(reason, occurredAt, epic, detail)) {
+            return;
+        }
+        if (pendingRebuild == null) {
+            pendingRebuild = new PendingRebuild(reason, occurredAt, epic, detail);
+        } else {
+            log.accept("belt " + reason + (epic != null ? " " + epic : "") + " paced out — answered by the "
+                    + pendingRebuild.reason() + " rebuild already asked for"); // the record keeps the first ask
+        }
+    }
+
+    private record PendingRebuild(EventType reason, Instant occurredAt, @Nullable String epic,
+            @Nullable ObjectNode detail) { }
+
     /** As above, but scoping the reason event to {@code epic} with {@code detail} — used when one
      * market's rejection with no healthy witness is what forced the whole-session rebuild (§3.5).
      * The reason event is written only when the rebuild actually proceeds (never when paced out or
@@ -411,6 +435,9 @@ public final class Supervisor implements StreamObserver, BeltView, Runnable {
                 && now - lastRebuildMono < backoff.delayFor(consecutiveFailures).toNanos()) {
             return false; // not yet — space rebuilds so a re-login storm never trips IG's throttles (§3.2)
         }
+        deadAt = null; // whatever this rebuild is for, it supersedes the connection a latched death
+        deadDetail = null; // described and answers any verdict still waiting its turn (re-review 7, 8)
+        pendingRebuild = null;
         if (backoff.exhausted(rebuildsConnected)) {
             giveUp("ceiling", occurredAt); // ten connected and none streamed — the cap behind the budget
             return true;

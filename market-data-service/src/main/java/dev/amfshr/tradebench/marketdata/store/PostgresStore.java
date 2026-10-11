@@ -141,7 +141,8 @@ public final class PostgresStore implements CaptureStore {
                 bind(freshTicks, fresh, held);
                 freshTicks.addBatch();
             }
-            freshTicks.executeBatch(); // the round trip: a database that refuses writes fails here (E1-T10 #6)
+            freshTicks.executeBatch(); // the round trip when ticks are held: a database that refuses writes fails
+            // here; with nothing held the batch is empty and the caller's next write is the proof (E1-T10 #6)
             pending.clear();
         } catch (SQLException e) {
             closeQuietly(freshTicks, freshBars, fresh);

@@ -85,8 +85,10 @@ Around the signals, seven pieces of judgment, each visible in the code:
   zombie cannot hide behind a weekend.
 - *No verdict while the connection is down* (`onConnection`, E1-T10 #5): a retry substate, the
   handshake, a rebuild in flight — that silence is the connection's, the escalator's domain; when
-  streaming resumes every stopwatch and episode starts afresh, so the new session gets its full
-  window and the watchdog never fires into a recovery.
+  streaming resumes every stopwatch starts afresh, so the new session gets its full window and the
+  watchdog never fires into a recovery — but a market's episode survives the rebuild it earned (E1-T13,
+  the re-review's finding 3): its grace keeps doubling instead of restarting at base every ~450s for as
+  long as the item is dead.
 - *Episodes with doubling grace* (`remedyFor`): first remedy at the threshold (90s tick-silent);
   the grace then doubles **before** each wait — 120s, 240s, 480s … capped at 30min (the 60s base
   is the seed, never itself waited) — so the second resubscribe lands at T+210s and the
@@ -99,17 +101,20 @@ Around the signals, seven pieces of judgment, each visible in the code:
   a judged silence is not judged bar-silent as it returns (E1-T12 finding 1, the 2026-08-10
   dawn replay: a spurious pair resubscribe two seconds after DAX came back) — and a market leaving its CLOSED/SUSPEND stand-down starts its CHART clock at
   the opening, for the same reason (the T12 review's finding 1, ruled 2026-10-10).
-- *Session-shaped verdict*: ≥2 markets stale together is never market noise — one
-  `REBUILD`, not N remedies. "Together" means within one sweep of each other
-  (`anotherWithinASweep`, E1-T10 #33): a lone stale market whose neighbour is one sweep from its
-  own threshold waits a round, so two feeds dying 584ms apart earn one verdict, not a stray
-  resubscribe the sweep before it. It carries its own doubling grace
+- *Session-shaped verdict*: ≥2 markets stale in the same round is never market noise — one
+  `REBUILD`, not N remedies — however far apart they crossed their thresholds (DAX stale from 90,
+  NASDAQ from 390 → one session verdict at 390, pre-empting DAX's next rung and NASDAQ's surgery).
+  The one-sweep rule is the *hold* (`anotherWithinASweep`, E1-T10 #33): a lone stale market whose
+  neighbour is one sweep from its own threshold waits a round, so two feeds dying 584ms apart earn
+  one verdict, not a stray resubscribe the sweep before it. It carries its own doubling grace
   (`lastSessionVerdict`/`sessionGraceNanos`), added after the test harness caught the
-  verdict re-firing every round — and since E1-T12 (ruling 4, D29 (5)) that ladder closes only on
-  data from a market that was stale at the verdict — a rebuilt connection that reports streaming
-  and sends nothing does not reset it, nor do a live third market's ticks — so the
-  verdicts space out 60s → 120 → 240 → 480 → `sessionGraceCap` (10 minutes) instead of re-firing
-  every 90s for the whole silence, as the 2026-08-04 scar's replay showed they did.
+  verdict re-firing every round — and since E1-T12/T13 (ruling 4, D29 (5), amended 2026-10-11) that ladder is time-decayed, never
+  data-reset: a rebuilt connection that reports streaming does not reset it, nor does any tick,
+  candle or snapshot — its grace stands until the grace and a whole `sessionGraceCap` have passed
+  with no verdict — so the
+  verdicts space out 120s → 240 → 480 → `sessionGraceCap` (10 minutes) — the base grace is doubled
+  before it first gates, so a mute session's verdicts fall at 90, 210, 450, 930, 1530, 2130 — instead of
+  re-firing every 90s for the whole silence, as the 2026-08-04 scar's replay showed they did.
 - *Clock-anomaly immunity*: chapter 7's discriminator; anomalous rounds re-baseline every
   stopwatch and return nothing. The contract is a **~1s evaluation cadence** — the freeze
   detector *defines* coarser jumps as anomalies, which is why the tests advance
@@ -135,13 +140,21 @@ stateDiagram-v2
 
 **`StuckSubstateEscalator`** — the 2h56m scar (§3.3): the SDK hung in
 `DISCONNECTED:WILL-RETRY`, which trips no disconnect handler — it had given up without
-saying so. The escalator times the substate on the monotonic clock and declares
-`rebuildDue` past a threshold — **120s for WILL-RETRY, 300s for TRYING-RECOVERY**. The
-asymmetry is informed patience: in TRYING-RECOVERY the server may still complete a
-*lossless replay*, so waiting can win back data; in WILL-RETRY the server has abandoned
-recovery, so every waited second is pure loss. One subtle line: `onStatus` only restarts
-the stopwatch when the substate *changes* — a chattily re-fired identical status must not
-launder the elapsed time.
+saying so. The escalator measures **time-not-streaming** on the monotonic clock — the D27
+one-streaming rule applied here (E1-T13, the re-review's finding 2, ruled 2026-10-11): the
+stopwatch starts at the first status that is not streaming and runs across every non-streaming
+status the connection reports — `CONNECTING`, the `STREAM-SENSING` handshake, `STALLED`, the two
+retry substates — until one streams; a chattily re-fired status, or the SDK's own retry cycle
+`WILL-RETRY → CONNECTING → WILL-RETRY`, cannot launder the elapsed time. It declares
+`rebuildDue` past a threshold set by the retry substate most recently seen — **120s for
+WILL-RETRY, 300s for TRYING-RECOVERY**, and WILL-RETRY's for a connection that never reached
+one (a handshake that hangs at boot). The asymmetry is informed patience: in TRYING-RECOVERY
+the server may still complete a *lossless replay*, so waiting can win back data; in WILL-RETRY
+the server has abandoned recovery, so every waited second is pure loss. Before the ruling the
+escalator timed the *substate*: each `CONNECTING` between retries reset it, the watchdog stands
+down while not streaming, no death is latched and the budget is inert before the first rebuild —
+so a stale endpoint cycling every few seconds, or a boot into a hung handshake, was watched by
+nothing. A bare `DISCONNECTED` clears the stopwatch: the Supervisor's death latch owns that path.
 
 **`BackoffPolicy`** — `base·2^(attempt−1)`, jittered ±50% (injectable `DoubleSupplier`,
 so tests are exact), capped at 60s — then the part IG taught us: a **5s floor on every
@@ -182,6 +195,14 @@ market-shaped → `Quarantine` just it. No witness → session-shaped → `Rebui
 case is the craft: a would-be witness still inside its 30s confirm window returns `Wait` —
 the strike stands and the verdict is held, rendered by `rejudge` the moment that witness confirms
 or its window lapses (E1-T10 #4) — never race a fast rejection into a whole-service rebuild.
+Two held verdicts can render in one sweep (every market rejected — a config-shaped fault): the
+first `Rebuild` resets every held verdict, so the loop stops at the first it cannot find rather
+than treating the rest as a missing record (re-review 4 — the old `requireNonNull` there died the
+sweep thread as `FEED_DEAD{fatal}` and tore down the session it had just re-logged into). And the
+cores consume a verdict as they render it, so a `Rebuild` the pacing floor refuses is latched
+(`pendingRebuild`) and re-asked every sweep until a rebuild runs for any reason (re-review 8) —
+otherwise the rejected market sat unjudged until the watchdog's 90s, and a refused unsubscribe's
+kept leg stayed an orphan on the wire.
 Strikes are per-session attempt counts — a pair's two legs are one strike, and a leg of a pair
 already replaced is none (#8) — so a flapping error code can't reset them;
 quarantine exit is **restart-only** (config-shaped failures don't self-heal); a refused
@@ -243,8 +264,12 @@ each `Status` feeds `ReconnectClassifier` and `StuckSubstateEscalator` (emitting
 this outage was `giveUpAfter` ago and streaming never resumed, give up — checked here, after
 the drain (a queued resume resets it first) and before any detector, so it never depends on
 how often a detector re-fires. Third, the detectors — a latched death first (asked again every sweep until the pacing lets the
-rebuild run, so a refusal that recurs inside the floor still climbs the ladder), then the
-escalator if a rebuild is due, then `checkStaleness()`. Nothing in the pass waits on the database:
+rebuild run, so a refusal that recurs inside the floor still climbs the ladder), a latched verdict next,
+then the escalator if a rebuild is due, then `checkStaleness()`. Every latch is cleared by
+*whichever* rebuild runs, inside `rebuild()` once the pacing check passes — any rebuild supersedes the
+connection a death described and answers every verdict still waiting (re-review 7: a death latched in
+the sweep that rebuilt for a held verdict used to fire a second rebuild against the new, streaming
+session once the floor passed). Nothing in the pass waits on the database:
 event writes go onto a bounded queue that one writer thread drains (`QueuedEventLog`, D29 (3),
 E1-T10 #12) — a full queue refuses the event and the sweep counts the drop, a write Postgres refuses
 is counted by the writer and dropped (`eventWriteFailures`, surfaced by the heartbeat), never
@@ -314,15 +339,16 @@ or strike the new session.
 **The seams, and why they are interfaces.** The shell touches the world through exactly two
 injected ports — `StreamControl` (`rebuild()` / `resubscribe(epic)` / `quarantine(epic)`)
 and `MarketFreshness` (the pulled last-seen clocks) — plus the `onExhausted` hook and an
-injected `Clock` and `Sleeper`. In production `Main` wires `StreamControl` to
+injected `Clock` and `Sleeper`. In production `CaptureAssembly.compose` wires `StreamControl` to
 `IgStreamControl` — the one class that owns the IG session and the Lightstreamer stream,
 over the `IgSessions` and `StreamTransport` seams — and `MarketFreshness` to the pump's
 `Buffers`, which stamps each market's last arrival on the monotonic clock as it queues it.
 The control loop has one back-edge — the stream reports status and subscription outcomes to
-the Supervisor as a `StreamObserver` — and `Main` ties it off with a single `bind()` at the
-composition root. In tests they are fakes — and *that is the point*. Because every effect is
+the Supervisor as a `StreamObserver` — and `CaptureAssembly.compose` ties it off with a single
+`bind()`; `Main`, the composition root, only reads the environment and hands it the ports. In tests
+they are fakes — and *that is the point*. Because every effect is
 a seam and every core takes a `long` clock, `SupervisorTest` drives `sweep()` directly with a
-`FakeClock` and asserts on recorded events and fake rebuild/resubscribe counts: twenty whole
+`FakeClock` and asserts on recorded events and fake rebuild/resubscribe counts: more than forty whole
 outages —
 replayed reconnect, stuck substate, backoff-then-give-up, host-sleep, open-market silence,
 two-markets-together — run as millisecond unit tests with no real sleeps and no sockets. The

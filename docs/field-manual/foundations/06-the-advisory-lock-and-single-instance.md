@@ -58,10 +58,26 @@ if (!result.getBoolean(1)) {
 ```
 
 `Database.dedicatedConnection()` goes straight to `DriverManager` — deliberately around
-Hikari. The class then holds that raw connection as its only field; `close()` closes the
+Hikari. The class then holds that raw connection as its session; `close()` closes the
 session, and closing the session *is* the release. `LOCK_KEY` is a stable, documented
 constant (`0x7472_6462_0001` — "trdb", service #1): one advisory key per service, so a
 future second service takes its own key, not a collision.
+
+**The session can die under you.** A session-scoped lock lives exactly as long as its session —
+and a Postgres restart ends every session, while an idle connection learns nothing until it is
+next asked (keep-alive and `socketTimeout` only bite during a read). The capture sink holds
+through exactly such a restart (D28), so without a second look the process would stream on for the
+rest of its life holding no lock, and a second launch would be let in. Hence `verify()`, called
+from `Main`'s heartbeat loop every 60s (E1-T13, the re-review's finding 1): a live session still
+holds its lock, so liveness (`isValid`) is the whole check — `HELD`; a dead session is closed and a
+fresh one takes the lock again — `REACQUIRED`; a fresh session that is *refused* means another
+instance took the lock while ours was gone, and `verify()` throws the same `IllegalStateException`
+as `acquire` for `Main` to exit loud — whoever holds the lock runs; and a fresh session that cannot
+be opened at all means the database is still down, so nobody can take the lock either —
+`UNVERIFIABLE`, reported and asked again next heartbeat, never an exit (which would drop what the
+sink is holding). The session source is a one-method seam (`SessionSource`,
+`Database::dedicatedConnection` in production) so the database-down case can be tested without
+stopping the container.
 
 Contention is a **try**-lock plus a loud refusal, not a wait. A second instance is a
 config mistake (two terminals, a stray systemd unit), and mistakes should fail with a
@@ -91,6 +107,15 @@ The tests, `SingleInstanceLockTest`, are shaped by the scar below:
 - `closeReleasesTheLockForANewSession` — close the first, acquire with a **new** session.
   This is the test that pins release itself: if `close()` leaked the session (the pooled
   defect), this acquire is refused and the test goes red.
+- `aLockWhoseSessionDiedIsReacquiredOnAFreshSession` — the lock holder's backend is terminated
+  from another session (`pg_terminate_backend` on the pid holding our key in `pg_locks` — what a
+  database restart does to the session, without restarting the container); `verify()` reports
+  `REACQUIRED` and a second launch is refused again.
+- `aLockTakenByAnotherInstanceWhileOurSessionWasDeadIsRefusedLoud` — the same death, but a second
+  `acquire` lands in the gap: `verify()` throws, the newcomer keeps the lock.
+- `aLockUnverifiableWhileTheDatabaseIsDownIsAskedAgainNotAbandoned` — a `SessionSource` that
+  refuses connections while a flag is set: `UNVERIFIABLE` twice, then `REACQUIRED` when it clears.
+- `aHeartbeatOnAHeldLockFindsItHeld` — the ordinary minute: `HELD`, and still exclusive.
 
 ## The scars
 

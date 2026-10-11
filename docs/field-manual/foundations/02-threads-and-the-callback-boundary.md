@@ -39,19 +39,23 @@ published they are safe forever.
 
 ## Our code path
 
-The running capture process is **three threads of ours** — one dormant until Ctrl-C — plus
-the Lightstreamer SDK's own internal pool:
+The running capture process is **six threads of ours** — four working, one dormant until a stop,
+one born only to exit — plus the Lightstreamer SDK's own internal pool:
 
 | Thread | Born where | Does |
 |---|---|---|
-| `main` | JVM | builds the object graph (`app/Main.main`), then becomes the heartbeat loop: sleep 60s, check the pump and the supervisor are alive, publish `capture_status`, log honest counters |
-| `capture-pump` | `Main` (`new Thread(pump, "capture-pump")`) | the single consumer: drains queues into the store — chapter 4 |
-| `capture-shutdown` | JVM shutdown hook | dormant until Ctrl-C, then the orderly close |
+| `main` | JVM | builds the object graph (`app/Main.main` → `CaptureAssembly.compose`), then becomes the heartbeat loop: sleep 60s, check the pump and the supervisor are alive, re-verify the single-instance lock (chapter 6), publish `capture_status`, log honest counters |
+| `capture-pump` | `Main` (`new Thread(capture.pump, "capture-pump")`) | the single consumer: drains queues into the store — chapter 4 |
+| `capture-supervisor` | `Main` | the resilience belt's sweep, every second — the service book's chapter 8 |
+| `capture-events` | `Main` | the Tier-2 event writer: drains the Supervisor's bounded event queue into Postgres, so the sweep never waits on a write (D29 (3)) |
+| `capture-shutdown` | JVM shutdown hook | dormant until a stop, then the orderly close (`CaptureAssembly.shutdown`) |
+| `capture-exit` | `Main.exitLoud`, on a fatal | born only to call `System.exit(1)` off the reporting thread — the hook joins the workers, and a thread parked inside `exit` would never finish its join |
 | LS SDK threads | `LightstreamerClient` (inside `LightstreamerTransport.connect`) | not ours — a small pool the SDK manages; owns the socket and delivers every `onItemUpdate`/`onStatusChange` — the callback boundary |
 
-So at steady state only **two of ours** are doing work — `main` (the heartbeat) and
-`capture-pump` (the consumer); `capture-shutdown` sleeps until Ctrl-C, and the SDK's pool
-delivers the callbacks from the far side of the boundary.
+So at steady state **four of ours** are doing work — `main` (the heartbeat), `capture-pump`
+(the consumer), `capture-supervisor` (the sweep) and `capture-events` (the writer);
+`capture-shutdown` sleeps until a stop, and the SDK's pool delivers the callbacks from the far
+side of the boundary.
 
 The boundary crossing, concretely
 (`market-data-service/src/main/java/dev/amfshr/tradebench/marketdata/ingest/Buffers.java`):
@@ -74,7 +78,7 @@ sequenceDiagram
     P->>B: removeBarNow() — ack, strictly after apply
 ```
 
-Two lifecycle behaviours in `app/Main.java` complete the picture:
+Two lifecycle behaviours in `app/Main.java` and `app/CaptureAssembly.java` complete the picture:
 
 - **Pump death is fatal, loudly** (`Main`'s `onDeath` callback, since E1-T9): if the consumer
   died of a terminal store failure (the pump captures the cause, chapter 4), capture is void from
@@ -82,13 +86,16 @@ Two lifecycle behaviours in `app/Main.java` complete the picture:
   `System.exit(1)`s from its own thread; the heartbeat's `pumpThread.isAlive()` check is the
   backstop. A capture that is silently not persisting is worse than a dead one — P9, fail
   closed and loud. A *blip* is different: the pump holds and retries (chapter 10).
-- **Shutdown order is load-bearing** (`Main`'s shutdown hook): `stream.close()` *first* (stop
-  the faucet), `pump.stop()` and `join(5s)` (drain what's queued — the pump's `run` does a
-  final `drainOnce()` + `flush` after `running` flips), only then `sink.close()`, lock, DB.
-  Reverse any pair and you lose the tail: close the sink first and the drain writes into a
-  closed store; stop the pump first and the still-open stream keeps filling queues nobody
-  drains. And if the pump *doesn't* stop within 5s, the sink is deliberately left open — a
-  close racing a write is worse than a file missing its tail.
+- **Shutdown order is load-bearing** (`CaptureAssembly.shutdown`, run by `Main`'s hook): stop
+  and join the supervisor *first* — it owns the stream handles — then `control.close()` (stop the
+  faucet), then `pump.stop()` and `join(5s)` (the pump's `drainTail`: every queued batch, plus one
+  recovery attempt if the sink is broken), only then `sink.close()`; then the event writer is
+  stopped, joined and its queue drained right there — the sweep's last words, a `FEED_DEAD` among
+  them, must land; and `Main` closes the lock and the database last. Reverse any pair and you lose
+  the tail: close the sink first and the drain writes into a closed store; stop the pump first and
+  the still-open stream keeps filling queues nobody drains. And if the pump *doesn't* stop within
+  5s, the sink is deliberately left open — a close racing a write is worse than a file missing its
+  tail.
 
 This is also why `IgStreamSession` isn't in a try-with-resources block despite the IDE's
 warning: its lifetime is the process's, its close happens on a different thread (the hook)

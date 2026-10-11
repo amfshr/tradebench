@@ -349,9 +349,9 @@ class StalenessWatchdogTest {
 
     @Test
     void aLiveThirdMarketsTicksDoNotCloseTheSessionLadder() {
-        // Ruling 4 with three markets (the T12 review, ruled 2026-10-10): DAX and NASDAQ dead, FTSE
-        // alive through every rebuild. FTSE's ticks say nothing about the dead two, so the ladder
-        // keeps climbing — not a rebuild every ~95s for as long as the two stay silent.
+        // Three markets: DAX and NASDAQ dead, FTSE alive through every rebuild. Data never resets the
+        // session ladder (E1-T13 — only time does), so FTSE's ticks say nothing about the dead two and
+        // the ladder keeps climbing — not a rebuild every ~95s for as long as the two stay silent.
         String ftse = "IX.D.FTSE.DAILY.IP";
         dog.track(NDX, 0);
         dog.track(ftse, 0);
@@ -373,17 +373,130 @@ class StalenessWatchdogTest {
     }
 
     @Test
-    void theSessionLadderClosesOnTheFirstTickAfterARebuild() {
+    void aThinButOpenPairConvergesToOneRebuildPerCap() {
+        // E1-T13 (the re-review's finding 6, ruled 2026-10-11): both markets open and ticking together
+        // every 200s, each tick-bearing minute sealing its candle — so tick-stale for the last 110s of
+        // every gap, never bar-stale. Data does not reset the session ladder; its grace doubles per
+        // verdict to the 10-minute cap, so the pair settles at one rebuild per cap. Derived from the
+        // rule, not the run: a verdict when ≥2 are stale and grace has elapsed since the last; stale =
+        // 90s after the later of the last tick and the last rebaseline (the rebuild).
         dog.track(NDX, 0);
-        runTo(90); // the session verdict
+        List<Long> verdicts = new ArrayList<>();
+        while (clockSecond < 2400) {
+            clockSecond++;
+            if (clockSecond % 200 == 0) {
+                dog.onTick(DAX, clockSecond * S);
+                dog.onTick(NDX, clockSecond * S);
+                dog.onSealedBar(DAX, clockSecond * S);
+                dog.onSealedBar(NDX, clockSecond * S);
+            }
+            for (Remedy r : dog.evaluate(clockSecond * S, clockSecond * 1000)) {
+                assertEquals(Action.REBUILD, r.action());
+                verdicts.add(clockSecond);
+                dog.onConnection(false, clockSecond * S);
+                dog.onConnection(true, clockSecond * S + 1);
+            }
+        }
+        assertEquals(List.of(90L, 290L, 530L, 1090L, 1690L, 2290L), verdicts,
+                "grace 120 → 240 → 480 → 600 (cap) gates the verdicts: 200 apart, then 240, 560, then 600 for good");
+    }
+
+    @Test
+    void aCapOfQuietAfterTheLadderForgetsIt() {
+        // Two verdicts (grace now 240s), then the pair streams healthily for long enough that the grace
+        // and a whole cap have passed since the last verdict: the ladder forgets, and the next outage is
+        // judged at base — its second verdict 120s after its first, not 240.
+        dog.track(NDX, 0);
+        runTo(90);
         dog.onConnection(false, 90 * S);
         dog.onConnection(true, 90 * S + 1);
-        dog.onTick(DAX, 100 * S); // the new session delivers — the episode is over
-        dog.onTick(NDX, 100 * S);
+        runTo(210); // the second verdict, grace → 240
+        dog.onConnection(false, 210 * S);
+        dog.onConnection(true, 210 * S + 1);
+        assertEquals(List.of(90L, 210L), fired.stream().map(Fired::second).toList());
+        while (clockSecond < 1100) { // healthy until 1100: 890s since the verdict ≥ 240 + 600
+            clockSecond++;
+            dog.onTick(DAX, clockSecond * S);
+            dog.onTick(NDX, clockSecond * S);
+            if (clockSecond % 60 == 0) {
+                dog.onSealedBar(DAX, clockSecond * S);
+                dog.onSealedBar(NDX, clockSecond * S);
+            }
+            assertEquals(List.of(), dog.evaluate(clockSecond * S, clockSecond * 1000));
+        }
+        List<Long> next = new ArrayList<>();
+        while (clockSecond < 1400) { // silent again from 1100
+            clockSecond++;
+            for (Remedy r : dog.evaluate(clockSecond * S, clockSecond * 1000)) {
+                next.add(clockSecond);
+                dog.onConnection(false, clockSecond * S);
+                dog.onConnection(true, clockSecond * S + 1);
+            }
+        }
+        assertEquals(List.of(1190L, 1310L), next, "a fresh outage: 90s after the last tick, then the base grace doubled — 120s");
+    }
 
-        runTo(300);
+    @Test
+    void theLadderForgetsExactlyWhenTheGraceAndACapHavePassed() {
+        // The horizon is grace + cap after the verdict, inclusive: one verdict at 90 (grace → 120), then
+        // the pair streams until 720 and both fall silent exactly 90 + 120 + 600 = 810 later than the
+        // verdict's second. At the horizon the rung is forgotten — the outage is judged at base and its
+        // second verdict follows 120 later, not the kept rung's 240.
+        dog.track(NDX, 0);
+        runTo(90);
+        dog.onConnection(false, 90 * S);
+        dog.onConnection(true, 90 * S + 1);
+        assertEquals(List.of(90L), fired.stream().map(Fired::second).toList());
+        while (clockSecond < 720) {
+            clockSecond++;
+            dog.onTick(DAX, clockSecond * S);
+            dog.onTick(NDX, clockSecond * S);
+            if (clockSecond % 60 == 0) {
+                dog.onSealedBar(DAX, clockSecond * S);
+                dog.onSealedBar(NDX, clockSecond * S);
+            }
+            assertEquals(List.of(), dog.evaluate(clockSecond * S, clockSecond * 1000));
+        }
+        List<Long> next = new ArrayList<>();
+        while (clockSecond < 1100) {
+            clockSecond++;
+            for (Remedy r : dog.evaluate(clockSecond * S, clockSecond * 1000)) {
+                next.add(clockSecond);
+                dog.onConnection(false, clockSecond * S);
+                dog.onConnection(true, clockSecond * S + 1);
+            }
+        }
+        assertEquals(List.of(810L, 930L), next, "stale exactly at the horizon: judged at base, the next verdict 120 on");
+    }
 
-        assertEquals(List.of(90L, 190L), fired.stream().map(Fired::second).toList(),
-                "the next silence is a fresh episode, judged 90s after its last tick — not held to the doubled 120s grace");
+    @Test
+    void aMarketsLadderSurvivesTheRebuildItEarned() {
+        // E1-T13 (the re-review's finding 3): DAX dead from 0, NASDAQ alive. Resubscribe at 90 and 210,
+        // REBUILD at 450 (grace now 480s). The rebuilt session streams; DAX is still dead. Its episode
+        // must survive the rebuild it earned, so the next REBUILD waits the doubled grace — 930 — and the
+        // one after that 960 more (1890), not a fresh ladder from base every ~450s.
+        dog.track(NDX, 0);
+        List<Fired> remedies = new ArrayList<>();
+        while (clockSecond < 2000) {
+            clockSecond++;
+            dog.onTick(NDX, clockSecond * S);
+            if (clockSecond % 60 == 0) {
+                dog.onSealedBar(NDX, clockSecond * S);
+            }
+            for (Remedy r : dog.evaluate(clockSecond * S, clockSecond * 1000)) {
+                remedies.add(new Fired(clockSecond, r));
+                if (r.action() == Action.REBUILD) {
+                    dog.onConnection(false, clockSecond * S);
+                    dog.onConnection(true, clockSecond * S + 1);
+                }
+            }
+        }
+        assertEquals(List.of(
+                new Fired(90, new Remedy(DAX, Action.RESUBSCRIBE, Signal.TICK_SILENT)),
+                new Fired(210, new Remedy(DAX, Action.RESUBSCRIBE, Signal.TICK_SILENT)),
+                new Fired(450, new Remedy(DAX, Action.REBUILD, Signal.TICK_SILENT)),
+                new Fired(930, new Remedy(DAX, Action.REBUILD, Signal.TICK_SILENT)),
+                new Fired(1890, new Remedy(DAX, Action.REBUILD, Signal.TICK_SILENT))), remedies,
+                "the per-market ladder keeps doubling across the rebuilds it causes: 480, then 960");
     }
 }

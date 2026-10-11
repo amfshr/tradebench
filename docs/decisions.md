@@ -332,7 +332,9 @@ once, and the console reads a data product built for it — not one worked aroun
 E1-T5 slice B (writes `service_events` v2 + `bar_gaps` + `capture_status`), E1-T6 (writes
 `archives` + `heal_outcome`), E9-T2/T3 (read model + SPA). *Amended 2026-10-10 (E1-T12 ruling 3):
 the catalogue gains `connection_status` (resilience, info) — every raw Lightstreamer status transition as
-the SDK said it — so an outage Tradebench lives through replays with its real connection sequence; the
+the SDK said it, that reaches the Supervisor: a superseded connection's farewell is gated out (D29 (4)), so our
+own record of a rebuild shows no `DISCONNECTED` for the torn-down connection and a replay cut from our rows
+models the teardown — so an outage Tradebench lives through replays with its real connection sequence; the
 classified outcomes (`reconnect`, `connection_dead`, …) were all the record held before.*
 
 ## D26 — Field Manual organised in Parts: a Foundations part + one per subsystem, formed organically — **Accepted** (2026-10-02, Alex)
@@ -375,7 +377,12 @@ rejected configuration (`IgFatalConfigException`, now including `error.security.
 **(3) One streaming rule.** `ReconnectClassifier.isStreaming` — any `CONNECTED:*` substate except the
 `STREAM-SENSING` handshake — is the single definition of "data flowing", shared by the reconnect
 classifier and the health view: a resume onto a polling fallback ends an outage and resets the
-ladder (the degradation is `TRANSPORT_DOWNGRADED`), and the two voices cannot disagree. **Why:** each
+ladder (the degradation is `TRANSPORT_DOWNGRADED`), and the two voices cannot disagree. *Amended
+2026-10-11 (E1-T13 ruling 2, the re-review's finding 2): the rule is the escalator's clock too —
+`StuckSubstateEscalator` measures time-not-streaming, cleared only by a streaming status or a bare
+`DISCONNECTED`, so the retry cycle through `CONNECTING` and a handshake that hangs at boot are watched by
+it; before, each non-retry status reset its substate clock and nothing watched them before the first
+rebuild.* **Why:** each
 was ruled in-ticket (E1 plan T5 §; chapter 10 "The rulings behind it"), but they are contracts other
 work depends on, and G2 says a decision lives in the log, not only in the plan that made it.
 Supersedes the 09-28 nod's "exhaustion = clean exit(0)".
@@ -407,9 +414,16 @@ written best-effort before a terminal exit, so the console learns why capture di
 `Main` exits 1 from its own thread at once — never on a deliberate stop, since an exit from inside
 the shutdown hook would deadlock. **(6) The shared pool's `connectionTimeout` is 5s**
 (`Database.CONNECTION_TIMEOUT`): the heartbeat is held at most 5s per market during an outage and
-`recover()` fails fast into the backoff; no dedicated Tier-2 pool. *Amended 2026-10-10 (E1-T10 #22):
+`recover()` fails fast into the backoff; no dedicated Tier-2 pool (since E1-T13 the same 5s bounds every
+raw connect too, as `connectTimeout` — the lock's heartbeat re-connect included). *Amended 2026-10-10 (E1-T10 #22):
 per heartbeat, not per market — every market's row goes as one batch on one pooled connection.*
-Field Manual ch. 10 "When the database fails" carries the full argument.
+*Amended 2026-10-11 (E1-T13, the re-review's finding 1): the single-instance advisory lock is
+re-verified every heartbeat — its session dies with the restart the sink holds through, and an idle
+connection never learns it. A live session still holds the lock; a dead one is replaced by a fresh
+session that takes it again; a refusal (another instance took it meanwhile) exits loud, the newcomer
+runs; an unreachable database leaves the lock unverifiable — reported and asked again, never an exit,
+since nobody can take the lock from a database that is down and an exit would drop what the sink
+holds.* Field Manual ch. 10 "When the database fails" carries the full argument.
 
 ## D29 — Belt hardening rulings from the PR #14 review: a bounded CLOSED stand-down, a JDBC socket timeout, Tier-2 writes off the sweep thread, the hush retired — **Accepted** (2026-10-05, Alex)
 
@@ -423,8 +437,9 @@ on a closed market — so a server-side zombie cannot hide behind a weekend (fin
 socket timeout.** `socketTimeout` 30s and `tcpKeepAlive` on, on the pool and the lock's dedicated
 connection: a half-open connection must surface as a `PersistenceException` the hold can see, never a
 silent hang; our longest statement is a 500-row batch (finding 7). **(3) Tier-2 writes leave the
-sweep thread.** Service events are handed to a bounded queue drained by one writer thread, drops
-counted in `eventWriteFailures`, so the sweep never blocks on Postgres — a blocked sweep trips the
+sweep thread.** The Supervisor's service events are handed to a bounded queue drained by one writer
+thread, drops counted in `eventWriteFailures`, so the sweep never blocks on Postgres (the pump's and the
+pacer's events are written in place on their own threads, by the E1-T10 design) — a blocked sweep trips the
 process-freeze detector and rebaselines every staleness clock (finding 12). **(4) The `closing()`
 hush is retired.** The generation gate is the §3.6 hush — a torn-down connection's farewell never
 reaches the Supervisor — so `closing()`/`GRACEFUL_CLOSE` are dead code with a data race; deleted,
@@ -439,8 +454,10 @@ review is transient evidence, the docs are the product (framework §4). *Amended
 ruling 4, Alex): **(5) the watchdog's session ladder closes on data, not on the connection.** The replay of
 the 2026-08-04 scar showed a session that answers `CONNECTED:WS-STREAMING` and sends nothing being rebuilt
 every 90s for as long as the silence lasts — the ladder (60s doubling) was reset whenever the rebuilt
-connection reported streaming or the rebaselined markets read non-stale. Now only the first tick after a
-rebuild from a market that was stale at the verdict closes it (a live third market's ticks say nothing
-about the dead two — the T12 review, ruled the same day), and it has its own cap, `Tuning.sessionGraceCap` = 10 minutes (the per-market ladder
+connection reported streaming or the rebaselined markets read non-stale. Now the ladder is
+time-decayed, never data-reset (E1-T13, ruled 2026-10-11 on the re-review's findings 3, 5 and 6, superseding
+the first-tick reset of 2026-10-10/11): a verdict's doubled grace stands until the grace and a whole cap have
+passed with no further verdict, so a thin-but-open pair converges to one rebuild per cap, a sealed candle or a
+subscribe snapshot cannot restart it, and a market's own episode survives the rebuild it earned; and it has its own cap, `Tuning.sessionGraceCap` = 10 minutes (the per-market ladder
 keeps 30): a login every ten minutes at the limit, a recovery that needs a rebuild caught within ten,
 and the belt never gives up a feed that may return.*

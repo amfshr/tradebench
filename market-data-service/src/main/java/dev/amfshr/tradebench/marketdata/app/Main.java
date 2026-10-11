@@ -168,8 +168,30 @@ public final class Main {
                 log(instance, "FATAL: capture supervisor died — resilience is void from here");
                 System.exit(1);
             }
+            if (instanceLock != null) {
+                verifyLock(instance, instanceLock);
+            }
             capture.probe.publish();
             log(instance, capture.summary());
+        }
+    }
+
+    /** The lock's session dies with the database restart the sink holds through (D28); a live
+     * session still holds it, a dead one is replaced, a refusal means another instance took it while
+     * ours was gone — fail closed, the newcomer runs (E1-T13, re-review finding 1). */
+    private static void verifyLock(String instance, SingleInstanceLock lock) {
+        try {
+            switch (lock.verify()) {
+                case HELD -> { }
+                case REACQUIRED -> log(instance, "advisory lock re-acquired on a fresh session — the"
+                        + " database restarted under us and took the old session with it");
+                case UNVERIFIABLE -> log(instance, "advisory lock unverifiable — the database is"
+                        + " unreachable, so nobody can take it either; asking again next heartbeat");
+            }
+        } catch (IllegalStateException refused) {
+            log(instance, "FATAL: " + refused.getMessage()
+                    + " — it was taken while our session was gone");
+            System.exit(1);
         }
     }
 

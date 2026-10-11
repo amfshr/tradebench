@@ -3,7 +3,6 @@ package dev.amfshr.tradebench.marketdata.supervise;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -41,14 +40,12 @@ public final class StalenessWatchdog {
     private long lastRoundWallMillis;
     private boolean baselined;
     private boolean connectionDown;
+    // The session ladder is time-decayed, never data-reset (E1-T13, ruled 2026-10-11, superseding
+    // ruling 4's reset on the first tick): a verdict's doubled grace stands until a cap's worth of
+    // quiet has followed it, so a thin-but-open pair converges to one rebuild per cap and a session
+    // that answers and sends nothing climbs to it — no tick, candle or snapshot restarts it at base.
     private long lastSessionVerdict;
     private long sessionGraceNanos;
-    // The session ladder closes on data, never on a connection that merely says it streams: a
-    // rebuilt session that sends nothing would otherwise reset it every 90s (E1-T12 ruling 4) —
-    // and only data from a market that was stale at the verdict: a live third market's ticks say
-    // nothing about the dead two (the T12 review, ruled 2026-10-10).
-    private boolean fedSinceVerdict;
-    private final Set<String> staleAtVerdict = new HashSet<>();
 
     /** {@code sweepInterval} is the shell's cadence, not a tunable: "stale together" (§3.4) means
      * within one sweep of each other (E1-T10 #33). */
@@ -87,7 +84,6 @@ public final class StalenessWatchdog {
 
     public void forget(String epic) {
         markets.remove(epic);
-        staleAtVerdict.remove(epic);
     }
 
     public void onTick(String epic, long monotonicNanos) {
@@ -96,7 +92,6 @@ public final class StalenessWatchdog {
             return;
         }
         m.lastTick = monotonicNanos;
-        fed(epic);
         if (m.episode != null && m.episode.signal == Signal.TICK_SILENT) {
             // Ticks are back after a silence long enough to have been judged: no candle was owed while
             // they were gone, so the CHART leg's clock restarts with them — else the market is judged
@@ -113,14 +108,7 @@ public final class StalenessWatchdog {
             return;
         }
         m.lastBar = monotonicNanos;
-        fed(epic);
         healIf(m, Signal.BAR_SILENT_TICKS_FLOWING);
-    }
-
-    private void fed(String epic) {
-        if (staleAtVerdict.isEmpty() || staleAtVerdict.contains(epic)) {
-            fedSinceVerdict = true;
-        }
     }
 
     /** The market's latest DLG_FLAG; a closing flag starts (or continues) its stand-down. */
@@ -155,8 +143,10 @@ public final class StalenessWatchdog {
 
     /** The connection's state: down (any retry substate, the handshake, a rebuild in flight) means
      * no verdicts — silence is the connection's, not a market's; streaming again means every
-     * stopwatch and market episode starts afresh, so the new session gets its full window. The
-     * session ladder is not reset here: only data closes it (E1-T12 ruling 4). */
+     * stopwatch starts afresh, so the new session gets its full window. Neither ladder is reset
+     * here: a market's episode survives the rebuild it earned, so its grace keeps doubling instead
+     * of restarting at base every ~450s for as long as the item is dead (the re-review's finding 3,
+     * E1-T13), and heals only on its own kind of data; the session ladder decays by time alone. */
     public void onConnection(boolean streaming, long monotonicNanos) {
         if (!streaming) {
             connectionDown = true;
@@ -165,9 +155,6 @@ public final class StalenessWatchdog {
         if (connectionDown) {
             connectionDown = false;
             rebaseline(monotonicNanos);
-            for (Market m : markets.values()) {
-                m.episode = null;
-            }
         }
     }
 
@@ -190,28 +177,24 @@ public final class StalenessWatchdog {
         if (stale.size() >= 2) {
             // Session-shaped: several markets stale together is never market noise (§3.4).
             // Same storm-guard as per-market episodes: verdicts don't re-fire every round — and
-            // the ladder climbs across rebuilds until data flows, capped at sessionGraceCap, so a
-            // session that answers "streaming" and sends nothing earns a login every 10 minutes,
-            // not every 90s (E1-T12 ruling 4; the playbook's "nothing retries forever" in spirit).
+            // the ladder climbs across rebuilds, capped at sessionGraceCap, so a session that
+            // answers "streaming" and sends nothing earns a login every 10 minutes, not every 90s
+            // (E1-T12 ruling 4; the playbook's "nothing retries forever" in spirit). It forgets only
+            // after its grace and a whole cap have passed with no verdict: a quiet that long says
+            // the outage is over, and the next one starts the ladder at base (E1-T13).
+            long cap = tuning.sessionGraceCap().toNanos();
+            if (sessionGraceNanos != 0 && monotonicNanos - lastSessionVerdict >= sessionGraceNanos + cap) {
+                sessionGraceNanos = 0;
+            }
             if (sessionGraceNanos == 0) {
                 sessionGraceNanos = tuning.watchdogGraceBase().toNanos();
             } else if (monotonicNanos - lastSessionVerdict < sessionGraceNanos) {
                 return List.of();
             }
             lastSessionVerdict = monotonicNanos;
-            fedSinceVerdict = false;
-            staleAtVerdict.clear();
-            for (Map.Entry<String, Signal> e : stale) {
-                staleAtVerdict.add(e.getKey());
-            }
-            sessionGraceNanos = Math.min(sessionGraceNanos * 2,
-                    tuning.sessionGraceCap().toNanos());
+            sessionGraceNanos = Math.min(sessionGraceNanos * 2, cap);
             return List.of(new Remedy(stale.getFirst().getKey(), Action.REBUILD,
                     stale.getFirst().getValue()));
-        }
-        if (fedSinceVerdict) {
-            sessionGraceNanos = 0; // the session delivered to a market that was dead: a new episode next
-            staleAtVerdict.clear();
         }
         List<Remedy> remedies = teachingRemedies(monotonicNanos);
         if (stale.size() == 1 && anotherWithinASweep(stale.getFirst().getKey(), monotonicNanos)) {
