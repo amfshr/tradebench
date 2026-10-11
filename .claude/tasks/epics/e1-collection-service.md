@@ -224,7 +224,9 @@ rebuild at 60, not 180); its rebaseline half at T11 (PR #16, 2026-10-08).**
    from the ruling's ordering, for that reason: the host wakes with the Lightstreamer client stuck in `DISCONNECTED:WILL-RETRY`
    and the escalator rebuilds it, measured in awake time. **Residual 3 is closed, final (2026-10-09).**
 
-## T6 — Daily completeness + archive + digest (D6)
+## T6 — Daily completeness + archive + digest (D6) ⬜ next (unblocked 2026-10-11 by E1-T13's merge, PR #25)
+
+**Type** build · **Branch** — · **Started** — · **Blocked by** —
 
 **Goal:** every trading day ends healed, archived off-box, and reported — or the silence
 itself alarms (P9).
@@ -504,7 +506,7 @@ sweep thread via a bounded queue drained by one writer thread, drops counted in 
 **Slices (Alex's sequencing, 2026-10-08, standing: A1 first with targeted tests — ✅ PR #15 → E1-T11 the harness — ✅ PR #16,
 merged 2026-10-08 → A2 as scenarios on it — ✅ PR #17, merged 2026-10-09 → B as scenarios — ✅ PR #19, merged 2026-10-10 → C,
 the last slice, one PR — ✅ PR #20, merged 2026-10-10; T10 complete → E1-T12 replay acceptance — ✅ PR #23, merged 2026-10-11 → the belt's single cloud re-review, both its gates met — ✅ run 2026-10-11, PASS-WITH-FINDINGS
-(the close-out ruling, below) → E1-T13 the re-review's fixes (🔶 in review — PR #25 open 2026-10-11; T13 §) → E1-T6):**
+(the close-out ruling, below) → E1-T13 the re-review's fixes (✅ PR #25, merged 2026-10-11; T13 §) → E1-T6 — next):**
 
 - **A1 — the two highs, targeted tests, first.** **#1** a quarantined market's twin-leg rejection re-admits it:
   gate `SubscriptionError`s for epics in `quarantinedMarkets` in `Supervisor.sweep()`;
@@ -654,7 +656,7 @@ the merged head (`build` 52s, GitGuardian pass); the local branch deleted. Commi
 · `6e0a82d` (3/4) · `ba7fe45` (4/4) · `3e7ca9a` (the review fixes) · `fb24eb5` (board). The board's Done history carries the
 entry (tagged E1-T10); T5 § residual 3 is closed, final. **Next:** slice B as scenarios on the harness (#6, #20 ×2 — the three
 `@Disabled`; with #7, #12, #15/#16, #17, #24, #30) → C, one PR per slice — the next build work → E1-T12 (✅ PR #23, merged 2026-10-11) → the belt's single cloud
-re-review (✅ run 2026-10-11, PASS-WITH-FINDINGS — the close-out ruling below) → E1-T13 the re-review's fixes → E1-T6.
+re-review (✅ run 2026-10-11, PASS-WITH-FINDINGS — the close-out ruling below) → E1-T13 the re-review's fixes (✅ PR #25, merged 2026-10-11) → E1-T6 — next.
 
 **B — merged (PR #19, 2026-10-10).** **Started 2026-10-09** on `e1-t10-b-sink-and-database-edge` (branched from main at `034a9ea`);
 design nod posted and accepted by Alex 2026-10-09 ("pls proceed with your recommendations"). **Four increments, one PR
@@ -728,7 +730,7 @@ merge 2026-10-09T23:31Z); CI green on the merged head (`build` 48s, GitGuardian 
 board's Done history carries the entry (tagged E1-T10). **Open for Alex:** whether the `boolean recover()` mechanism (review
 finding 3) stands as taken — noted, not a blocker. **Next:** **slice C — the last slice of T10, one PR; T10 closes with it** (#9,
 #10, #22, #25, #26, #28, #31, #32; #27 done at T11; **started 2026-10-10, merged 2026-10-10 — PR #20; the record in "C — merged", below**) → E1-T12 (✅ PR #23, merged 2026-10-11) → the
-belt's single cloud re-review (✅ run 2026-10-11, PASS-WITH-FINDINGS — the close-out ruling below) → E1-T13 the re-review's fixes → E1-T6.
+belt's single cloud re-review (✅ run 2026-10-11, PASS-WITH-FINDINGS — the close-out ruling below) → E1-T13 the re-review's fixes (✅ PR #25, merged 2026-10-11) → E1-T6 — next.
 
 **C — merged (PR #20, 2026-10-10).** **Started 2026-10-10** on `e1-t10-c-loudness-reuse-docs` (branched from main at `897fb99`); design nod posted and accepted by Alex
 2026-10-10 ("okay fab proceed"). **Three increments, one PR for the slice — the last slice of T10; T10 closes with it:** **1 loudness**
@@ -773,7 +775,7 @@ pre-existing test literals (`ig-client` and `market-data-service` tests) and the
 did not add it — surfaced as open for Alex, not a finding; **closed by PR #21 the same day** (merge `5735640`: both ids replaced
 with the synthetic pair `AB12CD`/`AB12CE`; the rule — everything in `.env` is sensitive — now in G1, `27e30d0`; the check's two further hits, the IG login identifier and the instance name, redacted by PR #22, merge `200ca52`). **T10 closes with this merge: every finding
 of the PR #14 review is resolved** (A1 #1, #2 · A2 twelve · B nine — #15 and #16 counted apart, fixed together · T11 two, #23 and #27 · C eight — 33 findings,
-four slices plus the harness). **Next:** E1-T12 (✅ PR #23, merged 2026-10-11) → the belt's single cloud re-review (✅ run 2026-10-11, PASS-WITH-FINDINGS — the close-out ruling below) → E1-T13 the re-review's fixes → E1-T6.
+four slices plus the harness). **Next:** E1-T12 (✅ PR #23, merged 2026-10-11) → the belt's single cloud re-review (✅ run 2026-10-11, PASS-WITH-FINDINGS — the close-out ruling below) → E1-T13 the re-review's fixes (✅ PR #25, merged 2026-10-11) → E1-T6 — next.
 
 **The A2/B backlog on the harness (E1-T11 — merged 2026-10-08, PR #16; written 2026-10-08, the tenth, #4's window-lapse arm, added at T11's
 doctrine review; each verified red for its finding's reason):** the ten `@Disabled` scenarios in `BeltScenariosTest` —
@@ -856,8 +858,8 @@ found sound, letter and risk (the one place a fix answered the letter but opened
 findings 2 and 3). The gate's conditions — findings 1, 3, 4, 5, 7, 8 and the policy-table docs lines in 12 fixed before T6; rulings on
 2 and 6 (with 3 and 5 as one family) — are **E1-T13** (T13 §, below; ruled 2026-10-11, Alex: "proceed with your recommendations… make
 the ticket and do the fixes"; both rulings taken as recommended and recorded there); the deferred findings are backlog B11–B15. PR #24
-closed 2026-10-11 and its two branches deleted once the record was saved. **Sequencing stands as T13 before T6:** the re-review is a
-pass with conditions, and T6 starts on T13's merge.
+closed 2026-10-11 and its two branches deleted once the record was saved. **Sequencing stood as T13 before T6:** the re-review is a
+pass with conditions, and T6 starts on T13's merge — **E1-T13 ✅ merged 2026-10-11 (PR #25, merge `287e14e`); T6 is next.**
 
 ## T11 — The belt's scenario harness ✅ (PR #16, 2026-10-08 — complete; ticketed 2026-10-05, started 2026-10-08, design nod ruled 2026-10-08)
 
@@ -1330,15 +1332,15 @@ history carries the entry (tagged E1-T12). **T12 ✅ complete 2026-10-11.**
 merged 2026-10-09) → T10 B as scenarios (✅ PR #19, merged 2026-10-10) → T10 C (✅ PR #20, merged 2026-10-10 — T10 ✅ complete) → **T12 (✅ PR #23, merged 2026-10-11 — T12 ✅ complete)** → **the belt's single cloud re-review — ✅ run 2026-10-11, PASS-WITH-FINDINGS**: both its gates were met
 (T10 § close-out ruling — every T10 finding resolved, T12's replay acceptance green and merged; Alex's 2026-10-09 clarification named only T10 — T12 before the re-review confirmed by Alex 2026-10-10);
 a review-only PR with base pinned at `ee35f9b` and head = main, as PR #14 was — draft **PR #24** (`review/belt-after-t12` → `review-base/ee35f9b`; closed 2026-10-11, branches deleted); the brief at `.claude/reviews/2026-10-11-belt-re-review-brief.md`; Alex ran `/code-review ultra 24` in the cloud review session; the record `.claude/reviews/2026-10-11-belt-re-review.md` — 20 findings, the 33 fixes re-traced and found sound; its ruling on the ladder family (T13 § ruling 1: the session ladder is time-decayed, not data-reset) supersedes this ticket's ruling 4 and its 2026-10-11 refinement
-→ **E1-T13 the re-review's fixes (🔶 in review — PR #25 open 2026-10-11, awaiting merge — the gate's conditions; T13 §)** → T6 (starts on T13's merge).
+→ **E1-T13 the re-review's fixes (✅ PR #25, merged 2026-10-11 — the gate's conditions; T13 §)** → **T6 (next)**.
 
 **Cross-references:** G1 (market data only — never strategy content) · P8 · E1-T6 (the heal consumes these
 bar-gap windows) · E1-T8 (the live-tier acceptance this does not replace) · Field Manual ch. 10 ·
 `ig-client/build.gradle.kts` (the `demoSmoke` gating pattern).
 
-## T13 — The re-review's fixes: the ladder family, the Supervisor's latent paths, the lock across a held outage 🔶 (ticketed 2026-10-11; started 2026-10-11; in review — PR #25 open 2026-10-11, awaiting Alex's merge)
+## T13 — The re-review's fixes: the ladder family, the Supervisor's latent paths, the lock across a held outage ✅ (ticketed 2026-10-11; started 2026-10-11; done 2026-10-11 — PR #25, merged by Alex, merge `287e14e` — complete)
 
-**Type** build · **Branch** `e1-t13-re-review-fixes` (cut from main `45ffb46`, 2026-10-11; PR #25 → `main`, open 2026-10-11) · **Started** 2026-10-11 · **Blocked by** —
+**Type** build · **Branch** `e1-t13-re-review-fixes` (cut from main `45ffb46`, 2026-10-11; merged from it, PR #25 → `main`, 2026-10-11 — branch deleted) · **Started** 2026-10-11 · **Blocked by** —
 
 **Goal:** every finding the belt's cloud re-review says must be fixed before E1-T6, fixed — each with an executed exposing
 test and a killed mutation, the evidence the review could only trace — and the two rulings the review needed, taken as Claude
@@ -1421,8 +1423,16 @@ moot once increment 1 lands. 20 (i) — the G1 note on PR #24's own diff page �
 supplies the executed evidence); the two rulings recorded (D29 (5) amended; D27/D28 touched where named); `./gradlew build` and the
 acceptance lane green; doctrine review before the PR; T6 may start on the merge.
 
-**Built — 🔶 in review, PR #25 open 2026-10-11 (`e1-t13-re-review-fixes` → `main`; GitHub stamps 16:16Z; CI green on the head —
-`build`, `web`, GitGuardian), awaiting Alex's merge; not ✅ until he merges, and T6 starts on the merge.** Commits on the branch, in
+**DoD — met at the merge (2026-10-11):** ✅ every finding fixed with its exposing test and a killed mutation — 17 mutations (① 3 · ② 4 ·
+③ 6 · ⑤ 4), each listed in its commit message with the tests it turned red, restores byte-identical · ✅ the two rulings recorded — D29 (5)
+amended (ruling 1), D27 (3) amended (ruling 2, `4a44188`); D28 amended (the lock across a held outage; (6) for `connectTimeout`), D25's
+amendment trued (④) · ✅ `./gradlew build` green, 372 tests (main 353 → +19); the acceptance lane `replayAcceptance` 6/6; docs site 65/65 ·
+✅ doctrine review before the PR (2026-10-11, pass-with-findings — eight, none blocking, fixed on-branch in ⑤) · ✅ CI green on the PR
+head (`build`, `web`, GitGuardian) · T6 starts now.
+
+**Merged — ✅ done 2026-10-11: PR #25 (`e1-t13-re-review-fixes` → `main`; opened 2026-10-11, GitHub stamps 16:16Z; merged by Alex,
+GitHub stamps the merge 17:41Z — merge `287e14e`; CI green on the PR head — `build`, `web`, GitGuardian; the branch deleted); T6 starts
+now.** Commits as merged, in
 order: `319b52c` **①** the ladder family (findings 3, 5, 16; ruling 1 closes 6 — `StalenessWatchdog`'s session grace decays on time,
 `fedSinceVerdict`/`staleAtVerdict`/`fed()` gone; `onConnection(true)` rebaselines the stopwatches but keeps each market's episode;
 scenario: a dead market's ladder climbs across the rebuild it earned, connects 0, 509, 989) · `e46f5cd` board (the ticket) ·
@@ -1433,7 +1443,7 @@ clock and the lock (2, 1 — `StuckSubstateEscalator` measures time-not-streamin
 `DISCONNECTED`, the threshold following the last retry substate seen; scenarios: the retry cycle through `CONNECTING` → connects
 0, 130, 254, a boot into `STREAM-SENSING` → 0, 120; `SingleInstanceLock.verify()` as built above, four Testcontainers tests) ·
 `9ecea0a` **④** docs (12 (a)–(j), 20 (g) — the chapters, D25's amendment and the two `rebuild()` javadocs true to the code) ·
-`4a44188` D27 (3) amended for ruling 2 · `a276b62` **⑤** the doctrine review's findings. **Doctrine review (in-session agent,
+`4a44188` D27 (3) amended for ruling 2 · `a276b62` **⑤** the doctrine review's findings · `a103050` board (the record at PR). **Doctrine review (in-session agent,
 2026-10-11): pass-with-findings — eight, none blocking, G1 leak check clean**; fixed on-branch in ⑤: (1) the escalator threshold
 pinned in its other direction (TRYING-RECOVERY → WILL-RETRY shortens to 120); (2) the ladder's decay horizon pinned at exact equality
 (stale exactly at grace + cap → judged at base, the next verdict 120 on); (3) the rejudge loop's `|| gaveUp` guard tested — it is
@@ -1447,16 +1457,16 @@ six threads; (8) two comment nits. Also added: a console line when a paced-out v
 standings plus the refusal are tested on a real Postgres) — is backlog **B15**: a testable `heartbeat()` on `CaptureAssembly` taking
 the lock as a port, to ride E1-T7. **Evidence:** every behavioural test mutation-verified (applied → red → restored byte-identical) —
 ① 3 · ② 4 · ③ 6 · ⑤ 4 mutations listed in the commit messages, each with the tests it turned red; `./gradlew build` green, 372 tests
-(main 353 → +19); `replayAcceptance` 6/6 on the branch after ③; docs site 65/65 (the PR body's figures, 2026-10-11). **For Alex at
-the merge:** the one in-ticket policy choice — UNVERIFIABLE continues rather than exits while the database is down (nobody can take
-the lock from a down database; an exit would drop what the sink holds) — is logged in D28's 2026-10-11 amendment and is worth his
-conscious acceptance.
+(main 353 → +19); `replayAcceptance` 6/6 on the branch after ③; docs site 65/65 (the PR body's figures, 2026-10-11). **Accepted by the
+merge (Alex, 2026-10-11):** the one in-ticket policy choice — UNVERIFIABLE continues rather than exits while the database is down (nobody can take
+the lock from a down database; an exit would drop what the sink holds) — logged in D28's 2026-10-11 amendment and flagged for his
+conscious acceptance at the merge; he merged with it.
 
 **Estimate:** ≈ one session, possibly two — the lock test (a database restart under Testcontainers) and the escalator scenarios are
-the larger pieces. *Actual: one session — ticketed, built, reviewed and PR'd 2026-10-11.*
+the larger pieces. *Actual: one session — ticketed, built, reviewed, PR'd and merged 2026-10-11.*
 
 **Sequencing:** T12 (✅ PR #23, merged 2026-10-11) → the belt's single cloud re-review (✅ run 2026-10-11, PASS-WITH-FINDINGS) →
-**T13 — 🔶 in review, PR #25 open 2026-10-11, awaiting Alex's merge** → E1-T6 (starts on T13's merge).
+**T13 — ✅ merged 2026-10-11, PR #25 (merge `287e14e`)** → **E1-T6 (next)**.
 
 **Cross-references:** `.claude/reviews/2026-10-11-belt-re-review.md` (the findings; the source of truth) ·
 `.claude/reviews/2026-10-11-belt-re-review-brief.md` (what was asked) · D27 (3) (the one-streaming rule, now the escalator's clock
