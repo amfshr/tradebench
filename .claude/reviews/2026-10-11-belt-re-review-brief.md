@@ -16,7 +16,7 @@ redone). Say it in one line at the top of the report.
 
 ## The range
 
-`ee35f9b` → `main` (`5c62dd6` and after): 169 files, +25,788 / −749, eleven merged PRs —
+`ee35f9b` → `main` (`d8ca9de`, which includes this brief): 170 files, +25,912 / −749, eleven merged PRs —
 
 | PR | What | Merged |
 |---|---|---|
