@@ -1,7 +1,7 @@
 # Review brief — the resilience belt, re-reviewed after E1-T10, E1-T11 and E1-T12
 
 **Review only. Do not merge.** This PR exists to give one independent multi-agent review
-(`/code-review ultra <this PR's number>`) a single diff that spans the whole belt and everything done
+(`/code-review ultra 24` — this is PR #24) a single diff that spans the whole belt and everything done
 to it since the first review. Its base is `review-base/ee35f9b` — `main` just before the belt's first
 PR merged — and its head is `review/belt-after-t12`, a copy of `main` on 2026-10-11. Everything in it is
 already merged. The PR is a draft so it cannot be merged; close it and delete both branches once the
