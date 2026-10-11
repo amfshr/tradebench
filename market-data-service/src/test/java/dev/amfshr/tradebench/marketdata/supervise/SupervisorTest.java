@@ -435,6 +435,90 @@ class SupervisorTest {
     }
 
     @Test
+    void twoHeldVerdictsRenderedTogetherAreOneRebuildNotACrash() {
+        // Re-review 4: every watched market rejected (config-shaped — the wrong account type, a
+        // mistyped epic list). Each verdict waits on the other's window; both lapse in one sweep and
+        // render together. The first Rebuild resets every held verdict, so the second finds nothing
+        // left to render — never a missing record that kills the sweep thread as FEED_DEAD{fatal}.
+        supervisor.watch(DAX);
+        supervisor.watch(NASDAQ);
+        failToTheStrikeCeiling(DAX);
+        failToTheStrikeCeiling(NASDAQ);
+        supervisor.sweep();
+        assertEquals(0, stream.rebuilds, "both held: each is the other's would-be witness");
+
+        advanceAndSweep(Duration.ofSeconds(35)); // both windows lapse before one sweep
+
+        assertEquals(1, stream.rebuilds, "one session-shaped rebuild for the pair");
+        assertEquals(1, count(EventType.SUBSCRIPTION_REJECTED), "one reason row, for the rebuild that ran");
+        assertEquals(0, count(EventType.FEED_DEAD), "a verdict, never a crash");
+    }
+
+    @Test
+    void aDeathLatchedInTheSweepThatRebuildsForAnotherReasonIsServicedByThatRebuild() {
+        // Re-review 7: the old connection reports a bare DISCONNECTED in the sweep that renders a held
+        // verdict. The verdict's rebuild supersedes the connection the death described; the latch must
+        // not fire a second rebuild — against a session that is streaming — once pacing passes.
+        supervisor.watch(DAX);
+        supervisor.watch(NASDAQ); // unconfirmed: DAX's verdict waits on NASDAQ's window
+        failToTheStrikeCeiling(DAX);
+        supervisor.sweep();
+        advanceAndSweep(Duration.ofSeconds(25));
+        supervisor.onStatusChange(stream.generation, "DISCONNECTED"); // the old connection dies as the window lapses
+        clock.advance(Duration.ofSeconds(6));
+        supervisor.sweep();
+        assertEquals(1, stream.rebuilds, "the held verdict's rebuild ran");
+
+        supervisor.onStatusChange(stream.generation, STREAMING); // the new session streams inside the floor
+        supervisor.sweep();
+
+        assertEquals(1, stream.rebuilds, "the death was serviced by the rebuild that ran — no second");
+        assertEquals(0, count(EventType.CONNECTION_DEAD), "no reason row for a rebuild that did not happen");
+    }
+
+    @Test
+    void aRebuildVerdictPacedOutIsReAskedUntilItRuns() {
+        // Re-review 8: the cores consume a verdict as they render it, so a Rebuild the pacing floor
+        // refuses must be latched and re-asked each sweep, as a latched death is — or the rejected
+        // market sits unjudged until the watchdog's 90s (in STREAM-SENSING, the 10-minute budget).
+        supervisor.watch(DAX);
+        failToTheStrikeCeiling(DAX);
+        supervisor.sweep();
+        assertEquals(1, stream.rebuilds);
+
+        failToTheStrikeCeiling(DAX); // the new session rejects it again, inside the 5s floor
+        supervisor.sweep();
+        assertEquals(1, stream.rebuilds, "paced out: the floor stands");
+
+        advanceAndSweep(Duration.ofSeconds(6));
+
+        assertEquals(2, stream.rebuilds, "re-asked once the floor passed, not dropped");
+        assertEquals(2, count(EventType.SUBSCRIPTION_REJECTED), "the reason row is written when the rebuild runs");
+    }
+
+    @Test
+    void aRefusedUnsubscribePacedOutStillRebuildsOnceTheFloorPasses() {
+        // Re-review 8's worse residue: quarantineMarket has already forgotten the market and dropped
+        // the leg it could; a dropped Rebuild would leave the kept leg an orphan on the wire.
+        stream.quarantineRefused = true;
+        supervisor.watch(DAX);
+        supervisor.watch(NASDAQ);
+        supervisor.onStatusChange(stream.generation, "DISCONNECTED");
+        supervisor.sweep(); // the latched death: rebuild #1
+        assertEquals(1, stream.rebuilds);
+        supervisor.onSubscribed(stream.generation, NASDAQ, WitnessQuarantine.Kind.PRICE); // the witness confirms
+        supervisor.onSubscribed(stream.generation, NASDAQ, WitnessQuarantine.Kind.CHART);
+        failToTheStrikeCeiling(DAX); // quarantine → unsubscribe refused → Rebuild, inside the floor
+        supervisor.sweep();
+        assertEquals(List.of(DAX), stream.quarantined);
+        assertEquals(1, stream.rebuilds, "paced out");
+
+        advanceAndSweep(Duration.ofSeconds(6));
+
+        assertEquals(2, stream.rebuilds, "a refused unsubscribe always rebuilds — once the floor passes");
+    }
+
+    @Test
     void aRefusedUnsubscribeOnQuarantineForcesARebuild() {
         stream.quarantineRefused = true;
         supervisor.watch(DAX);

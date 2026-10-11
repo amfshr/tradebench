@@ -470,6 +470,30 @@ class BeltScenariosTest {
     }
 
     @Test
+    void everyMarketRejectedIsOneSessionShapedRebuildPerWindowNotACrash() throws Exception {
+        // Re-review 4: a config-shaped fault — every watched market rejected on every attempt. Each
+        // market's verdict waits on the other's 30s window; both lapse in one sweep and render
+        // together. One rebuild per lapse, the ladder left to end it — never FEED_DEAD{fatal} from
+        // the second verdict finding its record already reset by the first's rebuild. The cadence:
+        // the window is re-stamped by the second strike's retry and lapses 30s after it. Boot's
+        // strikes land at 0, 1, 2 (the first rejection is applied by the sweep that saw it), so the
+        // first lapse is at 31; a rebuild's first rejection is applied a sweep after it, so each
+        // later lapse is 32 on from the rebuild — 31, 63, 95.
+        Scenario allBad = Scenario.named("every market rejected").markets(DAX, NASDAQ)
+                .serverRejects(DAX, 40).serverRejects(NASDAQ, 40)
+                .at(s(0), streaming())
+                .until(s(120)).build();
+
+        Observed o = ScenarioRunner.run(allBad);
+
+        assertEquals(List.of(0L, 31L, 63L, 95L), o.secondsOf("connect"),
+                "one session-shaped rebuild each time the pair's windows lapse");
+        assertTrue(o.events(EventType.FEED_DEAD).isEmpty(), "a verdict, never a crash");
+        assertTrue(o.exits.isEmpty());
+        assertEquals(3, o.events(EventType.SUBSCRIPTION_REJECTED).size(), "one reason row per rebuild that ran");
+    }
+
+    @Test
     void aMarketWhoseBothLegsAreRejectedGetsItsTwoSurgicalRetries() throws Exception {
         // §3.5: initial subscribe + two surgical retries, a fresh pair each time. The server refuses
         // DAX outright, so both legs are rejected per attempt; that is one strike, not two. Each

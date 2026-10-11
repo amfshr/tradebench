@@ -185,6 +185,14 @@ market-shaped → `Quarantine` just it. No witness → session-shaped → `Rebui
 case is the craft: a would-be witness still inside its 30s confirm window returns `Wait` —
 the strike stands and the verdict is held, rendered by `rejudge` the moment that witness confirms
 or its window lapses (E1-T10 #4) — never race a fast rejection into a whole-service rebuild.
+Two held verdicts can render in one sweep (every market rejected — a config-shaped fault): the
+first `Rebuild` resets every held verdict, so the loop stops at the first it cannot find rather
+than treating the rest as a missing record (re-review 4 — the old `requireNonNull` there died the
+sweep thread as `FEED_DEAD{fatal}` and tore down the session it had just re-logged into). And the
+cores consume a verdict as they render it, so a `Rebuild` the pacing floor refuses is latched
+(`pendingRebuild`) and re-asked every sweep until a rebuild runs for any reason (re-review 8) —
+otherwise the rejected market sat unjudged until the watchdog's 90s, and a refused unsubscribe's
+kept leg stayed an orphan on the wire.
 Strikes are per-session attempt counts — a pair's two legs are one strike, and a leg of a pair
 already replaced is none (#8) — so a flapping error code can't reset them;
 quarantine exit is **restart-only** (config-shaped failures don't self-heal); a refused
@@ -246,8 +254,12 @@ each `Status` feeds `ReconnectClassifier` and `StuckSubstateEscalator` (emitting
 this outage was `giveUpAfter` ago and streaming never resumed, give up — checked here, after
 the drain (a queued resume resets it first) and before any detector, so it never depends on
 how often a detector re-fires. Third, the detectors — a latched death first (asked again every sweep until the pacing lets the
-rebuild run, so a refusal that recurs inside the floor still climbs the ladder), then the
-escalator if a rebuild is due, then `checkStaleness()`. Nothing in the pass waits on the database:
+rebuild run, so a refusal that recurs inside the floor still climbs the ladder), a latched verdict next,
+then the escalator if a rebuild is due, then `checkStaleness()`. Every latch is cleared by
+*whichever* rebuild runs, inside `rebuild()` once the pacing check passes — any rebuild supersedes the
+connection a death described and answers every verdict still waiting (re-review 7: a death latched in
+the sweep that rebuilt for a held verdict used to fire a second rebuild against the new, streaming
+session once the floor passed). Nothing in the pass waits on the database:
 event writes go onto a bounded queue that one writer thread drains (`QueuedEventLog`, D29 (3),
 E1-T10 #12) — a full queue refuses the event and the sweep counts the drop, a write Postgres refuses
 is counted by the writer and dropped (`eventWriteFailures`, surfaced by the heartbeat), never
