@@ -836,8 +836,20 @@ every finding is resolved, so the re-review is now gated only on E1-T12 — T12 
 confirmation; a pass gates E1-T6. **Both gates met (2026-10-11):** T10 complete 2026-10-10 (PR #20) and E1-T12's replay acceptance
 green and merged 2026-10-11 (PR #23, merge `9bae528`; the acceptance lane 6/6, `ReplayAcceptanceTest` through Testcontainers) — the
 re-review can run: a review-only PR, base pinned at `ee35f9b`, head = main, as PR #14 was, carrying T10, T11 and T12; Alex runs it
-with the cloud review session; a pass gates E1-T6. Whether Claude opens that review-only PR now is Alex's call (asked 2026-10-11) —
-not opened as of this record.
+with the cloud review session; a pass gates E1-T6. **Opened 2026-10-11 as draft PR #24** (Alex's ask the same day: "prepare a
+review branch which is read only, and prepare a statement task for cloud code"): `review/belt-after-t12`, a copy of `main` at
+`d8ca9de` → `review-base/ee35f9b`, pinned at `ee35f9b` as PR #14's base was; titled "REVIEW ONLY — the resilience belt after
+E1-T10, T11 and T12 — do not merge"; a draft, so it cannot be merged; 170 files, +25,912 / −749, eleven merged PRs (#11–#13,
+#15–#17, #19–#23). **The brief** — the task statement for the cloud review session — is the PR's body and lives at
+`.claude/reviews/2026-10-11-belt-re-review-brief.md` (`d8ca9de`; the PR number filled in at `d9332ae`): the range; the record to
+review against (the first review's 33 findings and their fixes, D25/D27/D28/D29 (1–5), the T12 nod, chapters 04/05/08/10); what to
+look at hardest first (the 33 fixes re-verified, the harness as an instrument, the replays and what they prove, the new policy's
+consequences, concurrency/failure/queue contracts, G1 including the `.env` leak check, docs truth); the known/open items not to
+re-raise (B's `boolean recover()`, B10, the accepted boot-into-quiet-pair rebuild, the two dropped fixture families, the
+`tradebench` exporter unexercised in anger, the lane not a required check); how to run things; and what to hand back — ranked
+findings in the first review's shape plus a one-line gate verdict PASS / PASS-WITH-FINDINGS / FAIL. Alex runs `/code-review ultra 24`
+in the cloud review session; the local session saves the result as `.claude/reviews/2026-10-11-belt-re-review.md` and triages it
+(Alex rules). Not yet run as of this record.
 
 ## T11 — The belt's scenario harness ✅ (PR #16, 2026-10-08 — complete; ticketed 2026-10-05, started 2026-10-08, design nod ruled 2026-10-08)
 
@@ -1039,7 +1051,9 @@ is on main (PR #16, merged 2026-10-08); **T10 A2 is on main (PR #17, merged 2026
 (#3 · #4 ×2 · #5 ×2 · #8 · #33), the host-suspend-then-stuck variant and the ruling-3 rename built; **T10 B is on main (PR #19, merged 2026-10-10)** — its three
 scenarios switched on here (#6 · #20 ×2), none `@Disabled` remain; **T10 C is on main (PR #20, merged 2026-10-10) — T10 ✅ complete, every finding resolved**. **E1-T12 is on main (PR #23, merged 2026-10-11) — T12 ✅ complete**, unblocked by this merge. Next: the belt's single cloud
 re-review, both its gates met (T10 § close-out ruling; Alex's 2026-10-09 clarification named only T10; T12 before the re-review
-confirmed by Alex 2026-10-10 — "part C, then T12, then review") → E1-T6 (a re-review pass gates it).
+confirmed by Alex 2026-10-10 — "part C, then T12, then review") — opened 2026-10-11 as draft **PR #24** (`review/belt-after-t12` →
+`review-base/ee35f9b`); the brief at `.claude/reviews/2026-10-11-belt-re-review-brief.md`; Alex runs `/code-review ultra 24` →
+E1-T6 (a re-review pass gates it).
 
 **DoD (met at the merge, 2026-10-08; residual 3 closed in its rebaseline half here and in its rebuild half at T10 A2, PR #17,
 2026-10-09 — ruled 2026-10-08, see "Closed" above; residual 3 final; wording kept as written):** the nine policy scenarios run deterministically with no real waiting, the scar replay as scenario ten
@@ -1307,7 +1321,7 @@ history carries the entry (tagged E1-T12). **T12 ✅ complete 2026-10-11.**
 **Sequencing (Alex, 2026-10-08, standing):** T11 (✅ PR #16, merged 2026-10-08) → T10 A2 as scenarios (✅ PR #17,
 merged 2026-10-09) → T10 B as scenarios (✅ PR #19, merged 2026-10-10) → T10 C (✅ PR #20, merged 2026-10-10 — T10 ✅ complete) → **T12 (✅ PR #23, merged 2026-10-11 — T12 ✅ complete)** → **the belt's single cloud re-review — next**: both its gates are met
 (T10 § close-out ruling — every T10 finding resolved, T12's replay acceptance green and merged; Alex's 2026-10-09 clarification named only T10 — T12 before the re-review confirmed by Alex 2026-10-10);
-a review-only PR with base pinned at `ee35f9b` and head = main, as PR #14 was; Alex runs it with the cloud review session; whether Claude opens that PR now is Alex's call (asked 2026-10-11)
+a review-only PR with base pinned at `ee35f9b` and head = main, as PR #14 was — opened 2026-10-11 as draft **PR #24** (`review/belt-after-t12` → `review-base/ee35f9b`); the brief at `.claude/reviews/2026-10-11-belt-re-review-brief.md`; Alex runs `/code-review ultra 24` in the cloud review session
 → T6 (a re-review pass gates T6).
 
 **Cross-references:** G1 (market data only — never strategy content) · P8 · E1-T6 (the heal consumes these
