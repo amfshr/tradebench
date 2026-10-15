@@ -112,9 +112,11 @@ Tags on every metric: `instance`, `market` (epic). **Counters:** `capture.ticks.
 
 - **DB (SPA, v1):** current status (`capture_status`), coverage map, gaps, catalogue, event
   log, downloads.
-- **Prometheus/Grafana (additive, later):** time-series trends + alerting rules.
-- **healthchecks.io (v1):** heartbeat absence-alarm — the serious-tier "box down" without
-  Prometheus.
+- **Operational telemetry (D33, 2026-10-15):** structured JSON logs and these metrics leave every
+  JVM through the OpenTelemetry Java agent over OTLP to Grafana Cloud's free tier, wired at E1-T7;
+  the admin area links out to Grafana. (Supersedes "Prometheus/Grafana additive, later".)
+- **healthchecks.io (v1, D33):** the dead-man ping — one outbound GET per heartbeat from the
+  collector — the serious-tier "box down" for the deaths that leave no row.
 
 ## Scheduling — the three clocks (R4)
 

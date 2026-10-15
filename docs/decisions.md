@@ -57,7 +57,10 @@ the middle step if persistent cron scheduling is ever needed; Batch is not on th
 *Amended 2026-10-11 (D30): the digest leaves this job. The EOD cycle is heal → Parquet archive, each
 run writing its audited `job_runs` row; the digest email and every alert belong to the operator
 console (E9), which reads those rows. Until E9 is deployed there is no email: the `job_runs` rows
-and the heartbeat are checked by hand each evening (Alex's ruling).*
+and the heartbeat are checked by hand each evening (Alex's ruling).* *Amended 2026-10-15 (D31 session,
+R7): "a plain scheduled task" means a plain scheduled executor inside the collector's own process —
+no Spring in the collector; `@Scheduled` was the wording, never the requirement. Spring's earning
+moment is `control-service` (D31).*
 
 ## D7 — One DSL grammar; declarative; predicates are boolean indicators — **Accepted** (2026-09-27)
 
@@ -310,6 +313,11 @@ E9** (Operator Console / Market Data Manager v0); its **T1** designs the event/m
 model, which feeds E1-T5 slice B before the event log is built. (Design session
 `docs/design/sessions/2026-09-30-collection-service-operability.md`.)
 
+*Amended 2026-10-15 (D31): the console is not a separate app — it is the role-gated admin area of the one
+platform front end (`web/platform`), and its backend is `control-service`, the platform's control plane;
+R5's command plane is confirmed and shaped by D32 (notify, then fetch). Edge gating, the outbound-only
+collector and mTLS-reserved-for-machines stand.*
+
 ## D25 — Observability & data model: `service_events` v2, `capture_status`, `bar_gaps`, `archives`; metrics/Grafana split; generous window + expected calendar — **Accepted** (2026-09-30, Alex)
 
 The collection service's self-record and the Operator Console's read model, ruled at E9-T1
@@ -340,6 +348,10 @@ the SDK said it, that reaches the Supervisor: a superseded connection's farewell
 own record of a rebuild shows no `DISCONNECTED` for the torn-down connection and a replay cut from our rows
 models the teardown — so an outage Tradebench lives through replays with its real connection sequence; the
 classified outcomes (`reconnect`, `connection_dead`, …) were all the record held before.*
+
+*Amended 2026-10-15 (D33): the "Prometheus/Grafana additive, later" line becomes operational telemetry
+over OpenTelemetry to Grafana Cloud's free tier, wired at E1-T7; the healthchecks.io dead-man ping is sent
+by the collector's heartbeat (D30 clarified). Domain truth stays in the rows.*
 
 ## D26 — Field Manual organised in Parts: a Foundations part + one per subsystem, formed organically — **Accepted** (2026-10-02, Alex)
 
@@ -488,3 +500,63 @@ alternative, a thin reporter pulled forward before E9, was declined: it would wi
 service's scope, and the sooner E9 is up the better. Supersedes the PRD's placement of the digest in
 the EOD job (§ "capture digest … the absence of the daily email is itself the alarm") and D6's third
 phase; E1-T6 is re-scoped to heal + archive; E9 gains the digest and alerts.
+*Clarified 2026-10-15 (D33, R8–R9): two outbound signals are not reporting and stay in the collector —
+operational telemetry (logs and metrics over OpenTelemetry) and the one-GET-per-heartbeat dead-man
+ping to healthchecks.io, a liveness signal for the deaths that leave no row.*
+
+## D31 — The platform app and its control plane: one front end, `control-service`, vertical slices — **Accepted** (2026-10-15, Alex)
+
+One platform front end, `web/platform` (D18), serves every platform page; the operator console is
+its role-gated admin area, not a separate app. Behind it sits one Spring Boot service,
+**`control-service`** — the platform's *control plane* to `market-data-service`'s *data plane*: it owns
+the `control` database (users, roles, jobs, settings), holds the read model over `market_data`
+(read-only credentials, D17), sends the digest and alerts (D30), and later carries the control actions
+and the kill switches execution needs. Spring's earning moment is here and nowhere else. E9 builds it
+in **vertical slices** (the health view end to end first), never a backend without the page that
+consumes it. D17 stands — one database per service, a strategy or backtest service brings its own —
+with one refinement: a bounded context that will plausibly become its own service (saved strategies,
+DSL indicators, backtest runs) gets its own database from birth, owned by `control-service` until the
+split, so the split is a credential change, not a data migration. The platform tier's owner — the
+user the deployed collector persists as — is named **`platform`** (renamed from `default-user` before
+the first production rows; `TRADEBENCH_USER` names it per instance; admin is Alex, mapped at login).
+**Why:** a service named for its role ("platform service" says nothing; "tradebench service" conflates
+the product with an app); a BFF with nothing behind it is the distributed monolith (P7); the console
+outlives its first pages. Amends D24 R1/R4. Session record:
+`docs/design/sessions/2026-10-15-platform-shell-identity-and-telemetry.md`.
+
+## D32 — Identity and trust: edge identity then app roles; the service-to-service trust ladder; the collector's command plane is notify-then-fetch — **Accepted** (2026-10-15, Alex)
+
+**(1) Humans.** Cloudflare Access authenticates every person at the edge; `control-service`
+verifies the Access JWT on every request (JWKS) and maps the email to a user and role in `control`
+(`admin`, `member`). No self-minted user token until a client exists that cannot pass through Access
+— PRD §2's "no heavyweight auth in v1", with roles real. **(2) Services.** The architecture spec's
+§6 ladder (agreed 2026-09-28) is now a decision: the private Docker network is the trust boundary
+now; service JWTs or mTLS from an internal CA when a second HTTP service exists; Cloudflare Access
+service tokens for machine clients through the edge. A user's token is never forwarded between
+services; the actor travels as a claim in a service-signed message. mTLS-for-practice is a ticket
+when the second Spring app arrives, not before. **(3) The collector's command plane.** The control
+service writes the job row in `control` — the durable truth — and publishes a nudge on a Redis
+stream (D4; Redis joins the compose stack); the collector fetches the definition from a small
+internal endpoint on `control-service` on the nudge, on boot and on a slow periodic resync, applies
+it idempotently by `(job id, version)`, and writes its own `job_runs` into `market_data`. The
+collector keeps **zero inbound ports** and never reads another service's tables (D17). Confirms D24
+R5. **Why:** the identity-aware-proxy pattern gives identity for free and the app keeps
+authorisation; each trust rung is adopted at its trigger, never before (£20/mo, minimal
+maintenance); notify-then-fetch keeps the durable truth in one place and the collector coupled to an
+API contract, not a schema — Alex's first instinct (the collector reading the control database) was
+argued once and he took the fetch.
+
+## D33 — Operational telemetry beside the domain record: OpenTelemetry to Grafana Cloud; the dead-man ping — **Accepted** (2026-10-15, Alex)
+
+Two kinds of observability, kept apart. **Business observability** is what happened to the data
+and stays in the database as rows (`service_events`, `capture_status`, `bar_gaps`, `job_runs` — D25);
+the platform renders it. **Operational telemetry** — structured JSON logs, metrics, later traces —
+leaves every JVM through the OpenTelemetry Java agent over OTLP to **Grafana Cloud's free tier**;
+the admin area links out to Grafana rather than re-rendering it. Wired at E1-T7 so the first deploy
+is observable. **The dead-man ping:** the collector's heartbeat makes one outbound HTTPS GET per
+minute to a healthchecks.io check (the URL holds a secret and lives in `.env`, G1; no data leaves) —
+a liveness signal for the deaths that leave no row (`kill -9`, OOM, a reboot, a database down at the
+moment of death); the orderly ones already write theirs. Neither is reporting: D30 stands. **Why:**
+OpenTelemetry is vendor-neutral and needs no framework in the collector; self-hosting the Grafana
+stack is gigabytes of RAM on a €5 box while the free tier keeps the NFR; the ping is the only thing
+that tells Alex the box died at 02:00 before E9-T5 exists. Amends D25's metrics line.

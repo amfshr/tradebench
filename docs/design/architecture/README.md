@@ -47,18 +47,24 @@ flowchart TB
         IGC["ig-client\nIG REST session/pricing (T2 ✅)\n+ Lightstreamer wrapper (T3)"]
     end
     subgraph apps [Deployable apps]
-        MDS["market-data-service\nSpring Boot, 24/7 cloud (T3–T7)\nthe collection service — D2: ships first"]
-        FE["web/\nReact/TS apps — docs site live (E2),\nplatform SPA seat reserved"]
+        MDS["market-data-service\nplain Main, 24/7 cloud (T3–T7)\nthe data plane — D2: ships first; no Spring (D6)"]
+        CTL["control-service\nSpring Boot (E9, D31)\nthe control plane: users · roles · jobs · settings;\nread model over market_data; digest + alerts"]
+        FE["web/\nReact/TS apps — docs site live (E2),\nweb/platform: the one platform SPA (D31)"]
     end
     PG[(PostgreSQL\nFlyway-migrated — T4)]
     IGX["IG Markets"]
     OSX["Object storage"]
+    RD[(Redis Streams\nthe nudge — D4, D32)]
     MDS --> CORE
     MDS --> IGC
     MDS --> PG
     MDS <--> IGX
     MDS --> OSX
-    FE -.->|later: reads via backend APIs| MDS
+    CTL --> PG
+    CTL --> RD
+    RD -.->|nudge| MDS
+    MDS -.->|fetch the job (internal API)| CTL
+    FE -->|JSON API, behind Cloudflare Access| CTL
 ```
 
 **Dependency rules (enforced from commit 1, build plan §2):** `core` and `ig-client` depend
@@ -68,9 +74,10 @@ tests, and throwaway CLIs — none should drag Spring in). Reserved module seats
 epics: `indicator-lib`, `strategy-dsl`, `engine`, `execution-oms`, `ig-simulator`,
 `backtester`, `workbench`.
 
-**Runtime posture (T7):** one `docker compose` stack (service + `postgres:16` + nightly
-`pg_dump` → object storage) on a small cloud box; staging + prod with separate DBs, promoted
-by release tag; outbound-only network (IG + heartbeat); Linux containers only, never Windows.
+**Runtime posture (T7):** one `docker compose` stack (the collector + `postgres:16` + `redis` +
+`cloudflared` + nightly `pg_dump` → object storage; `control-service` joins at E9) on a small cloud
+box; staging + prod with separate DBs, promoted by release tag; the collector outbound-only (IG, the
+database, the OpenTelemetry export and the dead-man ping — D33); Linux containers only, never Windows.
 
 **Database topology (D17):** one Postgres *instance* per environment (the repo `compose.yaml`
 manages it — dev today, the same file becomes the T7 stack); one *database* per service
@@ -154,14 +161,15 @@ backtests. Each element already has its seat:
 | `account` | per-user broker credentials are *data* (D16 §4: encrypted rows, E8) — a job references a credential id, never embeds one |
 | `market`, `timeframes: [ticks, 1m, 10m]` | capture stays atoms (ticks + 1m, D15); a job's timeframe list records **desired outputs** — higher TFs derive from healed 1m, never stream separately |
 | `start/end time` | playbook §4.4 windows (market properties + job windows) — in-service windows are T5/T7-era plan |
-| jobs CRUD + status over REST | Spring lands T6; a `stream_jobs` table (user, provider, credential-ref, market, windows, outputs, status) then replaces "read env" in `app.Main` — the composition root spawns N subscription sets onto the *same* ingest→store pipeline |
+| jobs CRUD + status over REST | `control-service` owns the jobs table in the `control` database and the REST surface (D31); the collector learns by **notify, then fetch** (D32): a nudge on Redis Streams, the definition fetched from the control service's internal endpoint, applied idempotently by `(job id, version)` — "read env" in `app.Main` becomes "fetch the job set"; the composition root spawns N assemblies onto the *same* ingest→store pipeline |
 | multi-user attribution | physically present on every row since V1 (`user_id`, `source_id`) — jobs supply real values where the runner writes `default-user` |
 | serving live + backtests | D17: `market_data` is the published read product; D4 events when the first live consumer arrives |
 
 Nothing in E1's build closes a door on this; the door-openers (dimensions from V1,
-capability-split subscriptions, provider seams, composition-root `Main`) were chosen for
-it. The jobs model + REST surface is Market-Data-Manager-era work (E4 horizon, T6 gives
-it Spring); this section exists so the trajectory stays in view.
+capability-split subscriptions, provider seams, composition-root `Main`, `CaptureAssembly`
+as the one-job unit) were chosen for it. The jobs model + REST surface is E9's command-plane
+ticket (D32; backlog B1's control half); the collector never gets Spring (D6 amended) — this
+section exists so the trajectory stays in view.
 
 ### 3.5 Serving the data outward — the fan-out plan (provisional until the first consumer)
 
@@ -238,34 +246,42 @@ checked by hand each evening.
 ## 5. Frontend (shape reserved)
 
 React/TS apps in `web/`, own toolchain (D3/D18); backend does the work, streams data to a
-thin visual client (PRD §10). First real resident: the **E2 board viewer** (D11 — markdown
-stays the write model; the app renders the read model). Component/state/dataflow
-documentation gets its own section here when E2 planning cuts tickets — same keep-current
-duty as the backend.
+thin visual client (PRD §10). First resident: the **E2 docs site** (D11 — markdown stays the
+write model; the app renders the read model). **The platform is one front end** (D31):
+`web/platform` serves every platform page with a role-gated admin area (the operator console,
+E9's first vertical slices), behind Cloudflare Access, over `control-service`'s JSON API.
+Component/state/dataflow documentation gets its own section here when E9's slices cut
+tickets — same keep-current duty as the backend.
 
 ## 6. Platform integration & security posture (agreed 2026-09-28)
 
-- **Edge identity, then tokens — credentials never travel.** Nothing platform-facing is
-  internet-reachable except through an identity-aware edge (Cloudflare Access or Tailscale;
-  PRD §9's edge-gating). The edge authenticates the user once; downstream apps receive a
-  **short-lived signed identity token** and verify signatures — no service ever sees or
-  forwards a password. Broker credentials never travel at all (D16 §4: encrypted DB data,
+- **Edge identity, then tokens — credentials never travel** (now D32). Nothing platform-facing is
+  internet-reachable except through an identity-aware edge (Cloudflare Access; PRD §9's
+  edge-gating). The edge authenticates the user once; `control-service` verifies the Access
+  assertion on every request and maps it to a user and role in `control` — no self-minted user
+  token until a client exists that cannot pass through Access; no service ever sees or forwards
+  a password, and a user's token is never forwarded between services (the actor travels as a
+  claim in a service-signed message). Broker credentials never travel at all (D16 §4: encrypted DB data,
   decrypted only inside the service that talks to the broker). Identity moves; secrets
   stay put.
-- **Service-to-service trust ladder:** single-host compose → private Docker network (only
-  accepted apps, by construction, zero cert ceremony) → multi-host → Tailscale between
-  boxes → full mTLS only if something specifically demands certificates. Each rung is
-  adopted when its trigger arrives, never before (£20/mo + minimal-maintenance NFRs).
+- **Service-to-service trust ladder** (D32): single-host compose → private Docker network (only
+  accepted apps, by construction, zero cert ceremony) → service JWTs or mTLS from an internal CA
+  when a second HTTP service exists → Tailscale between boxes if multi-host ever comes. Each rung
+  is adopted when its trigger arrives, never before (£20/mo + minimal-maintenance NFRs). Commands
+  to the collector are **notify, then fetch** (D32): a nudge on Redis Streams, the definition
+  fetched from `control-service`; the collector never reads another service's tables.
 - **Live data sharing = single writer + published events (D4).** The collection service
   remains the sole writer of the capture record and, when the first second consumer
   exists, additionally publishes ticks/sealed-bars to Redis Streams under explicitly
   schema'd contracts; consumers follow the standing contract (at-least-once, idempotent by
   key, ack-after-apply). The publisher is a `store.CaptureStore` fan-out — built when a real
   consumer arrives, not speculatively.
-- **The collection service needs no inbound at all** (outbound-only to IG + heartbeat) —
-  its deploy posture is firewall-closed regardless of the edge story.
-- **Jobs:** operational jobs are in-service `@Scheduled` with audited `job_runs` rows (D6);
-  compute jobs (backtests) are E3-era job-runner work — deliberately no shared framework.
+- **The collection service needs no inbound at all** (outbound-only: IG, its database, Redis,
+  the control service's internal endpoint, the OpenTelemetry export and the dead-man ping —
+  D33) — its deploy posture is firewall-closed regardless of the edge story.
+- **Jobs:** operational jobs are in-process scheduled tasks with audited `job_runs` rows (D6,
+  amended 2026-10-15: a plain scheduled executor, no Spring in the collector); compute jobs
+  (backtests) are E3-era job-runner work — deliberately no shared framework.
 
 ## 7. Cross-cutting rules
 
