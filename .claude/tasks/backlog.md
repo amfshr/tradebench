@@ -14,6 +14,18 @@
 
 **Captured** 2026-09-30 · **Likely home** a future epic (post-E1 spine) · **Trigger** E9 Operator Console gains save-credentials + save-jobs (Alex, 2026-10-03) · **Relates to** PRD §5.1 (stream-job setup), §2 (tenancy/admin) · D16 (one key per account; multi-user creds as encrypted DB data), D17 (DB topology) · IG playbook §7 (single-instance & single-key discipline) · E1-T5 slice C (the belt), E1-T7 (host ruling), E8 (multi-user goes real), E9 (the trigger) · architecture §3.4 (stream-jobs trajectory)
 
+**Folded in part 2026-10-15 (the design session — D32 (3), R6/R11; Alex):** the **control half** — save
+credentials, save jobs, the jobs table and its REST + pages — is **E9-T8** (the command plane + jobs
+control), after E9's read-only slices. The jobs table lives in the **`control` database owned by
+`control-service`**, and **the collector never reads it**: it is nudged on a Redis stream and fetches the
+definition from `control-service`'s internal endpoint, applying by `(job id, version)` with a boot and a
+slow periodic resync (D32 (3) — the collector reads no other service's tables, D17). **The collector's
+consumer side is E9/E1 joint work under E9-T8.** Gap 2 below (`TRADEBENCH_USER` + a `users` row per user)
+is closed by **E1-T14** (the seed renamed `platform`, R10). **What stays here, as is:** N jobs as N
+processes (the job manager as a process launcher), gap 1 (the per-job advisory lock), gap 3 (the env file +
+unit per job → E1-T7), the isolation findings. The "Config/profiles DB the service reads" bullet below is
+superseded by the fetch — kept as the record of the first shape.
+
 The market-data-service's wider role: a **central service running N capture jobs**, not one
 hardwired market. Each platform user's broker key = account = **one Lightstreamer session**
 multiplexing *that user's* markets (D16: one key per account). So N users → N sessions (one
@@ -25,7 +37,8 @@ users across containers only if it ever outgrows one box (P7).
 Three pieces, all **out of scope for E1-T5** (which stays single-user, config-at-startup):
 - **Config/profiles DB** — a `stream_jobs` table (user, provider, account, **encrypted
   credentials** per D16, market set, schedule, enabled) that the service reads to know which jobs
-  to run. Adding Dad's market = a row.
+  to run. Adding Dad's market = a row. *(Trued 2026-10-15, D32 (3): the table is E9-T8's jobs table in
+  `control`, owned by `control-service`; the collector never reads it — it is nudged, then fetches.)*
 - **Multi-user job manager** — reads the config and starts/stops a `CaptureJob` per enabled row.
 - **Dynamic reload** — add/remove a market (or a job) to a *live* session without a restart and
   without wobbling the other markets.
@@ -45,7 +58,8 @@ transport-layer concern *below* the connection/user layer, independent of the nu
    better on `(user, source)`). A double-launch of the *same* job stays refused.
 2. **`Main` hardcodes `USER = "default-user"`** and `V1__baseline.sql` seeds only that user: B1 needs a
    `TRADEBENCH_USER` config + a `users` row per platform user (e.g. Alex's brother). Env-file-per-job is fine
-   until D16's multi-user era moves users' broker credentials into app-encrypted DB columns (E8).
+   until D16's multi-user era moves users' broker credentials into app-encrypted DB columns (E8 — pulled
+   to **E9-T8** by R11, 2026-10-15: save credentials is B1's control half).
 3. **One env file + one service unit per job** (three jobs = three processes) — belongs to the deploy/host
    ticket (E1-T7 host ruling), not the service code.
 
@@ -81,8 +95,8 @@ multi-user era / E8 — not re-litigated here; E9 is Alex's stated trigger.)
 
 | Job | user | source | key | instance |
 |---|---|---|---|---|
-| 1 — Alex, prod, 2 markets | `default-user` | `ig-stream-live` | Alex `IG_LIVE_*` | `alex-live` |
-| 2 — Alex, demo, 3 markets | `default-user` | `ig-stream-demo` | Alex `IG_DEMO_*` | `alex-demo` |
+| 1 — Alex, prod, 2 markets | `platform` (R10 — was `default-user`) | `ig-stream-live` | Alex `IG_LIVE_*` | `alex-live` |
+| 2 — Alex, demo, 3 markets | `platform` (R10 — was `default-user`) | `ig-stream-demo` | Alex `IG_DEMO_*` | `alex-demo` |
 | 3 — brother, his choice, several | new `users` row | `ig-stream-live` or `-demo` | his own `IG_*` set | `brother-…` |
 
 **Heartbeat fail-fast during a database outage** (captured here 2026-10-05 from the T9 outage drill) → graduated to
@@ -240,6 +254,13 @@ shed 0 ticks and peaked at 303 queued writes — far below it).
 ## B9 — REST-fetch collection jobs (non-streaming) and allowance visibility
 
 **Captured** 2026-10-08 (Alex) · **Likely home** a cross-cutting epic once both apps are deployed and past v0 — the platform web app (E9) *and* the market-data service, one spine exercise · **Trigger** after E1 (T6, T7) and E9's platform app are deployed and off v0 — Alex's call when; not scheduled · **Relates to** E1-T6 (the heal is the same REST primitive — a REST-only job is a scheduled backfill with no stream to heal; D6: a plain scheduled task) · E9 (jobs and the allowance view belong in the console) · B1 (per-user jobs and credentials — the job model B9 extends) · D27/D28 (the collector's resilience tiers apply) · D16 + IG playbook §7 (a REST job on a key a live stream also uses — the shared-key case B1 flags) · P8 (source-attributed always) · IG playbook §4.3 (historical-data allowance — 10,000 candle points/week; 1m depth ≤ 40 days), §6 (request allowances) · `IgRestClient` → `ApplicationAllowance` (`GET /operations/application`; golden `wire/application-allowance.json`), `RequestPacer`, `PacerDiscovery` · the seeded `sources` (`V1__baseline.sql`: `ig-stream-demo`, `ig-stream-live`, `ig-rest-heal`)
+
+**Folded in part 2026-10-15 (R11; Alex):** the **allowance view** folds into **E9-T8** (the command plane +
+jobs control) — the request allowances and the historical-data budget shown in the admin area beside the
+jobs; the figures' source (the collector's recorded budget events vs `control-service` asking IG itself —
+D16's one-key rule) is E9-T8's in-ticket decision. **The REST-fetch job type stays here, as is**, its trigger
+unchanged; when it comes it is a second job type in E9-T8's jobs table and a plain scheduled task in the
+collector (D6 amended 2026-10-15: a plain executor, no Spring in the collector).
 
 Not every user wants to stream. A **second job type pulls bars by REST** — e.g. one end-of-day fetch of
 the day's 1-minute bars per market (other timeframes later), scheduled — instead of a 24/7 Lightstreamer

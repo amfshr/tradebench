@@ -8,12 +8,14 @@
 >
 > Sources: broker playbook §1–§7 (the porting spec), phase-1 build plan §3–§7 (porting order,
 > module design, deploy analysis), data-platform-design (atoms, healing, coverage),
-> decisions D2/D6/D12.
+> decisions D2/D6 (amended 2026-10-15 — no Spring in the collector)/D12; the 2026-10-15 session
+> (D31–D33) for the `platform` user, the command plane, telemetry and the dead-man ping.
 
 ## Epic shape
 
 **Dependency spine:** T2 (session/REST) → T3 (streaming) → T4 (persistence) → T5 (resilience)
-→ T6 (EOD cycle) → T7 (deploy) → T8 (shadow-diff acceptance). Genuine parallelism: T4's
+→ T14 (the platform user — the `platform` seed before the first production rows, R10/D31) → T6 (EOD cycle)
+→ T7 (deploy) → T8 (shadow-diff acceptance). Genuine parallelism: T4's
 schema/migrations can start alongside T3; T6's Parquet half only needs T2+T4 (its digest left for E9 — D30).
 **Risk concentrates in T5** (the resilience belt is most of what the playbook exists to
 transfer — budget it as the long tail) and in T6's provider-allowance realities.
@@ -224,7 +226,7 @@ rebuild at 60, not 180); its rebaseline half at T11 (PR #16, 2026-10-08).**
    from the ruling's ordering, for that reason: the host wakes with the Lightstreamer client stuck in `DISCONNECTED:WILL-RETRY`
    and the escalator rebuilds it, measured in awake time. **Residual 3 is closed, final (2026-10-09).**
 
-## T6 — Daily completeness + archive (D6 amended, D30) ⬜ ready to start (re-scoped 2026-10-11 by D30; unblocked 2026-10-11 by E1-T13's merge, PR #25)
+## T6 — Daily completeness + archive (D6 amended, D30) ⬜ ready to start (re-scoped 2026-10-11 by D30; unblocked 2026-10-11 by E1-T13's merge, PR #25; trued 2026-10-15 — no Spring, R7; the calendar-source nod item; T14 first)
 
 **Type** build · **Branch** `e1-t6-heal-and-archive` · **Started** — · **Blocked by** —
 
@@ -240,11 +242,22 @@ this service's scope; "the sooner the E9 service is up the better"). Alex's plan
 this week, deploy (T7) next weekend. Branch `e1-t6-heal-and-archive` cut from `main` 2026-10-11;
 Alex starts it next session with the design nod (D13).
 
+**Trued 2026-10-15 (the design session — R7, R10, D31; the calendar-source item handed to this nod):**
+**no Spring in the collector** — the EOD job runs on a plain scheduled executor inside the existing
+process (D6 amended 2026-10-15: "a plain scheduled task" never needed the framework; Spring's earning
+moment is `control-service`, D31); the architecture spec's §3.4 trued the same evening. **T14 lands
+first** (the platform user, R10): the heal's and the archive's rows carry the user `platform` from the
+start — not a blocker, sequenced ahead so this ticket's fixtures are born right; T6's nod on 2026-10-16
+does not wait for it. The nod sheet gains **the expected calendar's source** (below). Alex's plan
+stands: heal + archive this week, deploy (T7) this weekend (2026-10-17).
+
 **Goal:** every trading day ends healed and archived off-box, with an audited `job_runs` row per
 run — or the row's absence itself alarms (P9).
-**Approach:** one `@Scheduled` EOD job (plain task, NOT Spring Batch — D6), two phases, each run
+**Approach:** one EOD job on **a plain scheduled executor in the existing process — no Spring in the
+collector** (D6 amended 2026-10-15, R7; NOT Spring Batch, never was), two phases, each run
 writing its audited `job_runs` row, clean or not:
-1. **Heal**: diff expected-vs-present 1m bars; REST v3 backfill window-clipped and paced
+1. **Heal**: diff expected-vs-present 1m bars (expected = the expected calendar — its *source* is
+   this nod's new item, below); REST v3 backfill window-clipped and paced
    (the ~10k-points/week allowance is real — §4.3); outcomes classified
    `healed / tickless-at-source / failed`. **Ticks are stream-only** — provably
    unrecoverable from IG REST; the job never claims otherwise.
@@ -265,7 +278,22 @@ API service — moved to E9-T5 by D30.)*
 **Design item queued for this ticket's nod (Alex, 2026-09-28):** the schema/role story —
 named schema vs Postgres `public` (currently `public`; likely: dedicated schema +
 `search_path`, `public` revoked), owner-vs-app role split (D22, with the T7 ops script),
-and DataGrip/read-only role for humans. Decide when Spring lands, migrate via Flyway.
+and DataGrip/read-only role for humans. Decide at this nod — Spring never lands in the collector
+(R7, 2026-10-15) — and migrate via Flyway.
+**Design item added for this ticket's nod (the 2026-10-15 session — handed, not ruled):** the
+**expected calendar's source** — what decides a "real gap" for the heal, and for E9-T3's coverage map
+(one truth about "open"). Alex's 24-hour concern ("how does the belt know the market is quiet and the
+feed is not dead") is answered by D25's three clocks (the generous stream window; the deal flag, which
+stands the watchdog down on a closed market, bounded by the 12-hour teaching resubscribe; the expected
+calendar that defines a gap) and chapter 11 §5.1. The open piece is where the calendar comes from.
+**Recommendation on record:** derive the open spans from the recorded `market_state_change` events
+(every flag transition is a row since E1-T5), count gaps only inside open spans, and keep a **static
+per-market calendar** (D25's `market_calendar` — XETRA sessions + German holidays) as the **fallback
+for hours the collector itself was down** (no rows to derive from). A quiet-but-open market that ticks
+less than once per 90s earns harmless surgical resubscribes; the first weeks' `watchdog_stale` rows at
+quiet hours are the evidence for tuning `tickSilent` per market (T7's soak). Decide at the nod; the
+heal's classification tests then anchor on the chosen source's boundaries (a gap on a span's edge; a
+closed hour never a gap).
 **Post-sweep refinement (2026-09-28):** `exceeded-account-historical-data-allowance` resets
 *weekly* — the heal treats it as budget-exhausted (plan via the parsed `Allowance` metadata
 before firing), never as a backoff-and-retry error.
@@ -278,23 +306,38 @@ resilience that B2 tracks (the broad OMS/enquiries surface rolls it out at E6).
 re-golden `application-allowance.json`) comes first if the heal budget leans on pacer discovery.
 
 
-## T7 — Deploy
+## T7 — Deploy ⬜ (gains 2026-10-15 from the design session: Redis in the stack, the OTel agent + Grafana Cloud export, the dead-man ping)
 
-**Goal:** staging + prod, promoted by release tag; runs unattended.
+**Type** ops · **Branch** `—` · **Started** — · **Blocked by** T6
+
+**Goal:** staging + prod, promoted by release tag; runs unattended — and observable from its first day (D33).
 **Pre-cloud runway (Alex, 2026-09-28):** before any cloud deploy, the deployable stack
 runs a multi-day soak on Alex's Mac — the confidence gate T3's single-day capture no
 longer carries.
 **Approach:** Dockerfile (jib or buildpacks — pick in-ticket) + `docker compose`
-(service + `postgres:16` + nightly `pg_dump` → object storage); separate DBs per env;
-secrets injected via env files on the box, never committed; outbound-only network posture
-(SSH/Tailscale in, IG + heartbeat out); heartbeat ping (healthchecks.io-style) so a dead box
-alerts a phone. Host: revisit the build-plan §6 analysis (Lightsail $12 vs Hetzner ~€4)
+(service + `postgres:16` + **Redis** — the command stream's home, in the stack from the first deploy
+so E9-T8's nudge has somewhere to land (D32 (3), R6) — + `cloudflared` (E9-T4 wires it) + nightly
+`pg_dump` → object storage); separate DBs per env; secrets injected via env files on the box, never
+committed; outbound-only network posture (SSH/Tailscale in; IG, the OTLP export and the ping out).
+**Operational telemetry (D33, R8) — this ticket wires the collector; E9-T7 wires `control-service`:**
+structured JSON logs; the OpenTelemetry Java agent attached to the collector's JVM in its container,
+exporting metrics + logs over OTLP to Grafana Cloud's free tier (the account stood up here; the
+endpoint + credentials in `.env`, G1; service name + instance as resource attributes). Domain truth
+stays in the rows (D25) — this is exhaust, not reporting (D30 stands). **The dead-man ping (D33, R9):**
+the heartbeat loop makes one outbound HTTPS GET per minute to a healthchecks.io check — the URL
+carries a random secret and lives in `.env` (G1); no data leaves; a liveness signal for the deaths that
+leave no row (`kill -9`, OOM, a reboot, a database down at the moment of death — the orderly ones
+already write theirs). B15's judgment 1 rides with it: a testable `heartbeat()` on `CaptureAssembly`
+taking the lock and the ping as ports, so the harness drives the heartbeat's checks and the ping
+(proposed, settle in-ticket: a failed ping logs and never stops the collector — the check's silence is
+the alarm, not the collector's). Host: revisit the build-plan §6 analysis (Lightsail $12 vs Hetzner ~€4)
 against the ~£20/mo envelope — **decision recorded in-ticket**.
 **DoD anchor:** staging runs 24/7 for 3 consecutive unattended days, each evening's hand check
-clean — the heartbeat line, `capture_status` freshness, the day's `job_runs` rows (D30: no digest
-until E9-T5 lands).
-**Runbook:** deploy, rollback (re-tag), secrets rotation, the evening check (heartbeat line ·
-`capture_status` freshness · the day's `job_runs` rows) and the `job_runs`-absence response (D30;
+clean — the heartbeat line, `capture_status` freshness, the day's `job_runs` rows, and the
+healthchecks.io check green on the ping (D30: no digest until E9-T5 lands; D33).
+**Runbook:** deploy, rollback (re-tag), secrets rotation (the OTLP credentials and the ping URL
+included), the evening check (heartbeat line · `capture_status` freshness · the day's `job_runs` rows ·
+the healthchecks.io check · a glance at Grafana Cloud) and the `job_runs`-absence response (D30;
 the digest and its absence alarm are E9-T5's).
 
 ## T8 — Acceptance: shadow-diff week
@@ -1494,3 +1537,48 @@ the larger pieces. *Actual: one session — ticketed, built, reviewed, PR'd and 
 too) · D28 (Tier 1's hold — gains the lock's fate across a held outage) · D29 (5) (amended by ruling 1) · T10 § close-out ruling ·
 T12 § ruling 4 (superseded by ruling 1) · P9 (the lock is a fail-closed guard) · IG playbook §7 (single-instance discipline) · Field
 Manual ch. 08 (the ladders), ch. 10 (the failure playbook) · backlog B11–B15.
+
+## T14 — The platform user ⬜ (born 2026-10-15 from the design session — R10, D31; sequenced before T6)
+
+**Type** build · **Branch** `—` · **Started** — · **Blocked by** —
+
+**Why (R10, D31):** the deployed collector persists rows under the admin-owned platform tier —
+PRD §7's platform-provided datasets every user sees — so the tier's owner is the user **`platform`**,
+not `default-user`. The rename happens **now, before the first production rows** (T7's deploy this
+weekend): after it, a rename is a migration over live rows. `TRADEBENCH_USER` names the owner per
+instance (B1's plan — its gap 2, closed here); admin is Alex, mapped at login in `control-service`
+(E9-T2). Supersedes PRD §2's `default-user` phrasing.
+
+**Sequencing — the `board-steward`'s call, recorded so it can be re-ruled:** its own small PR,
+**before T6 starts**, rather than T6's first increment: it needs no nod (R10 is ruled), lands in an
+hour, and T6's fixtures are then born under `platform` — fewer files for the rename to touch and T6's
+branch stays about heal + archive. The hard constraint is only "before T7's first production rows";
+T6's nod on 2026-10-16 does not wait for it. Suggested branch `e1-t14-platform-user` (not yet cut).
+
+**Surfaces (verified 2026-10-15 by `git grep default-user`):**
+- `market-data-service/src/main/java/dev/amfshr/tradebench/marketdata/app/Main.java` line 53 —
+  `private static final String USER = "default-user";` → read `TRADEBENCH_USER` with the same
+  `required()` discipline as the other env vars: **no code default** (CLAUDE.md config discipline;
+  G1). An unknown name still refuses at startup via `Jdbc.lookupId` ("schema seeds are the source of
+  truth") — B10's unpinned path, the natural rider for this ticket if Alex wants it.
+- `V1__baseline.sql` (the seed `INSERT INTO users (name) VALUES ('default-user')`) and
+  `V2__observability.sql` (a lookup by that name at migration time) are **immutable** under Flyway's
+  checksum — the rename is a **new migration** (`UPDATE users SET name = 'platform' WHERE name =
+  'default-user'`): the row's id is unchanged, so nothing keyed by `user_id` moves and the constraints
+  hold. The generated schema render and the drift gate (T4) follow.
+- Tests and fixtures: `scenario/PostgresStores`, `store/PostgresStoreTest`,
+  `store/PostgresObservabilityStoreTest`, `store/JsonlStoreTest`, `scenario/ExportTradebenchSqlTest`.
+- `scripts/export-replay.sh` — the `TRADEBENCH_USER_NAME` default.
+- `.env.example` gains `TRADEBENCH_USER` (a synthetic value, G1); the live docs that name
+  `default-user` — `docs/design/architecture/README.md`, `docs/design/observability-and-data-model.md`,
+  Field Manual ch. 05, `docs/product/overview.md`, `CLAUDE.md`'s "runs as `default-user`" line —
+  updated; dated records (decisions, session records, the Done history, backlog captures) keep theirs.
+
+**Tests:** `Main` started without `TRADEBENCH_USER` refuses loud (failure-mode test — mutation:
+restore a code default → red); the migration applied over a database carrying V1 + V2 rows renames in
+place (Testcontainers: a tick written under the old name is read back under `platform` with the same
+`user_id`).
+
+**DoD:** no `default-user` literal left in code, the live seed, tests, scripts or the live docs;
+`TRADEBENCH_USER` required with no code default; the schema render + drift gate green;
+`./gradlew build` green; merged before T7's first production rows.
