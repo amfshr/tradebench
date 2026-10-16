@@ -27,6 +27,10 @@ public interface HealStore {
     /** Minute starts in {@code [from, to)} that hold a bar from any of this user's sources. */
     Set<Instant> barMinutes(String epic, Instant from, Instant to);
 
+    /** Minute starts in {@code [from, to)} already healed — a bar under the REST source, from this
+     * attempt or an earlier one. */
+    Set<Instant> healedMinutes(String epic, Instant from, Instant to);
+
     /** Write healed bars under the REST source; idempotent by minute. */
     void writeHealed(List<Bar1m> bars);
 

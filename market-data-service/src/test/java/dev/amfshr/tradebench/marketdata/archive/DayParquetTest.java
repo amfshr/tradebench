@@ -55,8 +55,11 @@ class DayParquetTest {
                 new ArchivedBar(Instant.parse("2026-10-15T07:00:00Z"), bid, ask, 321L, "ig-stream-demo"),
                 new ArchivedBar(Instant.parse("2026-10-15T07:01:00Z"), bid, ask, null, "ig-rest-demo")));
 
-        assertEquals(11, parquetSchema(file).size());
-        assertEquals("ltv INT64 INT_64", parquetSchema(file).get(9), "volume is an optional 64-bit integer");
+        assertEquals(List.of("start_utc INT64 TIMESTAMP_MICROS/UTC",
+                "bid_o INT64 DECIMAL(18,6)", "bid_h INT64 DECIMAL(18,6)", "bid_l INT64 DECIMAL(18,6)", "bid_c INT64 DECIMAL(18,6)",
+                "ask_o INT64 DECIMAL(18,6)", "ask_h INT64 DECIMAL(18,6)", "ask_l INT64 DECIMAL(18,6)", "ask_c INT64 DECIMAL(18,6)",
+                "ltv INT64 INT_64", "source BYTE_ARRAY STRING"), parquetSchema(file),
+                "every column of the bars file is the contract (the doctrine review's finding 9)");
         assertEquals(List.of("2026-10-15T07:00:00Z|1.500000|2.100000|321|ig-stream-demo",
                 "2026-10-15T07:01:00Z|1.500000|2.100000|null|ig-rest-demo"),
                 rows(file, "SELECT start_utc, bid_o, ask_c, ltv, source FROM read_parquet('%s') ORDER BY start_utc"),

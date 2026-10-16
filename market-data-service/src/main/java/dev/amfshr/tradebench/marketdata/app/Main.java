@@ -29,6 +29,7 @@ import dev.amfshr.tradebench.marketdata.store.BestEffortEventLog;
 import dev.amfshr.tradebench.marketdata.store.Database;
 import dev.amfshr.tradebench.marketdata.store.PostgresStore;
 import dev.amfshr.tradebench.marketdata.heal.Healer;
+import dev.amfshr.tradebench.marketdata.heal.IgHistory;
 import dev.amfshr.tradebench.marketdata.heal.RetryingCandleSource;
 import dev.amfshr.tradebench.marketdata.jobs.DailyJobs;
 import dev.amfshr.tradebench.marketdata.jobs.JobTuning;
@@ -137,8 +138,10 @@ public final class Main {
         if (db != null) {
             List<DayPhase> phases = new ArrayList<>();
             phases.add(new Healer(new PostgresHealStore(db.dataSource(), user, source, restSource, instance),
-                    new RetryingCandleSource((epic, from, to) -> rest.minuteCandlesBetween(sessions.current(),
-                            epic, from, to), 3, Duration.ofSeconds(2)), clock, 720));
+                    new RetryingCandleSource(new IgHistory(
+                            afterFailure -> afterFailure ? sessions.afterFailure() : sessions.current(),
+                            rest::minuteCandlesBetween), 3, Duration.ofSeconds(2)),
+                    clock, 720, HEAL_ALLOWANCE_RESERVE));
             if (archive != null) {
                 phases.add(new Archiver(new PostgresArchiveStore(db.dataSource(), user, source),
                         new S3ObjectStore(archive.endpoint(), archive.region(), archive.bucket(), archive.accessKeyId(),
@@ -288,6 +291,10 @@ public final class Main {
      * none leaves the archive off and says so; some is a mistake, refused before anything runs. */
     record ArchiveConfig(URI endpoint, String region, String bucket, String accessKeyId, String secretAccessKey) {
     }
+
+    /** Points of the week's 10,000 the daily heal never spends: kept for manual heals (E9-T8) and anything
+     * else that shares the key's historical allowance. */
+    static final long HEAL_ALLOWANCE_RESERVE = 2_000;
 
     static final List<String> ARCHIVE_KEYS = List.of("TRADEBENCH_ARCHIVE_ENDPOINT", "TRADEBENCH_ARCHIVE_REGION",
             "TRADEBENCH_ARCHIVE_BUCKET", "TRADEBENCH_ARCHIVE_ACCESS_KEY_ID", "TRADEBENCH_ARCHIVE_SECRET_ACCESS_KEY");

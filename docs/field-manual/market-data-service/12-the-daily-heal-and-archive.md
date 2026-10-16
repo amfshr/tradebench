@@ -29,11 +29,13 @@ question: which market-days have ended, settled, and not yet succeeded?
 | The archive waits for the heal to be **attempted**, not to succeed | — | a day stuck on a failing heal is still archived |
 | The archive is due again whenever the heal **succeeds after it** | — | a heal that finally works gets its bars into a fresh archive |
 | A failed phase is retried on a doubling backoff | 1 h, 2 h, 4 h … capped at 24 h | a weekend's exhausted allowance does not write a row every five minutes |
-| Only the last seven complete days are considered | 7 days | a first boot over old data cannot spend the week's allowance |
+| Only the last seven complete days are considered | 7 days | bounds catch-up; the allowance's own guards (§4) bound what it can spend |
 
 A collector that was down at midnight does the work when it comes back: catch-up is the same
 question asked later. Nothing in the runner can stop the collector — a phase's failure is a failed
-row, a database failure ends the tick, and the next wake tries again.
+row (a native library that will not load included), a database failure ends the tick, and the next
+wake tries again. A stop during a phase is not recorded as a failure, so the next start is not held
+back by the backoff.
 
 ## 3. What "open" means — IG's own word
 
@@ -49,10 +51,15 @@ states (`heal.DaySpans`):
 - **Unknown** — the collector was not observing the whole minute, or IG had not yet said anything.
   The heal asks IG, whose candles answer whether the market was open.
 
-**When was the collector observing?** From each boot (`service_start`, written at startup) to its
-last sign of life before the next boot: the latest tick or event row. Between those, it was down,
-and the window is unknown. An orderly stop writes `service_stop`; a crash writes nothing, which is
-why the last sign of life, not the stop row, ends the window.
+**When was the collector observing?** Only while it was *streaming*. Within each run of the process
+— from its boot (`service_start`) to its last sign of life before the next boot, the latest tick or
+event row — the windows are the spans a recorded `connection_status` says streaming (D27's one rule).
+A run starts not streaming, so the handshake after a boot is not observing; a stream outage inside
+one run is not observing either, which matters at a reopen: if the stream drops under `CLOSED` at
+21:10 and only streams again at 22:30, the reopen at 22:00 was not seen, so 22:00–22:29 is unknown
+and asked of IG, not read as closed. Between runs the collector was down. An orderly stop writes
+`service_stop`; a crash writes nothing, which is why the last sign of life ends the run. History
+recorded before boots and statuses were written (before E1-T6) is taken as observed, as it was.
 
 **Two guards keep the allowance safe.** Minutes before the collector's first-ever record are out of
 scope: the platform never claimed to have captured them, and backfilling history is a different
@@ -78,11 +85,22 @@ Holidays need no list: IG never flags them `DEAL`.
    `ig-rest-live`), so a healed minute is always told from a streamed one (P8).
 6. **Close each gap row** whose last minute falls in the day, with IG's answer.
 7. **Record any gap the pump never saw** — one across a restart, which the pump cannot detect —
-   already closed with its outcome.
+   already closed with its outcome. A run that reaches midnight is the exception: the pump writes a
+   gap across midnight only when the next day's first bar seals, so the next day's heal closes that
+   row, and recording half of it now would count its minutes twice.
 
-**Before each run** the heal checks the allowance IG reported after the previous run. If it
-cannot cover the next run, the heal stops loud: the bars it healed stay, the rest of the rows stay
-open, and the runner retries later.
+**Before each run** the heal checks the allowance IG last reported — remembered across attempts until
+IG says it resets, so a retry never spends as if the week were fresh — and keeps a reserve of 2,000
+points it never spends, for manual heals and anything else sharing the key. If the next run would
+go below the reserve, the heal stops loud: the bars it healed stay, the rest of the rows stay open,
+and the runner retries later.
+
+**The account's offset can go stale.** IG reports it at login, and a clock change (British Summer
+Time ends on the last Sunday of October) makes the login's wrong for the rest of that session.
+When IG serves a window at another offset, the request fails with the offset IG actually used, read
+off the served candles' own local and UTC stamps; the heal asks once more at that offset and keeps
+it. One wasted request per change, never a retry storm. A retry also takes the session's failure
+path, so a dead token is replaced rather than reused.
 
 **Retries** (`heal.RetryingCandleSource`, Resilience4j): three attempts, doubling from two seconds,
 for transient failures only — an I/O error, or an IG error the classifier calls retryable. Never a

@@ -27,8 +27,11 @@ import dev.amfshr.tradebench.marketdata.jobs.MarketDay;
  * run, and each gap row in the day is closed with what IG said — {@code healed} (IG filled some of
  * it), {@code tickless_at_source} (IG had none of it: nobody traded) or {@code closed_at_source}
  * (every minute of it was closed by IG's own flag, so it was never a gap). Ticks are stream-only:
- * nothing here claims to recover one. The week's allowance is checked before each run; a run it
- * cannot cover stops the heal loud, leaving the rest open for a later attempt.
+ * nothing here claims to recover one. The week's allowance is checked before each run and
+ * remembered across attempts until IG says it resets; a run that would take it below the reserve
+ * stops the heal loud, leaving the rest open for a later attempt. A run reaching midnight leaves
+ * its gap row to the next day's heal: the pump writes a gap across midnight only once the next
+ * day's first bar seals, and recording half of it now would count those minutes twice.
  */
 public final class Healer implements DayPhase {
 
@@ -42,12 +45,19 @@ public final class Healer implements DayPhase {
     private final CandleSource candles;
     private final Clock clock;
     private final int maxRunMinutes;
+    private final long reserve;
+    // The last allowance IG reported, kept across attempts until it resets: a retry must not spend as
+    // if the week were fresh (the doctrine review's finding 3).
+    private long knownRemaining = Long.MAX_VALUE;
+    private Instant knownUntil = Instant.MIN;
 
-    public Healer(HealStore store, CandleSource candles, Clock clock, int maxRunMinutes) {
+    /** @param reserve points the heal never spends — kept for manual heals and whatever else shares the week */
+    public Healer(HealStore store, CandleSource candles, Clock clock, int maxRunMinutes, long reserve) {
         this.store = store;
         this.candles = candles;
         this.clock = clock;
         this.maxRunMinutes = maxRunMinutes;
+        this.reserve = reserve;
     }
 
     @Override
@@ -77,12 +87,13 @@ public final class Healer implements DayPhase {
         });
         List<Run> runs = Run.of(missing, maxRunMinutes);
         Set<Instant> filled = new TreeSet<>();
-        long remaining = Long.MAX_VALUE;
         long spent = 0;
         for (Run run : runs) {
-            if (remaining < run.minutes()) {
+            long remaining = clock.wallInstant().isBefore(knownUntil) ? knownRemaining : Long.MAX_VALUE;
+            if (remaining != Long.MAX_VALUE && remaining - run.minutes() < reserve) {
                 throw new IllegalStateException("allowance too low for the next run (" + remaining + " points left, "
-                        + run.minutes() + " minutes to ask) — healed " + filled.size() + " minutes, the rest stay open");
+                        + run.minutes() + " minutes to ask, " + reserve + " kept in reserve) — healed " + filled.size()
+                        + " minutes, the rest stay open");
             }
             PriceHistory history = candles.minuteCandles(epic, run.from(), run.to());
             List<Bar1m> bars = new ArrayList<>();
@@ -92,18 +103,22 @@ public final class Healer implements DayPhase {
             }
             store.writeHealed(bars);
             spent += bars.size();
-            remaining = history.allowance().remainingAllowance();
+            knownRemaining = history.allowance().remainingAllowance();
+            knownUntil = clock.wallInstant().plusSeconds(history.allowance().allowanceExpirySeconds());
         }
+        Set<Instant> healed = new TreeSet<>(filled);
+        healed.addAll(store.healedMinutes(epic, from, to)); // an earlier attempt's bars count too
         Instant healedAt = clock.wallInstant();
         List<OpenGap> gaps = store.openGapsEnding(epic, from, to); // read once: closing them hides them
         for (OpenGap gap : gaps) {
-            store.closeGap(gap.id(), healedAt, outcome(new Run(gap.from(), gap.to()), states, filled));
+            store.closeGap(gap.id(), healedAt, outcome(new Run(gap.from(), gap.to()), states, healed));
         }
         int rowsAdded = 0;
         for (Run run : runs) {
             boolean seenByThePump = gaps.stream().anyMatch(g -> !g.from().isAfter(run.from()) && !g.to().isBefore(run.to()));
-            if (!seenByThePump) {
-                store.recordHealedGap(epic, run, healedAt, outcome(run, states, filled));
+            boolean reachesMidnight = run.to().equals(to.minusSeconds(60));
+            if (!seenByThePump && !reachesMidnight) {
+                store.recordHealedGap(epic, run, healedAt, outcome(run, states, healed));
                 rowsAdded++;
             }
         }
@@ -113,22 +128,22 @@ public final class Healer implements DayPhase {
         detail.put("runs", runs.size());
         detail.put("healedMinutes", filled.size());
         detail.put("pointsSpent", spent);
-        if (remaining != Long.MAX_VALUE) {
-            detail.put("allowanceRemaining", remaining);
+        if (clock.wallInstant().isBefore(knownUntil)) {
+            detail.put("allowanceRemaining", knownRemaining);
         }
         detail.put("gapRowsClosed", gaps.size());
         detail.put("gapRowsAdded", rowsAdded);
         return detail;
     }
 
-    /** A gap's outcome from its minutes inside this day: filled by IG, empty at IG, or never open. */
-    static String outcome(Run gap, Map<Instant, MinuteState> states, Set<Instant> filled) {
+    /** A gap's outcome from its minutes inside this day: healed by IG (now or before), empty at IG, or never open. */
+    static String outcome(Run gap, Map<Instant, MinuteState> states, Set<Instant> healed) {
         boolean anyExpected = false;
         for (Map.Entry<Instant, MinuteState> e : states.entrySet()) {
             if (!gap.contains(e.getKey())) {
                 continue;
             }
-            if (filled.contains(e.getKey())) {
+            if (healed.contains(e.getKey())) {
                 return HEALED;
             }
             anyExpected |= e.getValue() != MinuteState.CLOSED;

@@ -117,6 +117,60 @@ class DailyJobsTest {
         assertTrue(log.stream().anyMatch(l -> l.contains("tick abandoned")), "said, never thrown");
     }
 
+    @Test
+    void aPhaseThatCannotLoadANativeLibraryIsAFailedRowAndTheRunnerLivesOn() throws Exception {
+        // the doctrine review's finding 5: the archive's DuckDB on the wrong platform throws a
+        // LinkageError — it must be a failed row, the next day still due, never a dead runner
+        DayPhase broken = new DayPhase() {
+            @Override
+            public String name() {
+                return "archive";
+            }
+
+            @Override
+            public ObjectNode run(MarketDay day) {
+                throw new UnsatisfiedLinkError("no libduckdb_java for this platform");
+            }
+        };
+        DailyJobs withBroken = new DailyJobs(clock, List.of(DAX), List.of(heal, broken), store,
+                new JobTuning(Duration.ofMinutes(5), Duration.ofMinutes(10), 7, Duration.ofHours(1), Duration.ofHours(4)),
+                log::add);
+        settle();
+
+        withBroken.tick();
+
+        assertFalse(store.last("archive", D).succeeded(), "the failure is a row");
+        assertTrue(store.last("archive", D).detailJson().contains("UnsatisfiedLinkError"));
+        assertTrue(heal.ran(D.minusDays(6)), "and every other day was still worked");
+    }
+
+    @Test
+    void aPhaseInterruptedByAShutdownIsNotRecordedAsAFailure() {
+        DayPhase stopped = new DayPhase() {
+            @Override
+            public String name() {
+                return "heal";
+            }
+
+            @Override
+            public ObjectNode run(MarketDay day) {
+                Thread.currentThread().interrupt(); // the shutdown's interrupt, surfacing as a plain exception
+                throw new IllegalStateException("retry wait interrupted");
+            }
+        };
+        DailyJobs withStop = new DailyJobs(clock, List.of(DAX), List.of(stopped), store,
+                new JobTuning(Duration.ofMinutes(5), Duration.ofMinutes(10), 7, Duration.ofHours(1), Duration.ofHours(4)),
+                log::add);
+        settle();
+
+        try {
+            org.junit.jupiter.api.Assertions.assertThrows(InterruptedException.class, withStop::tick);
+            assertTrue(store.rows.isEmpty(), "no failed row for a stop — the next start is not held back an hour");
+        } finally {
+            Thread.interrupted(); // leave the test thread clean
+        }
+    }
+
     private void settle() {
         clock.advance(Duration.ofMinutes(10));
     }

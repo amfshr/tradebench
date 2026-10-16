@@ -287,9 +287,24 @@ class IgRestClientTest {
         // what a wrong offset looks like — fail rather than heal the wrong minutes
         transport.enqueue(FakeTransport.json(200, Wire.fixture("captured-prices-dated-window.json")));
 
-        IllegalStateException thrown = assertThrows(IllegalStateException.class, () -> client.minuteCandlesBetween(
+        AccountZoneMismatch thrown = assertThrows(AccountZoneMismatch.class, () -> client.minuteCandlesBetween(
                 onUtcPlusOne(), DAX_EPIC, Instant.parse("2026-10-16T07:01:00Z"), Instant.parse("2026-10-16T07:10:00Z")));
         assertTrue(thrown.getMessage().contains("outside the asked window"));
+        assertEquals(Duration.ofHours(1), thrown.observedOffset(), "IG's own word, read off the served candles' stamps");
+    }
+
+    @Test
+    void aStaleOffsetIsReportedWithTheOffsetIgActuallyUsed() throws Exception {
+        // a session that logged in thinking UTC+0 asks for 07:00–07:10Z as 07:00 local; IG, at UTC+1,
+        // serves 06:00–06:10Z — read off the served candles, the offset IG used is +1h, not the +0 sent
+        transport.enqueue(FakeTransport.json(200, Wire.fixture("captured-prices-dated-window.json")));
+        IgSession staleAtUtc = new IgSession(new IgTokens("cstA", "xstA"), "AB12CE",
+                "https://demo-apd.marketdatasystems.com", List.of(), Duration.ZERO);
+
+        AccountZoneMismatch thrown = assertThrows(AccountZoneMismatch.class, () -> client.minuteCandlesBetween(
+                staleAtUtc, DAX_EPIC, Instant.parse("2026-10-16T08:00:00Z"), Instant.parse("2026-10-16T08:10:00Z")));
+
+        assertEquals(Duration.ofHours(1), thrown.observedOffset());
     }
 
     @Test

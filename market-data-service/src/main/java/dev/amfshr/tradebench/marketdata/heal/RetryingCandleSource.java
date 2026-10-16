@@ -4,6 +4,7 @@ import java.io.IOException;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.Locale;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import dev.amfshr.tradebench.ig.error.IgRetryableException;
 import dev.amfshr.tradebench.ig.rest.PriceHistory;
@@ -22,10 +23,11 @@ public final class RetryingCandleSource implements CandleSource {
 
     static final String ALLOWANCE_EXHAUSTED = "exceeded-account-historical-data-allowance";
 
-    /** The call being retried — in production, a dated history request on the current session. */
+    /** The call being retried — in production, {@link IgHistory}. {@code afterFailure} is true on a
+     * retry, so a dead session is replaced rather than reused. */
     @FunctionalInterface
     public interface Fetch {
-        PriceHistory fetch(String epic, Instant fromUtc, Instant toUtc) throws Exception;
+        PriceHistory fetch(String epic, Instant fromUtc, Instant toUtc, boolean afterFailure) throws Exception;
     }
 
     private final Fetch fetch;
@@ -42,7 +44,8 @@ public final class RetryingCandleSource implements CandleSource {
 
     @Override
     public PriceHistory minuteCandles(String epic, Instant fromUtc, Instant toUtc) throws Exception {
-        return retry.executeCallable(() -> fetch.fetch(epic, fromUtc, toUtc));
+        AtomicInteger attempt = new AtomicInteger();
+        return retry.executeCallable(() -> fetch.fetch(epic, fromUtc, toUtc, attempt.getAndIncrement() > 0));
     }
 
     static boolean isTransient(Throwable failure) {

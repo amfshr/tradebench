@@ -76,6 +76,10 @@ class RetryingCandleSourceTest {
     }
 
     private RetryingCandleSource source(Script script) {
-        return new RetryingCandleSource((epic, from, to) -> script.on(calls.incrementAndGet()), 3, Duration.ofMillis(1));
+        return new RetryingCandleSource((epic, from, to, afterFailure) -> {
+            int n = calls.incrementAndGet();
+            assertEquals(n > 1, afterFailure, "a retry asks for a fresh session");
+            return script.on(n);
+        }, 3, Duration.ofMillis(1));
     }
 }

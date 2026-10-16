@@ -36,7 +36,8 @@ class HealerTest {
 
     private final FakeStore store = new FakeStore();
     private final FakeIg ig = new FakeIg();
-    private final Healer healer = new Healer(store, ig, new FakeClock(Instant.parse("2026-10-16T00:10:00Z")), 720);
+    private final FakeClock clock = new FakeClock(Instant.parse("2026-10-16T00:10:00Z"));
+    private final Healer healer = new Healer(store, ig, clock, 720, 0);
 
     @Test
     void aGapIgCanFillIsHealedFromItsHistoryAndItsRowClosed() throws Exception {
@@ -111,6 +112,70 @@ class HealerTest {
         assertEquals(1, ig.asked.size(), "the second run was never asked");
         assertEquals(List.of(at("01:00")), store.healed.stream().map(Bar1m::startUtc).toList(), "what was healed stays");
         assertTrue(store.closed.isEmpty(), "rows stay open for the retry");
+    }
+
+    @Test
+    void aRetryAfterAPartialHealStillCallsTheEarlierHealedGapHealed() throws Exception {
+        // the doctrine review's finding 2: gap 10 heals, the allowance stops gap 11; on the retry gap
+        // 10's minutes are present bars — healed by the first attempt — and must not read as tickless
+        store.openAllDay();
+        store.missing("01:00", "05:00", "05:01");
+        store.gap(10, "01:00", "01:00");
+        store.gap(11, "05:00", "05:01");
+        ig.has("01:00", "05:00", "05:01");
+        ig.remainingAfterEachCall = 1;
+        assertThrows(IllegalStateException.class, () -> healer.run(DAX_D));
+
+        ig.remainingAfterEachCall = 9_000;
+        clock.advance(java.time.Duration.ofDays(8)); // IG's allowance has reset since
+        healer.run(DAX_D);
+
+        assertEquals(Map.of(10L, Healer.HEALED, 11L, Healer.HEALED), store.closed);
+    }
+
+    @Test
+    void theAllowanceIsRememberedAcrossAttemptsUntilItResets() throws Exception {
+        // the doctrine review's finding 3: a retry must not spend as if the week were fresh
+        store.openAllDay();
+        store.missing("01:00", "05:00", "05:01");
+        store.gap(10, "01:00", "01:00");
+        store.gap(11, "05:00", "05:01");
+        ig.has("01:00");
+        ig.remainingAfterEachCall = 1;
+        assertThrows(IllegalStateException.class, () -> healer.run(DAX_D));
+        int asked = ig.asked.size();
+
+        clock.advance(java.time.Duration.ofHours(1)); // the runner's retry, the same week
+        assertThrows(IllegalStateException.class, () -> healer.run(DAX_D));
+
+        assertEquals(asked, ig.asked.size(), "the second attempt refuses before asking IG anything");
+    }
+
+    @Test
+    void aRunExactlyCoveredByWhatIsLeftAboveTheReserveProceeds() throws Exception {
+        Healer reserving = new Healer(store, ig, clock, 720, 100);
+        store.openAllDay();
+        store.missing("01:00", "05:00", "05:01");
+        ig.has("01:00", "05:00", "05:01");
+        ig.remainingAfterEachCall = 102; // 102 − 2 minutes = the reserve exactly
+
+        reserving.run(DAX_D);
+
+        assertEquals(2, ig.asked.size(), "equal to the reserve is enough; below it is not");
+    }
+
+    @Test
+    void aRunReachingMidnightLeavesItsGapRowToTheNextDay() throws Exception {
+        // the doctrine review's finding 4: the pump writes a gap across midnight only when the next
+        // day's first bar seals; recording 23:50–23:59 now would count those minutes twice
+        store.everyMinuteHasABarExceptBetween("23:50", "23:59"); // one run, 23:50 to the day's last minute
+        store.flagAtStart = "DEAL";
+        ig.has("23:55");
+
+        healer.run(DAX_D);
+
+        assertEquals(List.of(at("23:55")), store.healed.stream().map(Bar1m::startUtc).toList(), "the bars are healed");
+        assertTrue(store.added.isEmpty(), "but no row of its own for a run that reaches midnight");
     }
 
     @Test
@@ -237,8 +302,16 @@ class HealerTest {
         }
 
         @Override
+        public Set<Instant> healedMinutes(String epic, Instant from, Instant to) {
+            Set<Instant> minutes = new HashSet<>();
+            healed.forEach(b -> minutes.add(b.startUtc()));
+            return minutes;
+        }
+
+        @Override
         public void writeHealed(List<Bar1m> written) {
             healed.addAll(written);
+            written.forEach(b -> bars.add(b.startUtc())); // a healed bar is a present bar from now on
         }
 
         @Override

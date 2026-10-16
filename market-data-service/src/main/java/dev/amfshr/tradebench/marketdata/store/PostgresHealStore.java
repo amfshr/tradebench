@@ -22,12 +22,16 @@ import dev.amfshr.tradebench.marketdata.heal.HealStore;
 import dev.amfshr.tradebench.marketdata.heal.OpenGap;
 import dev.amfshr.tradebench.marketdata.heal.Run;
 import dev.amfshr.tradebench.marketdata.heal.Window;
+import dev.amfshr.tradebench.marketdata.supervise.ReconnectClassifier;
 
 /**
  * The heal's reads and writes for one instance (E1-T6). It reads what the stream recorded — the
- * flags, the boots, the bars and gaps — and writes healed bars under the REST source, so a healed
- * minute is always told from a streamed one (P8). Observation windows run from each boot
- * ({@code service_start}) to the last sign of life before the next: the latest tick or event row.
+ * flags, the boots, the connection statuses, the bars and gaps — and writes healed bars under the
+ * REST source, so a healed minute is always told from a streamed one (P8). The collector was
+ * observing only while it was streaming: within each boot ({@code service_start} to the last sign
+ * of life before the next — the latest tick or event row), the spans a recorded
+ * {@code connection_status} says streaming (D27's one rule). A boot starts not streaming; history
+ * recorded before either kind of row existed is taken as observed, as it was before them.
  * A pooled connection per call; the heal runs on the jobs thread only.
  */
 public final class PostgresHealStore implements HealStore {
@@ -40,6 +44,7 @@ public final class PostgresHealStore implements HealStore {
     private final String instance;
     private final short userId;
     private final short streamSourceId;
+    private final short restSourceId;
     private final InstrumentIds instruments = new InstrumentIds(new ConcurrentHashMap<>());
 
     public PostgresHealStore(DataSource dataSource, String userName, String streamSourceName, String restSourceName,
@@ -51,7 +56,7 @@ public final class PostgresHealStore implements HealStore {
         try (Connection c = dataSource.getConnection()) {
             this.userId = Jdbc.lookupId(c, "SELECT id FROM users WHERE name = ?", userName, "user");
             this.streamSourceId = Jdbc.lookupId(c, "SELECT id FROM sources WHERE name = ?", streamSourceName, "source");
-            Jdbc.lookupId(c, "SELECT id FROM sources WHERE name = ?", restSourceName, "source"); // refuse an unseeded one now
+            this.restSourceId = Jdbc.lookupId(c, "SELECT id FROM sources WHERE name = ?", restSourceName, "source");
         } catch (SQLException e) {
             throw new PersistenceException("heal store initialisation failed", e);
         }
@@ -118,20 +123,53 @@ public final class PostgresHealStore implements HealStore {
                 });
         List<Window> windows = new ArrayList<>();
         if (starts.isEmpty()) {
-            windows.add(new Window(Instant.EPOCH, FAR_FUTURE)); // before the first boot was recorded (pre-E1-T6)
+            streaming(epic, Instant.EPOCH, FAR_FUTURE, true, windows); // before boots were recorded (pre-E1-T6)
         } else {
             @Nullable Instant beforeFirst = lastSignBefore(epic, starts.getFirst());
             if (beforeFirst != null) {
-                windows.add(new Window(Instant.EPOCH, beforeFirst));
+                streaming(epic, Instant.EPOCH, beforeFirst, true, windows);
             }
             for (int i = 0; i < starts.size(); i++) {
                 Instant end = i + 1 < starts.size() ? lastSignBefore(epic, starts.get(i + 1)) : FAR_FUTURE;
                 if (end != null && !end.isBefore(starts.get(i))) {
-                    windows.add(new Window(starts.get(i), end));
+                    streaming(epic, starts.get(i), end, false, windows); // a boot is not streaming yet
                 }
             }
         }
         return windows.stream().filter(w -> w.to().isAfter(from) && w.from().isBefore(to)).toList();
+    }
+
+    /** The streaming spans of one process window, from its recorded connection statuses. */
+    private void streaming(String epic, Instant from, Instant to, boolean streamingAtStart, List<Window> into) {
+        List<Instant> at = new ArrayList<>();
+        List<Boolean> streams = new ArrayList<>();
+        query("""
+                SELECT event_time_utc, detail->>'status' FROM service_events
+                WHERE event_type = 'connection_status' AND instance = ? AND event_time_utc >= ? AND event_time_utc <= ?
+                ORDER BY event_time_utc, id""", epic, (s, id) -> {
+                    s.setString(1, instance);
+                    s.setObject(2, Jdbc.utc(from));
+                    s.setObject(3, Jdbc.utc(to));
+                }, r -> {
+                    while (r.next()) {
+                        at.add(r.getObject(1, OffsetDateTime.class).toInstant());
+                        streams.add(ReconnectClassifier.isStreaming(r.getString(2)));
+                    }
+                    return null;
+                });
+        boolean streaming = streamingAtStart;
+        Instant since = from;
+        for (int i = 0; i < at.size(); i++) {
+            if (streaming && !streams.get(i)) {
+                into.add(new Window(since, at.get(i)));
+            } else if (!streaming && streams.get(i)) {
+                since = at.get(i);
+            }
+            streaming = streams.get(i);
+        }
+        if (streaming) {
+            into.add(new Window(since, to));
+        }
     }
 
     private @Nullable Instant lastSignBefore(String epic, Instant boot) {
@@ -158,6 +196,25 @@ public final class PostgresHealStore implements HealStore {
                     s.setShort(2, id);
                     s.setObject(3, Jdbc.utc(from));
                     s.setObject(4, Jdbc.utc(to));
+                }, r -> {
+                    Set<Instant> minutes = new HashSet<>();
+                    while (r.next()) {
+                        minutes.add(r.getObject(1, OffsetDateTime.class).toInstant());
+                    }
+                    return minutes;
+                });
+    }
+
+    @Override
+    public Set<Instant> healedMinutes(String epic, Instant from, Instant to) {
+        return query("""
+                SELECT start_utc FROM bars_1m WHERE user_id = ? AND source_id = ? AND instrument_id = ?
+                  AND start_utc >= ? AND start_utc < ?""", epic, (s, id) -> {
+                    s.setShort(1, userId);
+                    s.setShort(2, restSourceId);
+                    s.setShort(3, id);
+                    s.setObject(4, Jdbc.utc(from));
+                    s.setObject(5, Jdbc.utc(to));
                 }, r -> {
                     Set<Instant> minutes = new HashSet<>();
                     while (r.next()) {

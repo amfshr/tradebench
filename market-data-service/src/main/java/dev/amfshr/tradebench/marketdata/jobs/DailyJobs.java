@@ -90,7 +90,12 @@ public final class DailyJobs {
             return new JobRun(phase.name(), day, started, clock.wallInstant(), true, detail.toString());
         } catch (InterruptedException e) {
             throw e;
-        } catch (Exception e) {
+        } catch (Exception | LinkageError e) {
+            if (Thread.currentThread().isInterrupted()) {
+                throw new InterruptedException("stopped during " + phase.name()); // a shutdown, not a failure
+            }
+            // a LinkageError too — a native library that will not load (the archive's DuckDB on the wrong
+            // platform) must be a failed row and the next day still due, never a dead runner
             log.accept("jobs: " + phase.name() + " " + day.epic() + " " + day.day() + " failed — " + e);
             ObjectNode detail = MAPPER.createObjectNode().put("error", String.valueOf(e));
             return new JobRun(phase.name(), day, started, clock.wallInstant(), false, detail.toString());

@@ -73,6 +73,15 @@ class PostgresHealStoreTest extends PostgresTestBase {
     }
 
     @Test
+    void healedMinutesAreTheRestSourcesOnly() {
+        stream.write(bar("2026-10-15T10:00:00Z"));
+        heal.writeHealed(List.of(bar("2026-10-15T10:01:00Z")));
+
+        assertEquals(Set.of(at("10:01:00")), heal.healedMinutes(DAX, at("00:00:00"), Instant.parse("2026-10-16T00:00:00Z")),
+                "a streamed minute is present but was never healed");
+    }
+
+    @Test
     void theFlagsAreReadBackInOrderAndTheOneInForceBeforeADay() {
         flag("2026-10-14T21:00:00Z", "CLOSED");
         flag("2026-10-15T06:00:00Z", "DEAL");
@@ -85,17 +94,59 @@ class PostgresHealStoreTest extends PostgresTestBase {
     }
 
     @Test
-    void observationRunsFromEachBootToTheLastSignOfLifeBeforeTheNext() throws Exception {
+    void observationRunsFromEachBootsFirstStreamingStatusToTheLastSignOfLifeBeforeTheNext() throws Exception {
         lifecycle(EventType.SERVICE_START, "2026-10-15T10:00:00Z");
+        status("2026-10-15T10:00:04Z", "CONNECTED:STREAM-SENSING");
+        status("2026-10-15T10:00:05Z", "CONNECTED:WS-STREAMING");
         stream.write(new Tick(DAX, Instant.parse("2026-10-15T11:00:30Z"), BigDecimal.ONE, BigDecimal.TWO));
+        stream.flush();
+        lifecycle(EventType.SERVICE_START, "2026-10-15T12:00:00Z");
+        status("2026-10-15T12:00:06Z", "CONNECTED:WS-STREAMING");
+
+        List<Window> windows = heal.observed(DAX, at("00:00:00"), Instant.parse("2026-10-16T00:00:00Z"));
+
+        assertEquals(new Window(at("10:00:05"), at("11:00:30")), windows.get(0),
+                "from the first streaming status — the handshake is not observing — to the last tick before the reboot");
+        assertEquals(at("12:00:06"), windows.get(1).from());
+        assertEquals(2, windows.size());
+    }
+
+    @Test
+    void aStreamOutageInsideOneRunIsNotObserved() {
+        // the doctrine review's finding 1: the process stays up while the stream is down, so a
+        // reopen during the outage must read as unknown, not as the CLOSED flag still in force
+        lifecycle(EventType.SERVICE_START, "2026-10-15T08:00:00Z");
+        status("2026-10-15T08:00:05Z", "CONNECTED:WS-STREAMING");
+        status("2026-10-15T21:10:00Z", "DISCONNECTED:WILL-RETRY");
+        status("2026-10-15T21:10:02Z", "CONNECTING");
+        status("2026-10-15T22:30:00Z", "CONNECTED:WS-STREAMING");
+
+        List<Window> windows = heal.observed(DAX, at("00:00:00"), Instant.parse("2026-10-16T00:00:00Z"));
+
+        assertEquals(new Window(at("08:00:05"), at("21:10:00")), windows.get(0));
+        assertEquals(at("22:30:00"), windows.get(1).from(), "observed again only once it streamed");
+    }
+
+    @Test
+    void historyBeforeAnyBootWasRecordedIsObservedToItsLastSignOfLife() throws Exception {
+        // pre-E1-T6 history: no boot rows existed yet — taking it as unobserved would ask IG for every
+        // minute of it and spend the week's allowance on days the stream did capture
+        stream.write(new Tick(DAX, Instant.parse("2026-10-15T09:30:00Z"), BigDecimal.ONE, BigDecimal.TWO));
         stream.flush();
         lifecycle(EventType.SERVICE_START, "2026-10-15T12:00:00Z");
 
         List<Window> windows = heal.observed(DAX, at("00:00:00"), Instant.parse("2026-10-16T00:00:00Z"));
 
-        assertEquals(2, windows.size(), "no window before the first boot: nothing was recorded before it");
-        assertEquals(new Window(at("10:00:00"), at("11:00:30")), windows.get(0), "down from the last tick to the reboot");
-        assertEquals(at("12:00:00"), windows.get(1).from());
+        assertEquals(new Window(Instant.EPOCH, at("09:30:00")), windows.getFirst());
+    }
+
+    @Test
+    void aRecordWithNoBootsAtAllIsObservedThroughout() {
+        List<Window> windows = heal.observed(DAX, at("00:00:00"), Instant.parse("2026-10-16T00:00:00Z"));
+
+        assertEquals(1, windows.size());
+        assertEquals(Instant.EPOCH, windows.getFirst().from());
+        assertTrue(windows.getFirst().to().isAfter(Instant.parse("2026-10-16T00:00:00Z")));
     }
 
     @Test
@@ -133,6 +184,11 @@ class PostgresHealStoreTest extends PostgresTestBase {
     private void flag(String iso, String dealFlag) {
         events.write(ServiceEvent.of(EventType.MARKET_STATE_CHANGE, Instant.parse(iso)).forEpic(DAX)
                 .withDetail(MAPPER.createObjectNode().put("dealFlag", dealFlag)));
+    }
+
+    private void status(String iso, String status) {
+        events.write(ServiceEvent.of(EventType.CONNECTION_STATUS, Instant.parse(iso))
+                .withDetail(MAPPER.createObjectNode().put("status", status)));
     }
 
     private void lifecycle(EventType type, String iso) {

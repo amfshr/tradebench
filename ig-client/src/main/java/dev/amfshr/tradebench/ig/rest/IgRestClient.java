@@ -36,6 +36,7 @@ public final class IgRestClient {
     /** Candles are keyed on {@code snapshotTimeUTC} — the only timezone-proof field (§4.2). */
     private static final DateTimeFormatter UTC_FORMAT = DateTimeFormatter.ISO_LOCAL_DATE_TIME;
     private static final DateTimeFormatter ACCOUNT_LOCAL = DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss");
+    private static final DateTimeFormatter ACCOUNT_STAMP = DateTimeFormatter.ofPattern("yyyy/MM/dd HH:mm:ss");
 
     private final HttpTransport transport;
     private final IgEnvironment environment;
@@ -112,6 +113,13 @@ public final class IgRestClient {
             throw new IllegalStateException("the session carries no account timezoneOffset — refusing a dated"
                     + " request IG would read in an unknown zone");
         }
+        return minuteCandlesBetween(session, epic, fromUtc, toUtc, offset);
+    }
+
+    /** As above, at an offset the caller knows better than the login's — one IG itself reported in an
+     * {@link AccountZoneMismatch}. */
+    public PriceHistory minuteCandlesBetween(IgSession session, String epic, Instant fromUtc, Instant toUtc,
+            Duration offset) throws IOException, InterruptedException {
         if (toUtc.isBefore(fromUtc)) {
             throw new IllegalArgumentException("window ends before it starts: " + fromUtc + " → " + toUtc);
         }
@@ -120,14 +128,23 @@ public final class IgRestClient {
                 + "&from=" + ACCOUNT_LOCAL.format(LocalDateTime.ofInstant(fromUtc.plus(offset), ZoneOffset.UTC))
                 + "&to=" + ACCOUNT_LOCAL.format(LocalDateTime.ofInstant(toUtc.plus(offset), ZoneOffset.UTC))
                 + "&max=" + candles + "&pageSize=" + candles;
-        PriceHistory history = prices(get(session, path, 3), epic);
+        HttpResult result = get(session, path, 3);
+        PriceHistory history = prices(result, epic);
         for (PriceCandle candle : history.candles()) {
             if (candle.snapshotTimeUtc().isBefore(fromUtc) || candle.snapshotTimeUtc().isAfter(toUtc)) {
-                throw new IllegalStateException("candle at " + candle.snapshotTimeUtc() + " lies outside the"
-                        + " asked window " + fromUtc + " → " + toUtc + " — IG did not read it at offset " + offset);
+                throw new AccountZoneMismatch("candle at " + candle.snapshotTimeUtc() + " lies outside the asked window "
+                        + fromUtc + " → " + toUtc + " — IG did not read it at offset " + offset, observedOffset(result));
             }
         }
         return history;
+    }
+
+    /** The offset IG served at: a candle's local {@code snapshotTime} less its {@code snapshotTimeUTC}. */
+    private Duration observedOffset(HttpResult result) throws IOException {
+        JsonNode candle = mapper.readTree(result.body()).path("prices").path(0);
+        LocalDateTime local = LocalDateTime.parse(candle.path("snapshotTime").asText(), ACCOUNT_STAMP);
+        LocalDateTime utc = LocalDateTime.parse(candle.path("snapshotTimeUTC").asText(), UTC_FORMAT);
+        return Duration.between(utc, local);
     }
 
     private PriceHistory prices(HttpResult result, String epic) throws IOException {

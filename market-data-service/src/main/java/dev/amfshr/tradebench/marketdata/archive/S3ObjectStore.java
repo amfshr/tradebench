@@ -16,8 +16,10 @@ import software.amazon.awssdk.services.s3.model.PutObjectRequest;
 
 /**
  * Any bucket that speaks the S3 protocol — Cloudflare R2 for now, chosen at E1-T7 (nod ruling 1).
- * The upload carries the file's SHA-256, so the store verifies the bytes it received and refuses
- * a corrupted upload. Endpoint, bucket and keys are the instance's configuration, never defaults.
+ * The upload carries the file's SHA-256 ({@code x-amz-checksum-sha256}); Amazon S3 and R2 verify it
+ * against the bytes they received and refuse a mismatch — the bucket's behaviour, not this class's,
+ * and to be confirmed against the chosen bucket at E1-T7 (newer SDKs' default checksum handling has
+ * tripped R2 before). Endpoint, bucket and keys are the instance's configuration, never defaults.
  */
 public final class S3ObjectStore implements ObjectStore, AutoCloseable {
 
