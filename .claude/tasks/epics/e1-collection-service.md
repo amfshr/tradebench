@@ -226,7 +226,7 @@ rebuild at 60, not 180); its rebaseline half at T11 (PR #16, 2026-10-08).**
    from the ruling's ordering, for that reason: the host wakes with the Lightstreamer client stuck in `DISCONNECTED:WILL-RETRY`
    and the escalator rebuilds it, measured in awake time. **Residual 3 is closed, final (2026-10-09).**
 
-## T6 — Daily completeness + archive (D6 amended, D30) ⬜ ready to start (re-scoped 2026-10-11 by D30; unblocked 2026-10-11 by E1-T13's merge, PR #25; trued 2026-10-15 — no Spring, R7; the calendar-source nod item; T14 first)
+## T6 — Daily completeness + archive (D6 amended, D30) ⬜ ready to start (re-scoped 2026-10-11 by D30; unblocked 2026-10-11 by E1-T13's merge, PR #25; trued 2026-10-15 — no Spring, R7; the calendar-source nod item; T14 first — ✅ merged 2026-10-16, PR #26)
 
 **Type** build · **Branch** `e1-t6-heal-and-archive` · **Started** — · **Blocked by** —
 
@@ -1538,9 +1538,9 @@ too) · D28 (Tier 1's hold — gains the lock's fate across a held outage) · D2
 T12 § ruling 4 (superseded by ruling 1) · P9 (the lock is a fail-closed guard) · IG playbook §7 (single-instance discipline) · Field
 Manual ch. 08 (the ladders), ch. 10 (the failure playbook) · backlog B11–B15.
 
-## T14 — The platform user 🔶 (born 2026-10-15 from the design session — R10, D31; sequenced before T6; started 2026-10-16)
+## T14 — The platform user ✅ (born 2026-10-15 from the design session — R10, D31; sequenced before T6; started 2026-10-16; done 2026-10-16 — PR #26, merged by Alex, merge `b61b740` — complete)
 
-**Type** build · **Branch** `e1-t14-platform-user` · **Started** 2026-10-16 · **Blocked by** —
+**Type** build · **Branch** `e1-t14-platform-user` (cut from main `acf0bd8`, 2026-10-16; merged from it, PR #26 → `main`, 2026-10-16 — branch deleted) · **Started** 2026-10-16 · **Blocked by** —
 
 **Why (R10, D31):** the deployed collector persists rows under the admin-owned platform tier —
 PRD §7's platform-provided datasets every user sees — so the tier's owner is the user **`platform`**,
@@ -1582,11 +1582,29 @@ ruled it; it stays in `backlog.md`.
   Field Manual ch. 05, `docs/product/overview.md`, `CLAUDE.md`'s "runs as `default-user`" line —
   updated; dated records (decisions, session records, the Done history, backlog captures) keep theirs.
 
-**Tests:** `Main` started without `TRADEBENCH_USER` refuses loud (failure-mode test — mutation:
-restore a code default → red); the migration applied over a database carrying V1 + V2 rows renames in
-place (Testcontainers: a tick written under the old name is read back under `platform` with the same
-`user_id`).
+**Tests (as built — trued at the close-out 2026-10-16):** `Main` started without `TRADEBENCH_USER` refuses
+loud (`MainTest`, failure-mode — mutations: restore a code default → red; read the wrong key → both
+`MainTest` tests red). **The write-then-migrate test planned here was not built:** `PlatformUserSeedTest`
+checks the renamed seed after a fresh migration run, and the live-rows case is covered by the 17 store tests
+(all run under `platform` — a no-op `V3` turns them and the seed test red) plus the SQL's semantics — the
+`UPDATE` touches only `name`, and every table references `users.id`, so no row keyed by `user_id` moves.
+Recorded at the doctrine review.
 
-**DoD:** no `default-user` literal left in code, the live seed, tests, scripts or the live docs;
-`TRADEBENCH_USER` required with no code default; the schema render + drift gate green;
-`./gradlew build` green; merged before T7's first production rows.
+**DoD:**
+- [x] no `default-user` literal left in code, the live seed, tests, scripts or the live docs — `V1`/`V2`
+  keep theirs (immutable under the checksum); `V3__platform_user.sql` renames the seed in place
+- [x] `TRADEBENCH_USER` required with no code default — a `Main` started without it refuses loud
+  (failure-mode test, mutation-verified)
+- [x] the schema render + drift gate green (unchanged)
+- [x] `./gradlew build` green — 375 tests (+3)
+- [x] merged before T7's first production rows — T7 has not run
+
+**Merged 2026-10-16 — PR #26** (`e1-t14-platform-user` → `main`; merged by Alex — GitHub stamps
+2026-10-16T19:02:47Z — merge `b61b740`; CI green — `build`, `web`, GitGuardian; the branch deleted locally
+and on origin). Commits as merged: `32f5cd5` (the migration; `Main` via `required()`; fixtures,
+`scripts/export-replay.sh`, `.env.example`, the live docs) · `2eb4441` (board) · `d767af0` (the doctrine
+review's fixes — `export-replay.sh` checks `TRADEBENCH_USER` before its pipeline, where the redirection
+would have truncated `--out`; `run-capture.sh`'s required list; the component doc and the secrets spec
+name the variable; `MainTest` uses a synthetic owner). Evidence: 3 mutations killed; docs site 65/65; the
+doctrine review pass-with-findings, four fixed on-branch; G1 clean. Closes backlog B1's gap 2. **B10 not
+folded in** — it stays in `backlog.md`. Its close-out the Done history entry tagged E1-T14.

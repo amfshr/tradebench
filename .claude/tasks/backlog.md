@@ -21,7 +21,7 @@ control), after E9's read-only slices. The jobs table lives in the **`control` d
 definition from `control-service`'s internal endpoint, applying by `(job id, version)` with a boot and a
 slow periodic resync (D32 (3) — the collector reads no other service's tables, D17). **The collector's
 consumer side is E9/E1 joint work under E9-T8.** Gap 2 below (`TRADEBENCH_USER` + a `users` row per user)
-is closed by **E1-T14** (the seed renamed `platform`, R10). **What stays here, as is:** N jobs as N
+was closed by **E1-T14** (PR #26, merged 2026-10-16 — the seed renamed `platform`, R10). **What stays here, as is:** N jobs as N
 processes (the job manager as a process launcher), gap 1 (the per-job advisory lock), gap 3 (the env file +
 unit per job → E1-T7), the isolation findings. The "Config/profiles DB the service reads" bullet below is
 superseded by the fetch — kept as the record of the first shape.
@@ -56,7 +56,8 @@ transport-layer concern *below* the connection/user layer, independent of the nu
    to protect the **IG key** — no accidental second Lightstreamer connection on a shared key (IG playbook
    §7) — not the database, so B1 scopes it to what it protects: **per job** (keyed on the instance name, or
    better on `(user, source)`). A double-launch of the *same* job stays refused.
-2. **`Main` hardcodes `USER = "default-user"`** and `V1__baseline.sql` seeds only that user: B1 needs a
+2. **Closed 2026-10-16 by E1-T14 (PR #26)** — `Main` reads `TRADEBENCH_USER` through `required()`, no code
+   default; `V3__platform_user.sql` renames the seed `platform`. *As captured:* **`Main` hardcodes `USER = "default-user"`** and `V1__baseline.sql` seeds only that user: B1 needs a
    `TRADEBENCH_USER` config + a `users` row per platform user (e.g. Alex's brother). Env-file-per-job is fine
    until D16's multi-user era moves users' broker credentials into app-encrypted DB columns (E8 — pulled
    to **E9-T8** by R11, 2026-10-15: save credentials is B1's control half).
