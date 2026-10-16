@@ -64,7 +64,7 @@ stands alone) · P8 data collected forever, source-attributed always · P9 fail 
 - Cheap work only on transport callback threads; queue the rest. At-least-once consumers,
   idempotent by key, ack-after-apply.
 - **User and data-source are first-class dimensions in every schema/API from day one** (the
-  platform runs as `default-user` until login lands).
+  platform runs as the `platform` user — the admin-owned platform tier's owner, D31 — until login lands).
 - **Testing doctrine** (engineering playbook §2): every new behavioural test is
   mutation-verified (apply the exact break it exists to catch → red); anchor expectations
   independently of the code under test; golden bytes for wire contracts; fail-closed paths get

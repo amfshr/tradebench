@@ -60,6 +60,8 @@
 - `IG_DEMO_IDENTIFIER / PASSWORD / API_KEY / ACCOUNT_ID` and the `IG_LIVE_*` mirror — only
   the selected set is read.
 - `TRADEBENCH_INSTANCE` — every process names itself before acting.
+- `TRADEBENCH_USER` — the owner of every row the instance writes (the platform tier's `platform`
+  until jobs carry real users, D31); required, never defaulted in code.
 - `TRADEBENCH_*` for all service config (`_CAPTURE_DIR`, `_EPICS`; later `_DB_URL`,
   `_DB_PASSWORD`, `_SMTP_*`, `_MASTER_KEY`).
 - Source attribution follows the environment automatically (`ig-stream-demo` /

@@ -39,9 +39,9 @@ class PostgresObservabilityStoreTest extends PostgresTestBase {
             s.execute("TRUNCATE service_events, bar_gaps, capture_status, instruments"
                     + " RESTART IDENTITY CASCADE");
         }
-        // 'ig-stream-live' seeds to id 2 (default-user is id 1), so a user/source swap or a
+        // 'ig-stream-live' seeds to id 2 (platform is id 1), so a user/source swap or a
         // dropped dimension is value-detectable, not hidden by an id collision.
-        store = new PostgresObservabilityStore(database.dataSource(), "default-user",
+        store = new PostgresObservabilityStore(database.dataSource(), "platform",
                 "ig-stream-live", "test-run");
     }
 
@@ -65,7 +65,7 @@ class PostgresObservabilityStoreTest extends PostgresTestBase {
             assertEquals("resilience", r.getString("category"));
             assertEquals("warn", r.getString("severity"));
             assertEquals("test-run", r.getString("instance"));
-            assertEquals("default-user", r.getString("usr"));
+            assertEquals("platform", r.getString("usr"));
             assertEquals("ig-stream-live", r.getString("source"));
             assertEquals(DAX, r.getString("market"));
             assertEquals("3", r.getString("attempt"));
@@ -86,7 +86,7 @@ class PostgresObservabilityStoreTest extends PostgresTestBase {
             r.next();
             assertEquals("error", r.getString("category"));
             assertEquals("error", r.getString("severity"));
-            assertEquals("default-user", r.getString("usr"));
+            assertEquals("platform", r.getString("usr"));
             assertEquals("ig-stream-live", r.getString("source"));
             assertNull(r.getObject("instrument_id"));
         }
@@ -112,7 +112,7 @@ class PostgresObservabilityStoreTest extends PostgresTestBase {
             assertEquals(1, r.getInt("open")); // healing is T6's
             assertEquals(Instant.parse("2026-09-28T09:01:00Z"), instant(r, "gfrom"));
             assertEquals(Instant.parse("2026-09-28T09:03:00Z"), instant(r, "gto"));
-            assertEquals("default-user", r.getString("usr"));
+            assertEquals("platform", r.getString("usr"));
             assertEquals("ig-stream-live", r.getString("source"));
         }
     }

@@ -50,14 +50,13 @@ import dev.amfshr.tradebench.marketdata.supervise.Tuning;
  */
 public final class Main {
 
-    private static final String USER = "default-user";
-
     private Main() {
     }
 
     static void main() throws Exception {
         Map<String, String> env = System.getenv();
         String instance = required(env, "TRADEBENCH_INSTANCE");
+        String user = platformUser(env);
         List<String> epics = Arrays.stream(required(env, "TRADEBENCH_EPICS").split(","))
                 .map(String::strip).filter(s -> !s.isEmpty()).toList();
         IgEnvironment igEnv = igEnvironment(required(env, "TRADEBENCH_IG_ENV"));
@@ -83,7 +82,7 @@ public final class Main {
                         + ".jsonl");
                 JsonlStore jsonl =
                         new JsonlStore(Files.newBufferedWriter(file, StandardCharsets.UTF_8));
-                jsonl.writeMeta(USER, source, instance, epics, started);
+                jsonl.writeMeta(user, source, instance, epics, started);
                 sink = jsonl;
                 // jsonl is market-data-only (decision #1): gaps and service events have no home
                 // here, so they are discarded — the db sink is the one that persists observability.
@@ -98,9 +97,9 @@ public final class Main {
                 database = Database.connect(dbUrl, required(env, "TRADEBENCH_DB_USER"),
                         required(env, "TRADEBENCH_DB_PASSWORD"));
                 lock = SingleInstanceLock.acquire(database);
-                sink = new PostgresStore(database.dataSource(), USER, source);
+                sink = new PostgresStore(database.dataSource(), user, source);
                 PostgresObservabilityStore observability = new PostgresObservabilityStore(
-                        database.dataSource(), USER, source, instance);
+                        database.dataSource(), user, source, instance);
                 eventLog = observability;
                 gaps = observability;
                 statusStore = observability;
@@ -235,6 +234,13 @@ public final class Main {
             default -> throw new IgFatalConfigException(
                     "TRADEBENCH_IG_ENV must be 'demo' or 'live', got '" + value + "'");
         };
+    }
+
+    /** The user every row this instance writes belongs to — the admin-owned platform tier's owner
+     * (`platform`, D31) until jobs carry real users. Named by the environment, never defaulted in
+     * code: an instance must say whose rows it writes before it writes one. */
+    static String platformUser(Map<String, String> env) {
+        return required(env, "TRADEBENCH_USER");
     }
 
     private static String required(Map<String, String> env, String key) {

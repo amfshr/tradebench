@@ -14,7 +14,8 @@
 #              (the container name; psql runs inside it as its own POSTGRES_USER). G1: the exporter
 #              reads the per-market tick tables only — never strategy_events or the OMS tables.
 # tradebench — Tradebench's own market_data: set TRADEBENCH_PSQL_URL (postgres://user:pass@host/db),
-#              and optionally TRADEBENCH_USER_NAME / TRADEBENCH_SOURCE_NAME (default-user, ig-stream-demo).
+#              TRADEBENCH_USER (the owner of the rows — the service's own variable, required, D31) and
+#              optionally TRADEBENCH_SOURCE_NAME (default ig-stream-demo).
 # Nothing machine-specific is defaulted here (config discipline); the variables come from the shell.
 set -euo pipefail
 cd "$(dirname "$0")/.."
@@ -54,11 +55,13 @@ case "$source_kind" in
     ;;
   tradebench)
     [[ -n "${TRADEBENCH_PSQL_URL:-}" ]] || { echo "set TRADEBENCH_PSQL_URL (postgres://user:pass@host:port/db)" >&2; exit 1; }
+    # checked here, before the pipeline: a check inside it would run after '> "$out"' had truncated the fixture
+    [[ -n "${TRADEBENCH_USER:-}" ]] || { echo "set TRADEBENCH_USER (the owner of the rows, e.g. platform)" >&2; exit 1; }
     preamble+=$'\\getenv user_name R_USER_NAME\n\\getenv source_name R_SOURCE_NAME\n'
     { printf '%s' "$preamble"; cat "$replays/export-tradebench.sql"; } \
       | R_ANCHOR="$anchor" R_BEFORE="$before" R_UNTIL="$until_secs" R_NAME="$name" \
         R_RECORDED="$recorded" R_MODELLED="$modelled" \
-        R_USER_NAME="${TRADEBENCH_USER_NAME:-default-user}" R_SOURCE_NAME="${TRADEBENCH_SOURCE_NAME:-ig-stream-demo}" \
+        R_USER_NAME="$TRADEBENCH_USER" R_SOURCE_NAME="${TRADEBENCH_SOURCE_NAME:-ig-stream-demo}" \
         psql "$TRADEBENCH_PSQL_URL" -At -v ON_ERROR_STOP=1 -f - \
       | jq -c . > "$out"
     ;;

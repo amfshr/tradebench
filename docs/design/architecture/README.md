@@ -36,7 +36,7 @@ flowchart LR
 
 The platform is provider-agnostic (D5): IG is the first integration, never the identity.
 Every series knows its source; user + data-source are first-class dimensions in every
-schema/API from day one (the platform runs as `default-user` until login lands, PRD §2).
+schema/API from day one (the platform runs as the `platform` user — the admin-owned platform tier's owner, D31 — until login lands, PRD §2).
 
 ## 2. Containers — deployables and the artifacts they're built from
 
@@ -162,7 +162,7 @@ backtests. Each element already has its seat:
 | `market`, `timeframes: [ticks, 1m, 10m]` | capture stays atoms (ticks + 1m, D15); a job's timeframe list records **desired outputs** — higher TFs derive from healed 1m, never stream separately |
 | `start/end time` | playbook §4.4 windows (market properties + job windows) — in-service windows are T5/T7-era plan |
 | jobs CRUD + status over REST | `control-service` owns the jobs table in the `control` database and the REST surface (D31); the collector learns by **notify, then fetch** (D32): a nudge on Redis Streams, the definition fetched from the control service's internal endpoint, applied idempotently by `(job id, version)` — "read env" in `app.Main` becomes "fetch the job set"; the composition root spawns N assemblies onto the *same* ingest→store pipeline |
-| multi-user attribution | physically present on every row since V1 (`user_id`, `source_id`) — jobs supply real values where the runner writes `default-user` |
+| multi-user attribution | physically present on every row since V1 (`user_id`, `source_id`) — jobs supply real values where the runner writes `platform` (D31) |
 | serving live + backtests | D17: `market_data` is the published read product; D4 events when the first live consumer arrives |
 
 Nothing in E1's build closes a door on this; the door-openers (dimensions from V1,

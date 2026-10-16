@@ -1538,9 +1538,9 @@ too) · D28 (Tier 1's hold — gains the lock's fate across a held outage) · D2
 T12 § ruling 4 (superseded by ruling 1) · P9 (the lock is a fail-closed guard) · IG playbook §7 (single-instance discipline) · Field
 Manual ch. 08 (the ladders), ch. 10 (the failure playbook) · backlog B11–B15.
 
-## T14 — The platform user ⬜ (born 2026-10-15 from the design session — R10, D31; sequenced before T6)
+## T14 — The platform user 🔶 (born 2026-10-15 from the design session — R10, D31; sequenced before T6; started 2026-10-16)
 
-**Type** build · **Branch** `—` · **Started** — · **Blocked by** —
+**Type** build · **Branch** `e1-t14-platform-user` · **Started** 2026-10-16 · **Blocked by** —
 
 **Why (R10, D31):** the deployed collector persists rows under the admin-owned platform tier —
 PRD §7's platform-provided datasets every user sees — so the tier's owner is the user **`platform`**,
@@ -1553,7 +1553,15 @@ instance (B1's plan — its gap 2, closed here); admin is Alex, mapped at login 
 **before T6 starts**, rather than T6's first increment: it needs no nod (R10 is ruled), lands in an
 hour, and T6's fixtures are then born under `platform` — fewer files for the rename to touch and T6's
 branch stays about heal + archive. The hard constraint is only "before T7's first production rows";
-T6's nod on 2026-10-16 does not wait for it. Suggested branch `e1-t14-platform-user` (not yet cut).
+T6's nod on 2026-10-16 does not wait for it. Branch `e1-t14-platform-user`, cut from `main` at `acf0bd8` on
+2026-10-16.
+
+**Started 2026-10-16 — no nod held (R10/D31 ruled it; the ticket is mechanical).** Built as one small PR
+on `e1-t14-platform-user`: a new migration `V3__platform_user.sql` renaming the seed in place; `Main` reads
+`TRADEBENCH_USER` through `required()` — no code default — with its failure-mode test; the test fixtures,
+`scripts/export-replay.sh` (**`TRADEBENCH_USER`, required** — refined at start from the `TRADEBENCH_USER_NAME`
+default named under Surfaces), `.env.example` and the live docs follow. **B10 is not folded in** — Alex has not
+ruled it; it stays in `backlog.md`.
 
 **Surfaces (verified 2026-10-15 by `git grep default-user`):**
 - `market-data-service/src/main/java/dev/amfshr/tradebench/marketdata/app/Main.java` line 53 —

@@ -41,7 +41,7 @@ Three trusted users; no public deploy, ever (PRD §2, §12):
 - **Alex's brother** — a capable DSL learner; role still firming up.
 
 **User is a designed-in concept, not a v1 feature**: every schema and API has carried the
-user dimension from the first migration, while the platform *operates* as `default-user`
+user dimension from the first migration, while the platform *operates* as the `platform` user
 until login lands (phase 5). The same is true of data-source attribution.
 
 ## The ten principles, in prose

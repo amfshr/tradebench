@@ -38,7 +38,8 @@ hold-and-retry (PR #13, 2026-10-05) are merged; the daily heal is T6.*
 
 ## Config (env only, D16)
 
-`TRADEBENCH_INSTANCE`, `TRADEBENCH_EPICS`, `TRADEBENCH_IG_ENV`, `TRADEBENCH_SINK` (jsonl|db),
+`TRADEBENCH_INSTANCE`, `TRADEBENCH_USER` (the owner of every row this instance writes — the
+platform tier's `platform`, D31), `TRADEBENCH_EPICS`, `TRADEBENCH_IG_ENV`, `TRADEBENCH_SINK` (jsonl|db),
 `TRADEBENCH_DB_*`, IG creds via `IG_DEMO_*` / `IG_LIVE_*`. No machine-specific code defaults.
 
 *Teaches the concepts: Field Manual
