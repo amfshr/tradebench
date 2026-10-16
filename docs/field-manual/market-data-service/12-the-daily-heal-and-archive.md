@@ -84,22 +84,30 @@ Holidays need no list: IG never flags them `DEAL`.
 5. **Write what IG has** under the REST source of the environment (`ig-rest-demo` or
    `ig-rest-live`), so a healed minute is always told from a streamed one (P8).
 6. **Close each gap row** whose last minute falls in the day, with IG's answer.
-7. **Record any gap the pump never saw** — one across a restart, which the pump cannot detect —
-   already closed with its outcome. A run that reaches midnight is the exception: the pump writes a
-   gap across midnight only when the next day's first bar seals, so the next day's heal closes that
-   row, and recording half of it now would count its minutes twice.
+7. **Record any gap the pump could not see**, straight after healing that run, so a later stop in
+   the same attempt cannot lose it. The pump writes a gap row when the first bar after it seals,
+   from a watermark it set before the gap — so a gap is the pump's whenever one run of the process
+   was up before it began and past its end, whatever day the pump writes the row on (across midnight,
+   across a weekend's maintenance window). A gap across a restart is the heal's: the new process has
+   no watermark from before it.
 
 **Before each run** the heal checks the allowance IG last reported — remembered across attempts until
 IG says it resets, so a retry never spends as if the week were fresh — and keeps a reserve of 2,000
-points it never spends, for manual heals and anything else sharing the key. If the next run would
+points for manual heals and anything else sharing the key. The allowance is known only from IG's
+answers, so after a restart the first run is unchecked: it can spend up to one run, 720 points, into
+the reserve before the check has a figure to apply. If the next run would
 go below the reserve, the heal stops loud: the bars it healed stay, the rest of the rows stay open,
 and the runner retries later.
 
 **The account's offset can go stale.** IG reports it at login, and a clock change (British Summer
 Time ends on the last Sunday of October) makes the login's wrong for the rest of that session.
-When IG serves a window at another offset, the request fails with the offset IG actually used, read
-off the served candles' own local and UTC stamps; the heal asks once more at that offset and keeps
-it. One wasted request per change, never a retry storm. A retry also takes the session's failure
+Every non-empty answer is checked: each served candle carries both its local and its UTC stamp, so
+the offset IG actually served at is read off the answer and compared with the one sent — even when
+the shifted window happens to hold candles inside the asked one. On a mismatch the heal asks once
+more at IG's offset and keeps it until IG says otherwise. One wasted request per change, never a
+retry storm. An *empty* answer cannot be checked: a wrong offset whose shifted window falls entirely
+in a closed hour would read as `tickless_at_source`; the first non-empty answer after it corrects the
+offset for everything that follows. A retry also takes the session's failure
 path, so a dead token is replaced rather than reused.
 
 **Retries** (`heal.RetryingCandleSource`, Resilience4j): three attempts, doubling from two seconds,

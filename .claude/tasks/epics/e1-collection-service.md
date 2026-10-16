@@ -272,7 +272,7 @@ checked by hand each evening (the runbook documents the check: heartbeat line ·
 `capture_status` freshness · the day's `job_runs` row).
 **Tests:** heal classification table-driven and exact; allowance/pacing boundary tests; a failed
 phase still writes its `job_runs` row (failure-mode test — the row is the audit, clean or not);
-Parquet golden file for the day-export contract.
+Parquet schema-and-values contract (as built — a byte golden was dropped: DuckDB's bytes carry its version, so a golden would break on every upgrade without the contract changing) for the day-export contract.
 **Nod (Alex, 2026-10-16)** — the design nod (D13), held the day the ticket started; it replaces the
 open in-ticket decisions and the two queued nod items (the schema/role story, 2026-09-28; the expected
 calendar's source, 2026-10-15) and the B2 retry choice this § carried:
@@ -324,7 +324,7 @@ calendar's source, 2026-10-15) and the B2 retry choice this § carried:
 no `market_calendar`) · ② the job runner, driven by the recorded flags, + `job_runs` per phase, plus
 **`SERVICE_START` at boot and `SERVICE_STOP` on an orderly stop** (catalogued since D25, never written —
 they bound the unknown windows) · ③ the heal (scan, classify open / closed / unknown, fetch exactly the
-gap's minutes, upsert) · ④ the archive (Parquet golden file, upload, manifest row) · ⑤ docs + runbook.
+gap's minutes, upsert) · ④ the archive (Parquet schema-and-values contract (as built — a byte golden was dropped: DuckDB's bytes carry its version, so a golden would break on every upgrade without the contract changing), upload, manifest row) · ⑤ docs + runbook.
 The probe's captures become the **re-goldened `/markets` and `/prices` wire fixtures** (the wire
 README asked T6 to re-golden them from captured bytes).
 
@@ -339,6 +339,14 @@ before firing), never as a backoff-and-retry error.
 REST retry** on the ig-client — Resilience4j's retry (ruling 6); the broad OMS/enquiries surface rolls
 it out at E6.
 
+
+
+**Decision: (TBD) — for Alex at the T6 PR (the re-review's N6, 2026-10-16).** Observation reads only the
+connection's status, so two cases still count as observing: a **quarantined** market (its pair unsubscribed,
+`MARKET_QUARANTINED`, never released within a process) and a **long CLOSED stand-down** the 12-hour teaching
+resubscribe has not yet confirmed (a reopen during it reads as closed until the next teach). Treating both as
+*unknown* would ask IG — free on closed spans, since IG returns no candles there. Not built: it extends ruling 4
+beyond D27's one streaming rule.
 
 ## T7 — Deploy ⬜ (gains 2026-10-15 from the design session: Redis in the stack, the OTel agent + Grafana Cloud export, the dead-man ping; opens with a provider analysis + design session — Alex, 2026-10-16)
 

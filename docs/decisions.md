@@ -364,7 +364,8 @@ until we use it every day").*
 which were never gaps); a failed heal writes no outcome — the row stays open for the retry and the
 failure is in `job_runs`. `job_runs` gains user, source, market and day (V5); `archives` gains user and
 source (V4).*
-*Refined 2026-10-16 (E1-T6's doctrine review, finding 1): "observing" means streaming, not merely running —
+*Refinement proposed 2026-10-16 (Claude, from E1-T6's doctrine review, finding 1) — **for Alex's ruling at the
+T6 PR, not yet ruled**: "observing" means streaming, not merely running —
 within each run of the process, the spans a recorded `connection_status` says streaming (D27's one rule).
 A stream outage inside one run is therefore unknown, so a reopen the stream missed is asked of IG rather
 than read as the closed flag still in force; closed spans cost nothing, since IG returns no candles there.

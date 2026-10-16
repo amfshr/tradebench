@@ -130,6 +130,15 @@ public final class IgRestClient {
                 + "&max=" + candles + "&pageSize=" + candles;
         HttpResult result = get(session, path, 3);
         PriceHistory history = prices(result, epic);
+        if (!history.candles().isEmpty()) {
+            // every served candle carries its local and UTC stamps: if IG served at another offset, say so even
+            // when the shifted window happens to hold candles inside the asked one — never heal the wrong minutes
+            Duration served = observedOffset(result);
+            if (!served.equals(offset)) {
+                throw new AccountZoneMismatch("IG served the window at offset " + served + ", not the " + offset
+                        + " it was sent at", served);
+            }
+        }
         for (PriceCandle candle : history.candles()) {
             if (candle.snapshotTimeUtc().isBefore(fromUtc) || candle.snapshotTimeUtc().isAfter(toUtc)) {
                 throw new AccountZoneMismatch("candle at " + candle.snapshotTimeUtc() + " lies outside the asked window "

@@ -112,6 +112,23 @@ class PostgresHealStoreTest extends PostgresTestBase {
     }
 
     @Test
+    void aProcessRunSpansItsBootToItsLastSignOfLifeStreamingOrNot() throws Exception {
+        // the pump's view: it sees a gap if one process was up before and past it, outage or not
+        lifecycle(EventType.SERVICE_START, "2026-10-15T08:00:00Z");
+        status("2026-10-15T08:00:05Z", "CONNECTED:WS-STREAMING");
+        status("2026-10-15T21:10:00Z", "DISCONNECTED:WILL-RETRY");
+        stream.write(new Tick(DAX, Instant.parse("2026-10-15T23:00:00Z"), BigDecimal.ONE, BigDecimal.TWO));
+        stream.flush();
+        lifecycle(EventType.SERVICE_START, "2026-10-16T01:00:00Z");
+
+        List<Window> runs = heal.processRuns(DAX, at("00:00:00"), Instant.parse("2026-10-17T00:00:00Z"));
+
+        assertEquals(new Window(at("08:00:00"), at("23:00:00")), runs.get(0),
+                "one run from its boot through the outage to its last tick");
+        assertEquals(Instant.parse("2026-10-16T01:00:00Z"), runs.get(1).from());
+    }
+
+    @Test
     void aStreamOutageInsideOneRunIsNotObserved() {
         // the doctrine review's finding 1: the process stays up while the stream is down, so a
         // reopen during the outage must read as unknown, not as the CLOSED flag still in force

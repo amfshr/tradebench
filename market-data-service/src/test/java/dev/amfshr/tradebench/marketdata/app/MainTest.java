@@ -71,4 +71,14 @@ class MainTest {
         assertEquals("a-synthetic-tradebench_archive_bucket", config.bucket());
         assertEquals("a-synthetic-tradebench_archive_secret_access_key", config.secretAccessKey());
     }
+
+    @Test
+    void theHealsRetryTakesTheSessionsFailurePathAndItsFirstAskTheCurrentSession() throws Exception {
+        // the re-review's N7: swapping these would reuse a dead token on every retry
+        dev.amfshr.tradebench.marketdata.testutil.FakeSessions sessions = new dev.amfshr.tradebench.marketdata.testutil.FakeSessions();
+        Main.healSessions(sessions).get(false);
+        assertEquals(0, sessions.reLogins, "a first ask takes the current session");
+        Main.healSessions(sessions).get(true);
+        assertEquals(1, sessions.reLogins, "a retry takes the failure path");
+    }
 }

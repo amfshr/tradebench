@@ -111,7 +111,26 @@ public final class PostgresHealStore implements HealStore {
     }
 
     @Override
+    public List<Window> processRuns(String epic, Instant from, Instant to) {
+        return runs(epic).stream().map(r -> new Window(r.from(), r.to()))
+                .filter(w -> w.to().isAfter(from) && w.from().isBefore(to)).toList();
+    }
+
+    @Override
     public List<Window> observed(String epic, Instant from, Instant to) {
+        List<Window> windows = new ArrayList<>();
+        for (ProcessRun run : runs(epic)) {
+            streaming(epic, run.from(), run.to(), run.streamingAtStart(), windows);
+        }
+        return windows.stream().filter(w -> w.to().isAfter(from) && w.from().isBefore(to)).toList();
+    }
+
+    /** A boot to its last sign of life; a recorded boot starts not streaming, history before boots were
+     * recorded (pre-E1-T6) is taken as streaming, as it was before the rows existed. */
+    private record ProcessRun(Instant from, Instant to, boolean streamingAtStart) {
+    }
+
+    private List<ProcessRun> runs(String epic) {
         List<Instant> starts = query("""
                 SELECT event_time_utc FROM service_events WHERE event_type = 'service_start' AND instance = ?
                 ORDER BY event_time_utc""", epic, (s, id) -> s.setString(1, instance), r -> {
@@ -121,22 +140,22 @@ public final class PostgresHealStore implements HealStore {
                     }
                     return all;
                 });
-        List<Window> windows = new ArrayList<>();
+        List<ProcessRun> runs = new ArrayList<>();
         if (starts.isEmpty()) {
-            streaming(epic, Instant.EPOCH, FAR_FUTURE, true, windows); // before boots were recorded (pre-E1-T6)
-        } else {
-            @Nullable Instant beforeFirst = lastSignBefore(epic, starts.getFirst());
-            if (beforeFirst != null) {
-                streaming(epic, Instant.EPOCH, beforeFirst, true, windows);
-            }
-            for (int i = 0; i < starts.size(); i++) {
-                Instant end = i + 1 < starts.size() ? lastSignBefore(epic, starts.get(i + 1)) : FAR_FUTURE;
-                if (end != null && !end.isBefore(starts.get(i))) {
-                    streaming(epic, starts.get(i), end, false, windows); // a boot is not streaming yet
-                }
+            runs.add(new ProcessRun(Instant.EPOCH, FAR_FUTURE, true));
+            return runs;
+        }
+        @Nullable Instant beforeFirst = lastSignBefore(epic, starts.getFirst());
+        if (beforeFirst != null) {
+            runs.add(new ProcessRun(Instant.EPOCH, beforeFirst, true));
+        }
+        for (int i = 0; i < starts.size(); i++) {
+            Instant end = i + 1 < starts.size() ? lastSignBefore(epic, starts.get(i + 1)) : FAR_FUTURE;
+            if (end != null && !end.isBefore(starts.get(i))) {
+                runs.add(new ProcessRun(starts.get(i), end, false));
             }
         }
-        return windows.stream().filter(w -> w.to().isAfter(from) && w.from().isBefore(to)).toList();
+        return runs;
     }
 
     /** The streaming spans of one process window, from its recorded connection statuses. */

@@ -21,6 +21,10 @@ public interface HealStore {
     /** The changes in {@code [from, to)}, oldest first. */
     List<FlagChange> flagChanges(String epic, Instant from, Instant to);
 
+    /** The runs of the collector's process — each boot to its last sign of life before the next —
+     * that overlap {@code [from, to)}, whether streaming or not. */
+    List<Window> processRuns(String epic, Instant from, Instant to);
+
     /** The spans the collector was observing that overlap {@code [from, to)}. */
     List<Window> observed(String epic, Instant from, Instant to);
 

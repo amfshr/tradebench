@@ -308,6 +308,20 @@ class IgRestClientTest {
     }
 
     @Test
+    void aWrongOffsetIsCaughtEvenWhenEveryServedCandleFallsInsideTheWindow() throws Exception {
+        // asked 06:00–07:30Z at +0: IG, at +1, serves 05:00–06:30Z's minutes — but this fixture's candles
+        // (07:00–07:10Z) all fall inside the asked window, which the window check alone cannot see
+        transport.enqueue(FakeTransport.json(200, Wire.fixture("captured-prices-dated-window.json")));
+        IgSession staleAtUtc = new IgSession(new IgTokens("cstA", "xstA"), "AB12CE",
+                "https://demo-apd.marketdatasystems.com", List.of(), Duration.ZERO);
+
+        AccountZoneMismatch thrown = assertThrows(AccountZoneMismatch.class, () -> client.minuteCandlesBetween(
+                staleAtUtc, DAX_EPIC, Instant.parse("2026-10-16T06:00:00Z"), Instant.parse("2026-10-16T07:30:00Z")));
+
+        assertEquals(Duration.ofHours(1), thrown.observedOffset());
+    }
+
+    @Test
     void aSessionWithoutTheAccountsOffsetRefusesADatedRequest() {
         assertThrows(IllegalStateException.class, () -> client.minuteCandlesBetween(session, DAX_EPIC,
                 Instant.parse("2026-10-16T07:00:00Z"), Instant.parse("2026-10-16T07:10:00Z")));

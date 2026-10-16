@@ -22,6 +22,7 @@ import dev.amfshr.tradebench.ig.http.JdkHttpTransport;
 import dev.amfshr.tradebench.ig.rest.IgRestClient;
 import dev.amfshr.tradebench.ig.rest.RequestPacer;
 import dev.amfshr.tradebench.ig.session.IgSessionManager;
+import dev.amfshr.tradebench.ig.session.IgSessions;
 import dev.amfshr.tradebench.ig.session.LoginRateGate;
 import dev.amfshr.tradebench.ig.stream.LightstreamerTransport;
 import dev.amfshr.tradebench.ig.time.Sleeper;
@@ -138,9 +139,8 @@ public final class Main {
         if (db != null) {
             List<DayPhase> phases = new ArrayList<>();
             phases.add(new Healer(new PostgresHealStore(db.dataSource(), user, source, restSource, instance),
-                    new RetryingCandleSource(new IgHistory(
-                            afterFailure -> afterFailure ? sessions.afterFailure() : sessions.current(),
-                            rest::minuteCandlesBetween), 3, Duration.ofSeconds(2)),
+                    new RetryingCandleSource(new IgHistory(healSessions(sessions), rest::minuteCandlesBetween), 3,
+                            Duration.ofSeconds(2)),
                     clock, 720, HEAL_ALLOWANCE_RESERVE));
             if (archive != null) {
                 phases.add(new Archiver(new PostgresArchiveStore(db.dataSource(), user, source),
@@ -290,6 +290,12 @@ public final class Main {
     /** Where the daily archive goes: a bucket over the S3 protocol (E1-T6). All five settings or none —
      * none leaves the archive off and says so; some is a mistake, refused before anything runs. */
     record ArchiveConfig(URI endpoint, String region, String bucket, String accessKeyId, String secretAccessKey) {
+    }
+
+    /** The heal's sessions: the current one, or — on a retry — the failure path, which validates the token
+     * and logs in fresh only if it is dead (a retry must never reuse a dead session). */
+    static IgHistory.Sessions healSessions(IgSessions sessions) {
+        return afterFailure -> afterFailure ? sessions.afterFailure() : sessions.current();
     }
 
     /** Points of the week's 10,000 the daily heal never spends: kept for manual heals (E9-T8) and anything

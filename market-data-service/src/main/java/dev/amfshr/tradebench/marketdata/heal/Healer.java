@@ -29,9 +29,11 @@ import dev.amfshr.tradebench.marketdata.jobs.MarketDay;
  * (every minute of it was closed by IG's own flag, so it was never a gap). Ticks are stream-only:
  * nothing here claims to recover one. The week's allowance is checked before each run and
  * remembered across attempts until IG says it resets; a run that would take it below the reserve
- * stops the heal loud, leaving the rest open for a later attempt. A run reaching midnight leaves
- * its gap row to the next day's heal: the pump writes a gap across midnight only once the next
- * day's first bar seals, and recording half of it now would count those minutes twice.
+ * stops the heal loud, leaving the rest open for a later attempt (from the first response on: after
+ * a restart the first run is unchecked, since IG's allowance is learned only from its answers).
+ * A gap row is the pump's to write whenever the pump could see the gap — one process running before
+ * and past it, whatever day the pump writes the row on; otherwise the heal records the row itself,
+ * straight after healing that run, so a later failure in the same attempt cannot lose it.
  */
 public final class Healer implements DayPhase {
 
@@ -86,6 +88,8 @@ public final class Healer implements DayPhase {
             }
         });
         List<Run> runs = Run.of(missing, maxRunMinutes);
+        List<Window> processRuns = store.processRuns(epic, from, to.plusSeconds(86_400));
+        int rowsAdded = 0;
         Set<Instant> filled = new TreeSet<>();
         long spent = 0;
         for (Run run : runs) {
@@ -102,6 +106,11 @@ public final class Healer implements DayPhase {
                 filled.add(candle.snapshotTimeUtc());
             }
             store.writeHealed(bars);
+            if (!pumpCanSee(run, processRuns)) {
+                store.recordHealedGap(epic, run, clock.wallInstant(), outcome(run, states, filled, store.healedMinutes(epic,
+                        run.from(), run.to().plusSeconds(60))));
+                rowsAdded++;
+            }
             spent += bars.size();
             knownRemaining = history.allowance().remainingAllowance();
             knownUntil = clock.wallInstant().plusSeconds(history.allowance().allowanceExpirySeconds());
@@ -112,15 +121,6 @@ public final class Healer implements DayPhase {
         List<OpenGap> gaps = store.openGapsEnding(epic, from, to); // read once: closing them hides them
         for (OpenGap gap : gaps) {
             store.closeGap(gap.id(), healedAt, outcome(new Run(gap.from(), gap.to()), states, healed));
-        }
-        int rowsAdded = 0;
-        for (Run run : runs) {
-            boolean seenByThePump = gaps.stream().anyMatch(g -> !g.from().isAfter(run.from()) && !g.to().isBefore(run.to()));
-            boolean reachesMidnight = run.to().equals(to.minusSeconds(60));
-            if (!seenByThePump && !reachesMidnight) {
-                store.recordHealedGap(epic, run, healedAt, outcome(run, states, healed));
-                rowsAdded++;
-            }
         }
         ObjectNode detail = MAPPER.createObjectNode();
         detail.put("expected", states.values().stream().filter(s -> s != MinuteState.CLOSED).count());
@@ -134,6 +134,18 @@ public final class Healer implements DayPhase {
         detail.put("gapRowsClosed", gaps.size());
         detail.put("gapRowsAdded", rowsAdded);
         return detail;
+    }
+
+    /** The pump writes a gap row when the first bar after it seals, from a watermark set before it —
+     * so only when one run of the process was up before the gap began and past its end. */
+    static boolean pumpCanSee(Run run, List<Window> processRuns) {
+        return processRuns.stream().anyMatch(p -> p.from().isBefore(run.from()) && p.to().isAfter(run.to().plusSeconds(60)));
+    }
+
+    private static String outcome(Run gap, Map<Instant, MinuteState> states, Set<Instant> filled, Set<Instant> healedBefore) {
+        Set<Instant> healed = new TreeSet<>(filled);
+        healed.addAll(healedBefore);
+        return outcome(gap, states, healed);
     }
 
     /** A gap's outcome from its minutes inside this day: healed by IG (now or before), empty at IG, or never open. */

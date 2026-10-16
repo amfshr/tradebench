@@ -88,6 +88,9 @@ class HealerTest {
         store.observed.add(new Window(at("00:00"), at("12:29").plusSeconds(59)));
         store.observed.add(new Window(at("13:00"), at("23:59").plusSeconds(59)));
         store.everyMinuteHasABarExceptBetween("12:30", "12:59");
+        store.processRuns.clear(); // the process died at 12:29 and was rebooted at 13:00
+        store.processRuns.add(new Window(at("00:00"), at("12:29").plusSeconds(59)));
+        store.processRuns.add(new Window(at("13:00"), Instant.parse("9999-01-01T00:00:00Z")));
         ig.has("12:30", "12:45");
 
         healer.run(DAX_D);
@@ -165,17 +168,54 @@ class HealerTest {
     }
 
     @Test
-    void aRunReachingMidnightLeavesItsGapRowToTheNextDay() throws Exception {
-        // the doctrine review's finding 4: the pump writes a gap across midnight only when the next
-        // day's first bar seals; recording 23:50–23:59 now would count those minutes twice
-        store.everyMinuteHasABarExceptBetween("23:50", "23:59"); // one run, 23:50 to the day's last minute
+    void aGapThePumpCouldSeeIsLeftToThePumpWhateverDayItEndsOn() throws Exception {
+        // the re-review's N1 and N2: one process ran before 23:50 and past midnight, so the pump writes
+        // this gap when the next day's first bar seals — recording 23:50–23:59 now would count it twice
+        store.everyMinuteHasABarExceptBetween("23:50", "23:59");
         store.flagAtStart = "DEAL";
         ig.has("23:55");
 
         healer.run(DAX_D);
 
         assertEquals(List.of(at("23:55")), store.healed.stream().map(Bar1m::startUtc).toList(), "the bars are healed");
-        assertTrue(store.added.isEmpty(), "but no row of its own for a run that reaches midnight");
+        assertTrue(store.added.isEmpty(), "and the row is the pump's");
+    }
+
+    @Test
+    void aGapAcrossARestartIsRecordedByTheHealEvenAtMidnight() throws Exception {
+        // the re-review's N2: the process died at 23:30 and came back after midnight — the new process has
+        // no watermark from before the gap, so the pump will never write it; the heal must
+        store.everyMinuteHasABarExceptBetween("23:30", "23:59");
+        store.flagAtStart = "DEAL";
+        store.processRuns.clear();
+        store.processRuns.add(new Window(at("00:00"), at("23:29").plusSeconds(59)));
+        store.processRuns.add(new Window(Instant.parse("2026-10-16T00:30:00Z"), Instant.parse("9999-01-01T00:00:00Z")));
+        ig.has("23:40");
+
+        healer.run(DAX_D);
+
+        assertEquals(List.of(at("23:30") + "→" + at("23:59") + " " + Healer.HEALED), store.added);
+    }
+
+    @Test
+    void aRestartGapsRowIsRecordedAsSoonAsItIsHealedSoALaterStopCannotLoseIt() throws Exception {
+        // the re-review's N4: run one heals a restart gap, then the allowance stops run two; on the retry run
+        // one's minutes are present bars and form no run — so its row must already exist
+        store.everyMinuteHasABarExceptBetween("01:00", "01:00");
+        store.bars.remove(at("05:00"));
+        store.bars.remove(at("05:01"));
+        store.flagAtStart = "DEAL";
+        store.processRuns.clear();
+        store.processRuns.add(new Window(at("00:00"), at("00:59").plusSeconds(59)));
+        store.processRuns.add(new Window(at("01:01"), Instant.parse("9999-01-01T00:00:00Z")));
+        store.gap(11, "05:00", "05:01");
+        ig.has("01:00", "05:00");
+        ig.remainingAfterEachCall = 1;
+
+        assertThrows(IllegalStateException.class, () -> healer.run(DAX_D));
+
+        assertEquals(List.of(at("01:00") + "→" + at("01:00") + " " + Healer.HEALED), store.added,
+                "recorded straight after its run, before the stop");
     }
 
     @Test
@@ -241,6 +281,7 @@ class HealerTest {
         @Nullable Instant first = Instant.parse("2026-10-01T00:00:00Z");
         final List<FlagChange> changes = new ArrayList<>();
         final List<Window> observed = new ArrayList<>();
+        final List<Window> processRuns = new ArrayList<>(List.of(new Window(Instant.EPOCH, Instant.parse("9999-01-01T00:00:00Z"))));
         final Set<Instant> bars = new HashSet<>();
         final List<OpenGap> gaps = new ArrayList<>();
         final List<Bar1m> healed = new ArrayList<>();
@@ -289,6 +330,11 @@ class HealerTest {
         @Override
         public List<FlagChange> flagChanges(String epic, Instant from, Instant to) {
             return changes;
+        }
+
+        @Override
+        public List<Window> processRuns(String epic, Instant from, Instant to) {
+            return processRuns;
         }
 
         @Override
