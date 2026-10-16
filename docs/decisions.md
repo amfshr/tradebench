@@ -349,6 +349,9 @@ own record of a rebuild shows no `DISCONNECTED` for the torn-down connection and
 models the teardown — so an outage Tradebench lives through replays with its real connection sequence; the
 classified outcomes (`reconnect`, `connection_dead`, …) were all the record held before.*
 
+*Amended 2026-10-16 (E1-T6's design nod, ruling 4): `market_calendar` holds the **broker's** hours for
+each epic — IG's for the DAX CFD, which trades well beyond XETRA's session — not the exchange's; it stays
+the primary gap-truth, refined by recorded CLOSED/SUSPEND flags.*
 *Amended 2026-10-15 (D33): the "Prometheus/Grafana additive, later" line becomes operational telemetry
 over OpenTelemetry to Grafana Cloud's free tier, wired at E1-T7; the healthchecks.io dead-man ping is sent
 by the collector's heartbeat (D30 clarified). Domain truth stays in the rows.*

@@ -108,6 +108,12 @@ short-circuit after the first pool-timeout failure); no longer a B1 item.
 
 **Captured** 2026-10-02 · **First consumer** E1-T6 (heal retry) · **Broad surface** E6 Execution (OMS) · **Relates to** E1-T2 (ig-client), D16, `docs/design/architecture/components/ig-client.md`, the trading-ig research (retry patterns)
 
+**First slice ruled 2026-10-16 (E1-T6's design nod, ruling 6 — Alex):** **Resilience4j's retry** — one
+standard for resilience across every service, as for logs and metrics (D33's reasoning); a plain-Java
+library, so ig-client stays framework-free; the belt's own `BackoffPolicy` stays for session rebuilds.
+This settles the "hand-roll vs standalone Resilience4j" choice below for the healer; the broad rollout
+(the wrapper's shape, the "resilience-in-the-consumer" revisit) stays open here until E6.
+
 The **ig-client is the platform's REST foundation, not just the stream wrapper.** As the platform
 grows, it carries the whole IG REST surface — OMS orders, market enquiries, dealing rules,
 account/positions, activity & transaction history, watchlists, `/operations/application` — consumed
