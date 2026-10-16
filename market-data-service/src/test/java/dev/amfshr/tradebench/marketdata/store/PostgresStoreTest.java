@@ -44,7 +44,7 @@ class PostgresStoreTest extends PostgresTestBase {
             s.execute("TRUNCATE ticks, bars_1m, instruments"
                     + " RESTART IDENTITY CASCADE");
         }
-        sink = new PostgresStore(database.dataSource(), "default-user", "ig-stream-demo");
+        sink = new PostgresStore(database.dataSource(), "platform", "ig-stream-demo");
     }
 
     @AfterEach
@@ -89,7 +89,7 @@ class PostgresStoreTest extends PostgresTestBase {
                 Statement s = c.createStatement();
                 ResultSet r = s.executeQuery("SELECT string_agg(name, ',') FROM users")) {
             r.next();
-            assertEquals("default-user", r.getString(1));
+            assertEquals("platform", r.getString(1));
         }
     }
 
@@ -175,7 +175,7 @@ class PostgresStoreTest extends PostgresTestBase {
     @Test
     void unknownSourceNameFailsLoudAtConstruction() {
         IllegalStateException thrown = assertThrows(IllegalStateException.class,
-                () -> new PostgresStore(database.dataSource(), "default-user", "not-a-source"));
+                () -> new PostgresStore(database.dataSource(), "platform", "not-a-source"));
         assertEquals(true, thrown.getMessage().contains("not-a-source"));
     }
 
@@ -254,7 +254,7 @@ class PostgresStoreTest extends PostgresTestBase {
     @Test
     void recoverWhileTheDatabaseIsStillDownThrowsRetryableAndKeepsTheBatch() throws SQLException {
         FlakyDataSource flaky = new FlakyDataSource(database.dataSource());
-        PostgresStore store = new PostgresStore(flaky, "default-user", "ig-stream-demo");
+        PostgresStore store = new PostgresStore(flaky, "platform", "ig-stream-demo");
         store.write(tick(DAX, "2026-09-28T07:00:01Z", "1.1", "1.2"));
         store.write(tick(DAX, "2026-09-28T07:00:02Z", "1.3", "1.4"));
         killOtherBackends();
@@ -385,7 +385,7 @@ class PostgresStoreTest extends PostgresTestBase {
         // become a PersistenceException the hold can see, not a thread parked in a socket read.
         try (Database quick = Database.connect(postgres.getJdbcUrl(), postgres.getUsername(),
                 postgres.getPassword(), Duration.ofSeconds(2))) {
-            PostgresStore frozen = new PostgresStore(quick.dataSource(), "default-user", "ig-stream-demo");
+            PostgresStore frozen = new PostgresStore(quick.dataSource(), "platform", "ig-stream-demo");
             String containerId = postgres.getContainerId();
             postgres.getDockerClient().pauseContainerCmd(containerId).exec();
             try {

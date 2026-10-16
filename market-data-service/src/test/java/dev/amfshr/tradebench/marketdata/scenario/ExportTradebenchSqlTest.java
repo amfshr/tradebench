@@ -54,7 +54,7 @@ class ExportTradebenchSqlTest extends PostgresTestBase {
 
     @Test
     void aWindowWithRecordedStatusesReplaysItsRealSequenceAndModelsNoAnswer() throws Exception {
-        PostgresStore sink = new PostgresStore(database.dataSource(), "default-user", "ig-stream-demo");
+        PostgresStore sink = new PostgresStore(database.dataSource(), "platform", "ig-stream-demo");
         sink.write(new Tick(DAX, ANCHOR.minusSeconds(30), new BigDecimal("24510.5"), new BigDecimal("24511.7")));
         sink.write(new Tick(DAX, ANCHOR.plusSeconds(5), new BigDecimal("24512.0"), new BigDecimal("24513.2")));
         sink.write(new Bar1m(DAX, ANCHOR, // the 15:00 candle, sealed at 15:01 — inside a 130s window from 14:59
@@ -63,7 +63,7 @@ class ExportTradebenchSqlTest extends PostgresTestBase {
                 null));
         sink.close();
         PostgresObservabilityStore events = new PostgresObservabilityStore(database.dataSource(),
-                "default-user", "ig-stream-demo", "test-run");
+                "platform", "ig-stream-demo", "test-run");
         events.write(statusAt(ANCHOR.minusSeconds(60), "CONNECTED:WS-STREAMING"));
         events.write(statusAt(ANCHOR.plusSeconds(2), "DISCONNECTED:WILL-RETRY"));
         events.write(statusAt(ANCHOR.plusSeconds(90), "CONNECTED:WS-STREAMING")); // past the window
@@ -71,7 +71,7 @@ class ExportTradebenchSqlTest extends PostgresTestBase {
         Scenario replay = Replays.parse(export(Map.of(
                 "anchor", "2026-10-07 15:00:00+00", "before_secs", "60", "until_secs", "130",
                 "name", "a captured window", "recorded", "two ticks, a candle, two transitions",
-                "modelled", "nothing", "user_name", "default-user", "source_name", "ig-stream-demo"))).build();
+                "modelled", "nothing", "user_name", "platform", "source_name", "ig-stream-demo"))).build();
 
         assertFalse(replay.serverAnswers, "the window holds the real sequence — the harness models no answer");
         assertEquals(List.of(new Event.Status("CONNECTED:WS-STREAMING"), new Event.Status("DISCONNECTED:WILL-RETRY")),
@@ -87,14 +87,14 @@ class ExportTradebenchSqlTest extends PostgresTestBase {
 
     @Test
     void aWindowWithoutRecordedStatusesIsAnsweredByTheHarnessAndSaysSo() throws Exception {
-        PostgresStore sink = new PostgresStore(database.dataSource(), "default-user", "ig-stream-demo");
+        PostgresStore sink = new PostgresStore(database.dataSource(), "platform", "ig-stream-demo");
         sink.write(new Tick(DAX, ANCHOR, new BigDecimal("24510.5"), new BigDecimal("24511.7")));
         sink.close();
 
         List<String> lines = export(Map.of(
                 "anchor", "2026-10-07 15:00:00+00", "before_secs", "10", "until_secs", "20",
                 "name", "before E1-T12", "recorded", "one tick", "modelled", "the server's answers",
-                "user_name", "default-user", "source_name", "ig-stream-demo"));
+                "user_name", "platform", "source_name", "ig-stream-demo"));
 
         assertTrue(Replays.parse(lines).build().serverAnswers);
         assertTrue(MAPPER.readTree(lines.getFirst()).path("payload").path("source").asText()

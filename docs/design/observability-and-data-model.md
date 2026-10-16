@@ -44,7 +44,7 @@
 -- service_events v2: the audit log. Dimensions + severity + occurrence/recorded split.
 service_events (
   id, instance,
-  user_id       NOT NULL → users,        -- default-user for now
+  user_id       NOT NULL → users,        -- the platform user for now (D31)
   source_id     → sources,               -- nullable: not all events are source-scoped
   instrument_id → instruments,           -- nullable: global events have no market
   category      NOT NULL,   -- lifecycle|resilience|data_liveness|data_quality|heal|error|rate_budget

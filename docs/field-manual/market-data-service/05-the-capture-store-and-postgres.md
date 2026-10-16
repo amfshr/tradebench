@@ -94,7 +94,7 @@ ask — redelivery or a re-import) drops silently; two ticks in the same millise
 flatten the finest truth (the T4 Q2 ruling).
 
 Every fact row carries `user_id` and `source_id` from V1 — not because multi-user exists
-yet (everything is `default-user` today) but because retrofitting a dimension onto
+yet (everything belongs to the `platform` user today — the admin-owned platform tier's owner, D31) but because retrofitting a dimension onto
 billions of rows is a migration you never want (platform doctrine, PRD §7). Timestamps
 are `timestamptz` named `*_utc`, prices are `numeric` fed from BigDecimal — scale exact,
 no float rounding, ever.

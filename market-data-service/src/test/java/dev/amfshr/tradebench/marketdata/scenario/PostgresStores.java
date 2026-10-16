@@ -34,7 +34,7 @@ import dev.amfshr.tradebench.marketdata.store.StatusStore;
  */
 final class PostgresStores implements Stores {
 
-    static final String USER = "default-user";
+    static final String USER = "platform";
     /** The replays are the prototype's demo-account captures. */
     static final String SOURCE = "ig-stream-demo";
     static final String INSTANCE = "acceptance";
