@@ -26,6 +26,13 @@ import dev.amfshr.tradebench.ig.time.Sleeper;
 import dev.amfshr.tradebench.marketdata.store.BestEffortEventLog;
 import dev.amfshr.tradebench.marketdata.store.Database;
 import dev.amfshr.tradebench.marketdata.store.PostgresStore;
+import dev.amfshr.tradebench.marketdata.heal.Healer;
+import dev.amfshr.tradebench.marketdata.heal.RetryingCandleSource;
+import dev.amfshr.tradebench.marketdata.jobs.DailyJobs;
+import dev.amfshr.tradebench.marketdata.jobs.JobTuning;
+import dev.amfshr.tradebench.marketdata.jobs.JobsRunner;
+import dev.amfshr.tradebench.marketdata.store.PostgresHealStore;
+import dev.amfshr.tradebench.marketdata.store.PostgresJobRunStore;
 import dev.amfshr.tradebench.marketdata.store.SingleInstanceLock;
 
 import org.jspecify.annotations.Nullable;
@@ -61,6 +68,7 @@ public final class Main {
                 .map(String::strip).filter(s -> !s.isEmpty()).toList();
         IgEnvironment igEnv = igEnvironment(required(env, "TRADEBENCH_IG_ENV"));
         String source = "ig-stream-" + igEnv.name().toLowerCase(java.util.Locale.ROOT);
+        String restSource = "ig-rest-" + igEnv.name().toLowerCase(java.util.Locale.ROOT); // the heal's bars (P8)
         String sinkKind = required(env, "TRADEBENCH_SINK").strip().toLowerCase(java.util.Locale.ROOT);
         IgCredentials credentials = IgCredentials.fromEnv(env, igEnv);
 
@@ -116,6 +124,14 @@ public final class Main {
         IgSessionManager sessions = new IgSessionManager(http, igEnv, credentials, pacer,
                 new LoginRateGate(clock::monotonicNanos, Sleeper.SYSTEM));
         IgRestClient rest = new IgRestClient(http, igEnv, credentials, pacer);
+        // The daily heal (E1-T6): db mode only — it reads and writes the record. Stopped first at
+        // shutdown, so a heal in flight is interrupted before the stores it writes to close.
+        JobsRunner jobs = db == null ? null : new JobsRunner(new DailyJobs(clock, epics,
+                List.of(new Healer(new PostgresHealStore(db.dataSource(), user, source, restSource, instance),
+                        new RetryingCandleSource((epic, from, to) -> rest.minuteCandlesBetween(sessions.current(),
+                                epic, from, to), 3, Duration.ofSeconds(2)), clock, 720)),
+                new PostgresJobRunStore(db.dataSource(), user, source, instance), JobTuning.playbook(),
+                message -> log(instance, message)), JobTuning.playbook().wake(), message -> log(instance, message));
 
         CaptureAssembly capture = CaptureAssembly.compose(new CaptureAssembly.Ports(instance, epics,
                 clock, Sleeper.SYSTEM, () -> 0.5 + ThreadLocalRandom.current().nextDouble(),
@@ -132,6 +148,15 @@ public final class Main {
         // a thread never started joins at once (E1-T10 #24).
         Runtime.getRuntime().addShutdownHook(new Thread(() -> {
             log(instance, "shutting down");
+            if (jobs != null) {
+                try {
+                    if (!jobs.stop(Duration.ofSeconds(5))) {
+                        log(instance, "jobs did not stop within 5s — a heal may be mid-write; its row is not recorded");
+                    }
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                }
+            }
             boolean pumpStopped = capture.shutdown(
                     () -> {
                         supervisorThread.interrupt();
@@ -150,6 +175,9 @@ public final class Main {
         pumpThread.start();
         supervisorThread.start();
         eventsThread.start();
+        if (jobs != null) {
+            jobs.start();
+        }
         // Log-only: discovery runs once, here at boot, so a refused breadcrumb is a console line,
         // never a heartbeat term (doctrine review 2026-10-10, finding 3).
         new PacerDiscovery(rest::applicationAllowance, pacer::setPerMinute,

@@ -3,6 +3,7 @@ package dev.amfshr.tradebench.ig.rest;
 import java.io.IOException;
 import java.math.BigDecimal;
 import java.net.URI;
+import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.ZoneOffset;
@@ -34,6 +35,7 @@ public final class IgRestClient {
 
     /** Candles are keyed on {@code snapshotTimeUTC} — the only timezone-proof field (§4.2). */
     private static final DateTimeFormatter UTC_FORMAT = DateTimeFormatter.ISO_LOCAL_DATE_TIME;
+    private static final DateTimeFormatter ACCOUNT_LOCAL = DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss");
 
     private final HttpTransport transport;
     private final IgEnvironment environment;
@@ -92,6 +94,43 @@ public final class IgRestClient {
         String path = "/prices/" + epic + "?resolution=" + resolution
                 + "&max=" + maxCandles + "&pageSize=" + maxCandles;
         HttpResult result = get(session, path, 3);
+        return prices(result, epic);
+    }
+
+    /**
+     * Every {@code MINUTE} candle from {@code fromUtc} to {@code toUtc}, both inclusive — the heal's
+     * gap-sized request (E1-T6). IG reads {@code from}/{@code to} in the account's zone, not UTC
+     * (captured 2026-10-16: asked 08:00–08:10 on a UTC+1 account, served 07:00–07:10Z), so the
+     * window is sent shifted by the session's offset; and since that offset is IG's word at login,
+     * every returned candle is checked against the UTC window asked for — one outside it means IG
+     * read the window in another zone, and the call fails loud rather than heal the wrong minutes.
+     */
+    public PriceHistory minuteCandlesBetween(IgSession session, String epic, Instant fromUtc, Instant toUtc)
+            throws IOException, InterruptedException {
+        Duration offset = session.accountUtcOffset();
+        if (offset == null) {
+            throw new IllegalStateException("the session carries no account timezoneOffset — refusing a dated"
+                    + " request IG would read in an unknown zone");
+        }
+        if (toUtc.isBefore(fromUtc)) {
+            throw new IllegalArgumentException("window ends before it starts: " + fromUtc + " → " + toUtc);
+        }
+        int candles = Math.toIntExact(Duration.between(fromUtc, toUtc).toMinutes() + 1);
+        String path = "/prices/" + epic + "?resolution=" + Resolution.MINUTE
+                + "&from=" + ACCOUNT_LOCAL.format(LocalDateTime.ofInstant(fromUtc.plus(offset), ZoneOffset.UTC))
+                + "&to=" + ACCOUNT_LOCAL.format(LocalDateTime.ofInstant(toUtc.plus(offset), ZoneOffset.UTC))
+                + "&max=" + candles + "&pageSize=" + candles;
+        PriceHistory history = prices(get(session, path, 3), epic);
+        for (PriceCandle candle : history.candles()) {
+            if (candle.snapshotTimeUtc().isBefore(fromUtc) || candle.snapshotTimeUtc().isAfter(toUtc)) {
+                throw new IllegalStateException("candle at " + candle.snapshotTimeUtc() + " lies outside the"
+                        + " asked window " + fromUtc + " → " + toUtc + " — IG did not read it at offset " + offset);
+            }
+        }
+        return history;
+    }
+
+    private PriceHistory prices(HttpResult result, String epic) throws IOException {
         if (result.status() != 200) {
             throw IgErrors.from(mapper, result, "GET /prices/" + epic);
         }

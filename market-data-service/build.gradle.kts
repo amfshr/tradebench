@@ -22,6 +22,7 @@ dependencies {
     implementation(project(":core"))
     implementation(project(":ig-client"))
     implementation(libs.jackson.databind)
+    implementation(libs.resilience4j.retry)
     implementation(libs.postgresql)
     implementation(libs.hikaricp)
     implementation(libs.flyway.core)
