@@ -226,7 +226,7 @@ rebuild at 60, not 180); its rebaseline half at T11 (PR #16, 2026-10-08).**
    from the ruling's ordering, for that reason: the host wakes with the Lightstreamer client stuck in `DISCONNECTED:WILL-RETRY`
    and the escalator rebuilds it, measured in awake time. **Residual 3 is closed, final (2026-10-09).**
 
-## T6 — Daily completeness + archive (D6 amended, D30) 🔶 in progress (started 2026-10-16; design nod held 2026-10-16, Alex; ruling 4 re-ruled and ruling 5 verified the same evening; re-scoped 2026-10-11 by D30; unblocked 2026-10-11 by E1-T13's merge, PR #25; trued 2026-10-15 — no Spring, R7; T14 first — ✅ merged 2026-10-16, PR #26)
+## T6 — Daily completeness + archive (D6 amended, D30) 🔶 in review — PR #27 open 2026-10-17, CI green (build, web, GitGuardian), awaiting Alex's merge (started 2026-10-16; design nod held 2026-10-16, Alex; ruling 4 re-ruled and ruling 5 verified the same evening; re-scoped 2026-10-11 by D30; unblocked 2026-10-11 by E1-T13's merge, PR #25; trued 2026-10-15 — no Spring, R7; T14 first — ✅ merged 2026-10-16, PR #26)
 
 **Type** build · **Branch** `e1-t6-heal-and-archive` · **Started** 2026-10-16 · **Blocked by** —
 
@@ -347,6 +347,17 @@ connection's status, so two cases still count as observing: a **quarantined** ma
 resubscribe has not yet confirmed (a reopen during it reads as closed until the next teach). Treating both as
 *unknown* would ask IG — free on closed spans, since IG returns no candles there. Not built: it extends ruling 4
 beyond D27's one streaming rule.
+
+**At the PR (2026-10-17) — 🔶 in review, not done.** PR #27 open 2026-10-17, CI green (`build`, `web`, GitGuardian), awaiting Alex's merge (GitHub stamps 2026-10-16T23:45Z). Commits on the
+branch: ① `6915f5d` · ② `c12ccbb` · ③ `dae3e38` · ④ `a37039e` · ⑤ `4f6e772` · the doctrine review's fixes `b9dc94e` ·
+the re-review's fixes `babfd5b` · board `a8bc216` `5ba663c` `87a7bef` · main merged in `f176dd1`. `./gradlew build` 449
+tests (+74 on main); `replayAcceptance` 6/6; docs site 65/65; 66 mutations. Doctrine review FAIL (12 findings), all fixed;
+the focused re-review PASS-WITH-FINDINGS, its code findings fixed (its N6 is the Decision (TBD) above). **DoD not fully
+met by this PR:** "staging produces the archive end-to-end" — staging is E1-T7's; the path is proven in tests against
+real Postgres and an S3-protocol server, not on staging. **For Alex at the merge:** (a) the proposed refinement of
+ruling 4 — observing = streaming (D25, marked proposed; merging rules it); (b) the Decision (TBD) above. **Surfaced at
+the PR as decisions:** the archive's Parquet writer is DuckDB JDBC (ruling 3's fallback, not `parquet-java`); the heal
+keeps a 2,000-point allowance reserve.
 
 ## T7 — Deploy ⬜ (gains 2026-10-15 from the design session: Redis in the stack, the OTel agent + Grafana Cloud export, the dead-man ping; opens with a provider analysis + design session — Alex, 2026-10-16)
 
