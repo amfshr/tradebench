@@ -60,9 +60,10 @@ class BeltScenariosTest {
         assertEquals(List.of(DAX_PRICE, DAX_CHART),
                 o.remedies("subscribe").stream().map(Observed.Remedy::item).toList(), "the pair, once");
         assertTrue(o.remedies("unsubscribe").isEmpty());
-        assertEquals(List.of(EventType.CONNECTION_STATUS, EventType.MARKET_STATE_CHANGE),
+        assertEquals(List.of(EventType.SERVICE_START, EventType.CONNECTION_STATUS, EventType.MARKET_STATE_CHANGE),
                 o.events.stream().map(Observed.Seen::type).toList(),
-                "the boot's one status transition and the first DEAL flag are the only events");
+                "the boot's start (E1-T6: the record's word that the collector observes from here), its one"
+                        + " status transition and the first DEAL flag are the only events");
         assertEquals(o.ticksDelivered + o.barsDelivered, o.landed.size(), "every tick and bar landed");
         assertEquals(0, o.ticksHeldAtEnd);
         assertEquals(List.of(60L, 120L, 180L),
@@ -608,6 +609,24 @@ class BeltScenariosTest {
 
         assertEquals(6_000, o.landed.size(), "every queued tick landed");
         assertTrue(o.log.stream().noneMatch(line -> line.contains("pump failure at shutdown")));
+    }
+
+    @Test
+    void aBootAndAnOrderlyStopEachLeaveTheirRowDatedWhenTheyHappened() throws Exception {
+        // E1-T6: the daily heal reads "unknown" from the last sign of life before a boot to that
+        // boot's start row, so both ends must be in the record — the start before anything else is
+        // said, the stop dated when it began, not when the drain behind it finished.
+        Scenario lifecycle = Scenario.named("a boot and a stop").markets(DAX)
+                .at(s(0), streaming()).at(s(0), subscribed(DAX))
+                .at(s(10), stop())
+                .until(s(20)).build();
+
+        Observed o = ScenarioRunner.run(lifecycle);
+
+        assertEquals(EventType.SERVICE_START, o.events.getFirst().type(), "the boot's start comes first");
+        assertEquals(0L, o.events(EventType.SERVICE_START).getFirst().at().toSeconds());
+        assertEquals(1, o.events(EventType.SERVICE_STOP).size(), "one orderly stop, one row");
+        assertEquals(10L, o.events(EventType.SERVICE_STOP).getFirst().at().toSeconds(), "dated when the stop began");
     }
 
     @Test
