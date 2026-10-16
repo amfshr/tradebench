@@ -359,6 +359,11 @@ the market was open. Holidays need no list: IG never flags them `DEAL`. **The us
 on by default for the platform tier; with it off, gaps are recorded and left open, to be fetched and healed
 on demand (E9's command plane). Revisit once weeks of history show what is wanted (Alex: "not a major thing
 until we use it every day").*
+*Amended 2026-10-16 (E1-T6 as built): `bar_gaps.heal_outcome` is `healed` | `tickless_at_source` |
+`closed_at_source` (a gap inside IG's own closure — the pump records gaps across the overnight close,
+which were never gaps); a failed heal writes no outcome — the row stays open for the retry and the
+failure is in `job_runs`. `job_runs` gains user, source, market and day (V5); `archives` gains user and
+source (V4).*
 *Amended 2026-10-15 (D33): the "Prometheus/Grafana additive, later" line becomes operational telemetry
 over OpenTelemetry to Grafana Cloud's free tier, wired at E1-T7; the healthchecks.io dead-man ping is sent
 by the collector's heartbeat (D30 clarified). Domain truth stays in the rows.*

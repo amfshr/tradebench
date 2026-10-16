@@ -383,14 +383,18 @@ FROM bar_gaps WHERE healed_at_utc IS NULL ORDER BY gap_from_utc;
 A gap matches an outage you can see in step 3. A gap with no outage beside it is the finding to
 write down.
 
-**5. Did the jobs run?** (Once T6 lands.) One `job_runs` row per run, clean or not:
+**5. Did the jobs run?** One `job_runs` row per phase per market-day, clean or not — the heal and
+then the archive, from ten past midnight UTC:
 
 ```sql
-SELECT job_name, started_utc, finished_utc, status, detail
-FROM job_runs WHERE started_utc > now() - interval '1 day' ORDER BY started_utc;
+SELECT job_name, covers_date, status, started_utc, detail
+FROM job_runs WHERE covers_date >= current_date - 2 ORDER BY started_utc;
 ```
 
-The row's **absence** is the alarm — the job did not even start.
+Yesterday should show a `heal` row and, if the bucket is configured, an `archive` row, both
+`succeeded`. A **missing** row is the alarm — the job did not even start. A `failed` row says why in
+its `detail` and is retried on its own, an hour later and then doubling. The gap outcomes from step 4
+now read `healed`, `tickless_at_source` or `closed_at_source`; chapter 12 explains each.
 
 When something does go wrong, the outage becomes a fixture: `scripts/export-replay.sh` cuts the
 day's rows into a replay, and the belt is run against it in acceptance mode (chapter 10, "The

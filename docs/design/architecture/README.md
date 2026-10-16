@@ -236,11 +236,17 @@ staleness watchdog (tick-silent 90s; bar-silent-while-ticks-flow 210s; market st
 stream's `DLG_FLAG`, no calendar) → witness-rule quarantine when multi-market. All pure
 logic on injectable clocks returning *values* the service executes.
 
-### 4.3 Daily completeness cycle (T6 target, D6)
+### 4.3 Daily completeness cycle (E1-T6, D6 amended)
 
-`@Scheduled` end-of-day: scan-first gap detection (anti-join, contiguous runs) → REST v3
-heal, window-clipped and allowance-aware (ticks are stream-only, never "healed") → day's
-Parquet to object storage. An audited `job_runs` row every run, clean or not. **No email from
+A plain scheduled executor in the collector's own process (no Spring), waking every five minutes:
+each market's UTC day is due ten minutes after it ends. **Heal**: every minute is classified open,
+closed or unknown from IG's own recorded flags and the collector's boots (no hand-kept calendar —
+D25 amended); the missing open-or-unknown minutes are asked of IG's REST history by gap-sized dated
+requests (read in the account's zone, every candle checked against the UTC window), written under
+the environment's REST source (P8), and each gap row closed `healed`, `tickless_at_source` or
+`closed_at_source` (ticks are stream-only, never "healed"). **Archive**: the day as two Parquet files
+in an S3-protocol bucket, a manifest row in `archives` each. An audited `job_runs` row per phase per
+attempt, clean or not. Field Manual chapter 12. **No email from
 this service** (D30, 2026-10-11): the digest and every alert are the operator console's (E9), read
 from `job_runs`, `capture_status` and `bar_gaps` — the digest's content proves the collector lived,
 its own absence alarms the reporter (P9). Until E9 is deployed, the row and the heartbeat are
