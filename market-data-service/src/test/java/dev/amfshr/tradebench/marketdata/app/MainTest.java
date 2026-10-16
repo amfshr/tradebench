@@ -33,17 +33,16 @@ class MainTest {
 
     @Test
     void anInstanceWithoutAPlatformUserRefusesToStart() {
-        // E1-T14 (D31): the user every row belongs to is named by the environment, never defaulted
-        // in code — an instance must say whose rows it writes before it writes one (config discipline).
+        // named by the environment, never defaulted in code (E1-T14, D31)
         IgFatalConfigException thrown = assertThrows(IgFatalConfigException.class,
                 () -> Main.platformUser(Map.of("TRADEBENCH_INSTANCE", "capture-demo-01")));
-        assertTrue(thrown.getMessage().contains("TRADEBENCH_USER"), "the missing key is named");
+        assertTrue(thrown.getMessage().contains("'TRADEBENCH_USER'"), "the missing key is named");
         assertThrows(IgFatalConfigException.class, () -> Main.platformUser(Map.of("TRADEBENCH_USER", "  ")),
                 "blank is missing");
     }
 
     @Test
     void thePlatformUserIsTheEnvironmentsWord() {
-        assertEquals("platform", Main.platformUser(Map.of("TRADEBENCH_USER", "platform")));
+        assertEquals("a-synthetic-owner", Main.platformUser(Map.of("TRADEBENCH_USER", "a-synthetic-owner")));
     }
 }
