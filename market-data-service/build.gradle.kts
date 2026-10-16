@@ -1,4 +1,4 @@
-// The deployable collection-service app (Spring Boot arrives with E1-T2/T3).
+// The deployable collection-service app — plain Java, no Spring (D6 amended 2026-10-15, D31).
 // Apps depend on libraries, never sideways between apps (phase-1 build plan §2).
 plugins {
     application
@@ -6,6 +6,12 @@ plugins {
 
 application {
     mainClass = "dev.amfshr.tradebench.marketdata.app.Main"
+    // DuckDB (the archive's Parquet writer) loads a native library; the JDK will block that unless granted.
+    applicationDefaultJvmArgs = listOf("--enable-native-access=ALL-UNNAMED")
+}
+
+tasks.withType<Test>().configureEach {
+    jvmArgs("--enable-native-access=ALL-UNNAMED")
 }
 
 group = "dev.amfshr.tradebench"
@@ -23,6 +29,14 @@ dependencies {
     implementation(project(":ig-client"))
     implementation(libs.jackson.databind)
     implementation(libs.resilience4j.retry)
+    // The archive's Parquet writer (E1-T6 nod ruling 3's fallback: parquet-java needs Hadoop at runtime).
+    // The all-platforms jar runs on a Mac and on CI; the deploy image takes the Linux one (E1-T7).
+    implementation(libs.duckdb.jdbc)
+    implementation(libs.awssdk.s3) {
+        exclude(group = "software.amazon.awssdk", module = "netty-nio-client") // the URL-connection client instead
+        exclude(group = "software.amazon.awssdk", module = "apache-client")
+    }
+    implementation(libs.awssdk.url.connection.client)
     implementation(libs.postgresql)
     implementation(libs.hikaricp)
     implementation(libs.flyway.core)

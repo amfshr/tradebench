@@ -1,5 +1,6 @@
 package dev.amfshr.tradebench.marketdata.app;
 
+import java.net.URI;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -7,6 +8,7 @@ import java.time.Duration;
 import java.time.Instant;
 import java.time.format.DateTimeFormatter;
 import java.time.temporal.ChronoUnit;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
@@ -33,6 +35,10 @@ import dev.amfshr.tradebench.marketdata.jobs.JobTuning;
 import dev.amfshr.tradebench.marketdata.jobs.JobsRunner;
 import dev.amfshr.tradebench.marketdata.store.PostgresHealStore;
 import dev.amfshr.tradebench.marketdata.store.PostgresJobRunStore;
+import dev.amfshr.tradebench.marketdata.archive.Archiver;
+import dev.amfshr.tradebench.marketdata.archive.S3ObjectStore;
+import dev.amfshr.tradebench.marketdata.jobs.DayPhase;
+import dev.amfshr.tradebench.marketdata.store.PostgresArchiveStore;
 import dev.amfshr.tradebench.marketdata.store.SingleInstanceLock;
 
 import org.jspecify.annotations.Nullable;
@@ -126,12 +132,26 @@ public final class Main {
         IgRestClient rest = new IgRestClient(http, igEnv, credentials, pacer);
         // The daily heal (E1-T6): db mode only — it reads and writes the record. Stopped first at
         // shutdown, so a heal in flight is interrupted before the stores it writes to close.
-        JobsRunner jobs = db == null ? null : new JobsRunner(new DailyJobs(clock, epics,
-                List.of(new Healer(new PostgresHealStore(db.dataSource(), user, source, restSource, instance),
-                        new RetryingCandleSource((epic, from, to) -> rest.minuteCandlesBetween(sessions.current(),
-                                epic, from, to), 3, Duration.ofSeconds(2)), clock, 720)),
-                new PostgresJobRunStore(db.dataSource(), user, source, instance), JobTuning.playbook(),
-                message -> log(instance, message)), JobTuning.playbook().wake(), message -> log(instance, message));
+        ArchiveConfig archive = archiveConfig(env);
+        JobsRunner jobs = null;
+        if (db != null) {
+            List<DayPhase> phases = new ArrayList<>();
+            phases.add(new Healer(new PostgresHealStore(db.dataSource(), user, source, restSource, instance),
+                    new RetryingCandleSource((epic, from, to) -> rest.minuteCandlesBetween(sessions.current(),
+                            epic, from, to), 3, Duration.ofSeconds(2)), clock, 720));
+            if (archive != null) {
+                phases.add(new Archiver(new PostgresArchiveStore(db.dataSource(), user, source),
+                        new S3ObjectStore(archive.endpoint(), archive.region(), archive.bucket(), archive.accessKeyId(),
+                                archive.secretAccessKey()), user + "/" + source));
+                log(instance, "daily job: heal, then archive to bucket " + archive.bucket());
+            } else {
+                log(instance, "daily job: heal only — no TRADEBENCH_ARCHIVE_* set, so nothing is archived off the box");
+            }
+            jobs = new JobsRunner(new DailyJobs(clock, epics, phases,
+                    new PostgresJobRunStore(db.dataSource(), user, source, instance), JobTuning.playbook(),
+                    message -> log(instance, message)), JobTuning.playbook().wake(), message -> log(instance, message));
+        }
+        JobsRunner dailyJobs = jobs;
 
         CaptureAssembly capture = CaptureAssembly.compose(new CaptureAssembly.Ports(instance, epics,
                 clock, Sleeper.SYSTEM, () -> 0.5 + ThreadLocalRandom.current().nextDouble(),
@@ -148,9 +168,9 @@ public final class Main {
         // a thread never started joins at once (E1-T10 #24).
         Runtime.getRuntime().addShutdownHook(new Thread(() -> {
             log(instance, "shutting down");
-            if (jobs != null) {
+            if (dailyJobs != null) {
                 try {
-                    if (!jobs.stop(Duration.ofSeconds(5))) {
+                    if (!dailyJobs.stop(Duration.ofSeconds(5))) {
                         log(instance, "jobs did not stop within 5s — a heal may be mid-write; its row is not recorded");
                     }
                 } catch (InterruptedException e) {
@@ -175,8 +195,8 @@ public final class Main {
         pumpThread.start();
         supervisorThread.start();
         eventsThread.start();
-        if (jobs != null) {
-            jobs.start();
+        if (dailyJobs != null) {
+            dailyJobs.start();
         }
         // Log-only: discovery runs once, here at boot, so a refused breadcrumb is a console line,
         // never a heartbeat term (doctrine review 2026-10-10, finding 3).
@@ -262,6 +282,28 @@ public final class Main {
             default -> throw new IgFatalConfigException(
                     "TRADEBENCH_IG_ENV must be 'demo' or 'live', got '" + value + "'");
         };
+    }
+
+    /** Where the daily archive goes: a bucket over the S3 protocol (E1-T6). All five settings or none —
+     * none leaves the archive off and says so; some is a mistake, refused before anything runs. */
+    record ArchiveConfig(URI endpoint, String region, String bucket, String accessKeyId, String secretAccessKey) {
+    }
+
+    static final List<String> ARCHIVE_KEYS = List.of("TRADEBENCH_ARCHIVE_ENDPOINT", "TRADEBENCH_ARCHIVE_REGION",
+            "TRADEBENCH_ARCHIVE_BUCKET", "TRADEBENCH_ARCHIVE_ACCESS_KEY_ID", "TRADEBENCH_ARCHIVE_SECRET_ACCESS_KEY");
+
+    static @Nullable ArchiveConfig archiveConfig(Map<String, String> env) {
+        List<String> missing = ARCHIVE_KEYS.stream().filter(k -> env.get(k) == null || env.get(k).isBlank()).toList();
+        if (missing.size() == ARCHIVE_KEYS.size()) {
+            return null;
+        }
+        if (!missing.isEmpty()) {
+            throw new IgFatalConfigException("the archive's bucket is half configured — set " + missing
+                    + " too, or none of TRADEBENCH_ARCHIVE_*");
+        }
+        return new ArchiveConfig(URI.create(env.get("TRADEBENCH_ARCHIVE_ENDPOINT")), env.get("TRADEBENCH_ARCHIVE_REGION"),
+                env.get("TRADEBENCH_ARCHIVE_BUCKET"), env.get("TRADEBENCH_ARCHIVE_ACCESS_KEY_ID"),
+                env.get("TRADEBENCH_ARCHIVE_SECRET_ACCESS_KEY"));
     }
 
     /** The user every row this instance writes belongs to — the admin-owned platform tier's owner

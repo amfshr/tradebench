@@ -45,4 +45,30 @@ class MainTest {
     void thePlatformUserIsTheEnvironmentsWord() {
         assertEquals("a-synthetic-owner", Main.platformUser(Map.of("TRADEBENCH_USER", "a-synthetic-owner")));
     }
+
+    @Test
+    void noArchiveSettingsLeaveTheArchiveOff() {
+        assertEquals(null, Main.archiveConfig(Map.of("TRADEBENCH_USER", "platform")));
+    }
+
+    @Test
+    void halfAnArchiveConfigurationRefusesToStartNamingWhatIsMissing() {
+        IgFatalConfigException thrown = assertThrows(IgFatalConfigException.class, () -> Main.archiveConfig(Map.of(
+                "TRADEBENCH_ARCHIVE_ENDPOINT", "https://bucket.example", "TRADEBENCH_ARCHIVE_BUCKET", "archive")));
+        assertTrue(thrown.getMessage().contains("TRADEBENCH_ARCHIVE_ACCESS_KEY_ID"), thrown.getMessage());
+        assertTrue(thrown.getMessage().contains("TRADEBENCH_ARCHIVE_REGION"));
+    }
+
+    @Test
+    void theFullArchiveConfigurationIsTheEnvironmentsWord() {
+        Map<String, String> env = new java.util.HashMap<>();
+        for (String key : Main.ARCHIVE_KEYS) {
+            env.put(key, "a-synthetic-" + key.toLowerCase());
+        }
+        env.put("TRADEBENCH_ARCHIVE_ENDPOINT", "https://bucket.example");
+        Main.ArchiveConfig config = Main.archiveConfig(env);
+        assertEquals("https://bucket.example", config.endpoint().toString());
+        assertEquals("a-synthetic-tradebench_archive_bucket", config.bucket());
+        assertEquals("a-synthetic-tradebench_archive_secret_access_key", config.secretAccessKey());
+    }
 }

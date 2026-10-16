@@ -133,6 +133,17 @@ largely the wrong tool for IG** (single downstream, no fallback, no inbound load
 rather than per-consumer loops. **First concrete slice: E1-T6's healer** — transient REST retry,
 allowance-aware (weekly `exceeded-allowance` = budget-exhausted, *not* retry). Broad rollout: E6.
 
+
+**The next slice, ruled 2026-10-16 (Alex):** HTTP-level resilience — retries *and* rate limits on every
+IG REST call, logins included — is one standard library everywhere, Resilience4j, as the heal's retry
+already is. So `RequestPacer` (IG's requests-per-minute allowance, adjusted at runtime by discovery) and
+`LoginRateGate` (≥ 61 s between logins) become Resilience4j `RateLimiter`s, and every ig-client REST call
+gets a Resilience4j `Retry` with an explicit transient-only predicate (never a lockout, never an exhausted
+allowance). ig-client stays framework-free: Resilience4j is a plain library. **Not** the belt: it decides
+*when* the stream session needs rebuilding — silence, deal flags, stuck SDK states, the give-up budget —
+domain logic no library knows; the login inside a rebuild is just a REST call through the same limiter
+and retry. **Timing:** after E1-T7's first deploy, not before — the pacer and the gate are IG-specific,
+tested and proven live, and replacing working code the week of a first deploy is risk for no data benefit.
 ## B3 — Component-reference docs: full per-jar coverage (the pages are too thin)
 
 **Captured** 2026-10-02 · **Likely home** an Architecture docs pass (D22; docs-only → main, G4), per component as it matures · **Relates to** E2-T6 (component reference born), D22
