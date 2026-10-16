@@ -31,6 +31,9 @@
   trading calendar** — not the window — is the gap-truth.
 - **R5 — the expected calendar** is a small config-encoded `market_calendar` (XETRA sessions +
   German holidays) now; a library (exchange-calendars-style) only when markets multiply.
+  *Superseded 2026-10-16 (D25 amended, E1-T6): IG publishes no hours for the DAX epic, so there is no
+  `market_calendar` table — "open" is IG's own recorded deal flag, and an unobserved window is asked of
+  IG's history (Field Manual chapter 12 §3).*
 - **R6 — `archives`** is a manifest table (E1-T6 writes a row per Parquet/`pg_dump`); the
   console lists it and pre-signs `object_key` (no live bucket-listing).
 - **R7 — timeframe generalisation** (Alex's forward question): higher timeframes are *derived
@@ -62,7 +65,8 @@ bar_gaps (
   gap_from_utc NOT NULL, gap_to_utc NOT NULL, missing_minutes NOT NULL,
   detected_at_utc NOT NULL DEFAULT now(),
   healed_at_utc,                           -- null = open
-  heal_outcome )                           -- null|healed|tickless_at_source|failed (E1-T6)
+  heal_outcome )                           -- null (open)|healed|tickless_at_source|closed_at_source (E1-T6;
+                                           --   a failed heal leaves the row open — the failure is in job_runs)
   -- UNIQUE(user,source,instrument,gap_from,gap_to); partial idx WHERE healed_at_utc IS NULL
 
 -- capture_status: per-heartbeat UPSERT — the console's near-live health source.
@@ -84,7 +88,10 @@ archives (
   created_at_utc NOT NULL DEFAULT now() )
 ```
 
-`job_runs` (V1) is unchanged — the EOD job's audit row; its absence is the alarm (D6).
+`job_runs` gained its dimensions at E1-T6 (V5: `user_id`, `source_id`, `instrument_id`, `covers_date`,
+and a `status` check — `succeeded` | `failed`): one row per phase per market-day attempt; its absence is
+the alarm (D6). `archives` as built (V4) also carries `user_id` and `source_id`, and holds one object per
+market-day per kind.
 
 ### The `event_type` vocabulary (the Java enum → text)
 
@@ -124,7 +131,7 @@ Tags on every metric: `instance`, `market` (epic). **Counters:** `capture.ticks.
 |---|---|---|
 | **Stream window** (per-market config, venue-local) | subscribe/unsubscribe — not process lifecycle (host 24/7, D37) | collector config; DAX default **generous** (~06:00–22:00 venue-local, warm-up + post-close) |
 | **`DLG_FLAG` watchdog** (from stream) | whether silence *alarms*; self-suppresses weekends/holidays (D25/D25-triage) | T5 `StalenessWatchdog` |
-| **Expected calendar** (`market_calendar`: XETRA sessions + German holidays) | classifies **gap vs scheduled-closure** for coverage | config table (R5) |
+| **Expected calendar** — *as built (E1-T6): IG's recorded deal flags, no table* | classifies **gap vs closure**: a missing bar inside a `DEAL` span is a gap, under any other flag it is not, an unobserved window is unknown | `service_events` `market_state_change` + `service_start` rows (Field Manual ch. 12) |
 
 A tight 06:00–17:00 window on an always-on box buys ~nothing (a closed DAX just sends
 `DLG_FLAG=CLOSED`, no ticks) while risking clipped data — so the window is generous and the
@@ -137,8 +144,10 @@ A tight 06:00–17:00 window on an always-on box buys ~nothing (a closed DAX jus
   (`CaptureAssembly.HEARTBEAT`, 60s) → **box down**; a fresh row with a stale `last_tick_at_utc` while
   `market_state` is open, or `stream_state ≠ connected_streaming`, → **feed dead** (ruled
   2026-10-03). `window_closed` is not produced until R4's stream windows exist.
-- **Coverage map:** per market×day — expected session-minutes (`market_calendar`) `LEFT JOIN`
-  present bar-minutes (`bars_1m`) → `complete | partial(gaps) | closed`.
+- **Coverage map:** per market×day — expected minutes (the open spans from IG's recorded
+  `market_state_change` flags, as the heal reads them — no `market_calendar` table, D25 amended
+  2026-10-16) `LEFT JOIN` present bar-minutes (`bars_1m`, any source) → `complete | partial(gaps) |
+  closed`.
 - **Gaps:** `bar_gaps WHERE healed_at_utc IS NULL` (open) + healed history with `heal_outcome`.
 - **Catalogue:** `min/max(ts_utc), count GROUP BY instrument, source` over ticks/bars.
 - **Event log:** `service_events WHERE severity IN (…) [AND instrument_id=…] ORDER BY

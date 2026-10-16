@@ -32,8 +32,13 @@ fields (`currentAccountId`, `accounts[]` with id/type/preferred, `lightstreamerE
 the authored endpoint value matched the real one exactly) and CST/X-SECURITY-TOKEN
 response headers all confirmed. Caveat: the profile's preferred account now equals the
 configured account, so the **account-switch path was not exercised** on the wire (it
-remains unit-tested only). `/markets` and `/prices` parsing meets the real wire first via
-T6's heal path — re-golden those fixtures from captured bytes then.
+remains unit-tested only). `/markets` and `/prices` met the real wire on 2026-10-16 (E1-T6's
+probe, `MarketHoursAndDatedPricesProbe`): **`captured-market-details-dax.json`** and
+**`captured-prices-dated-window.json`** are real bytes, kept beside the authored fixtures with tests
+parsing both. They showed `openingHours: null` for the DAX epic and that a dated request's `from`/`to`
+are read in the account's local time. **Still authored, still to capture:** `application-allowance.json`
+(`GET /operations/application`) and the login response's `timezoneOffset` — the probe saved neither;
+capture both at the next gated demo smoke.
 
 All credentials/tokens in fixtures and tests are obvious fakes; account ids and the
 identifier reuse values the inherited playbook already publishes.

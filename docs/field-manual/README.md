@@ -75,6 +75,9 @@ follow that journey and the resilience that keeps it honest.
   what breaks, what the belt does, what each outage costs, who finds out, how it heals; every
   clock and how they interact; the threads and the one race a fence can't cover; the three
   database tiers; the dated rulings behind every number.
+- [The daily heal and archive](market-data-service/12-the-daily-heal-and-archive.md) — the
+  collector's second job: when a day is due, "open" read from IG's own flags, the heal's dated
+  requests and outcomes, the day as Parquet off the box, and how to read what it did.
 - [The resilience belt, end to end](market-data-service/11-the-belt-end-to-end.md) — the
   walk-through: what the running service does second to second — the threads, the one streaming
   rule, a sweep step by step, every detector with its clock and numbers, the remedies and their

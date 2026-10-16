@@ -6,6 +6,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.math.BigDecimal;
+import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
 
@@ -254,5 +255,89 @@ class IgRestClientTest {
                 + "\"allowanceAccountOverall\":1,\"allowanceApplicationOverall\":60}]"));
         assertEquals(new ApplicationAllowance("placeholder-key", 1, 60, 0, 0, 0),
                 client.applicationAllowance(session), "1 is the floor — accepted");
+    }
+
+    // --- the dated window (E1-T6), against bytes captured from IG demo on 2026-10-16 ---------
+
+    private IgSession onUtcPlusOne() {
+        return new IgSession(new IgTokens("cstA", "xstA"), "AB12CE", "https://demo-apd.marketdatasystems.com",
+                List.of(), Duration.ofHours(1));
+    }
+
+    @Test
+    void aDatedWindowIsSentInTheAccountsZoneAndServedInUtc() throws Exception {
+        transport.enqueue(FakeTransport.json(200, Wire.fixture("captured-prices-dated-window.json")));
+
+        PriceHistory history = client.minuteCandlesBetween(onUtcPlusOne(), DAX_EPIC,
+                Instant.parse("2026-10-16T07:00:00Z"), Instant.parse("2026-10-16T07:10:00Z"));
+
+        String uri = transport.calls.getFirst().uri().toString();
+        assertTrue(uri.contains("from=2026-10-16T08:00:00&to=2026-10-16T08:10:00"),
+                "the UTC window shifted into the account's zone, as IG read it on the wire: " + uri);
+        assertTrue(uri.contains("max=11&pageSize=11"), "both ends inclusive: eleven minutes");
+        assertEquals(11, history.candles().size());
+        assertEquals(Instant.parse("2026-10-16T07:00:00Z"), history.candles().getFirst().snapshotTimeUtc());
+        assertEquals(Instant.parse("2026-10-16T07:10:00Z"), history.candles().getLast().snapshotTimeUtc());
+        assertEquals(new Allowance(9957, 10000, 588980), history.allowance(), "the captured budget after the call");
+    }
+
+    @Test
+    void aCandleOutsideTheAskedWindowFailsLoud() throws Exception {
+        // the same served bytes, asked for a minute later: 07:00Z is outside 07:01–07:10Z, which is
+        // what a wrong offset looks like — fail rather than heal the wrong minutes
+        transport.enqueue(FakeTransport.json(200, Wire.fixture("captured-prices-dated-window.json")));
+
+        AccountZoneMismatch thrown = assertThrows(AccountZoneMismatch.class, () -> client.minuteCandlesBetween(
+                onUtcPlusOne(), DAX_EPIC, Instant.parse("2026-10-16T07:01:00Z"), Instant.parse("2026-10-16T07:10:00Z")));
+        assertTrue(thrown.getMessage().contains("outside the asked window"));
+        assertEquals(Duration.ofHours(1), thrown.observedOffset(), "IG's own word, read off the served candles' stamps");
+    }
+
+    @Test
+    void aStaleOffsetIsReportedWithTheOffsetIgActuallyUsed() throws Exception {
+        // a session that logged in thinking UTC+0 asks for 07:00–07:10Z as 07:00 local; IG, at UTC+1,
+        // serves 06:00–06:10Z — read off the served candles, the offset IG used is +1h, not the +0 sent
+        transport.enqueue(FakeTransport.json(200, Wire.fixture("captured-prices-dated-window.json")));
+        IgSession staleAtUtc = new IgSession(new IgTokens("cstA", "xstA"), "AB12CE",
+                "https://demo-apd.marketdatasystems.com", List.of(), Duration.ZERO);
+
+        AccountZoneMismatch thrown = assertThrows(AccountZoneMismatch.class, () -> client.minuteCandlesBetween(
+                staleAtUtc, DAX_EPIC, Instant.parse("2026-10-16T08:00:00Z"), Instant.parse("2026-10-16T08:10:00Z")));
+
+        assertEquals(Duration.ofHours(1), thrown.observedOffset());
+    }
+
+    @Test
+    void aWrongOffsetIsCaughtEvenWhenEveryServedCandleFallsInsideTheWindow() throws Exception {
+        // asked 06:00–07:30Z at +0: IG, at +1, serves 05:00–06:30Z's minutes — but this fixture's candles
+        // (07:00–07:10Z) all fall inside the asked window, which the window check alone cannot see
+        transport.enqueue(FakeTransport.json(200, Wire.fixture("captured-prices-dated-window.json")));
+        IgSession staleAtUtc = new IgSession(new IgTokens("cstA", "xstA"), "AB12CE",
+                "https://demo-apd.marketdatasystems.com", List.of(), Duration.ZERO);
+
+        AccountZoneMismatch thrown = assertThrows(AccountZoneMismatch.class, () -> client.minuteCandlesBetween(
+                staleAtUtc, DAX_EPIC, Instant.parse("2026-10-16T06:00:00Z"), Instant.parse("2026-10-16T07:30:00Z")));
+
+        assertEquals(Duration.ofHours(1), thrown.observedOffset());
+    }
+
+    @Test
+    void aSessionWithoutTheAccountsOffsetRefusesADatedRequest() {
+        assertThrows(IllegalStateException.class, () -> client.minuteCandlesBetween(session, DAX_EPIC,
+                Instant.parse("2026-10-16T07:00:00Z"), Instant.parse("2026-10-16T07:10:00Z")));
+        assertTrue(transport.calls.isEmpty(), "refused before anything was sent");
+    }
+
+    @Test
+    void theCapturedMarketDetailsParse() throws Exception {
+        // the real /markets bytes (2026-10-16, a Friday evening): the authored fixture's shape holds
+        transport.enqueue(FakeTransport.json(200, Wire.fixture("captured-market-details-dax.json")));
+
+        MarketDetails details = client.marketDetails(session, DAX_EPIC);
+
+        assertEquals(DAX_EPIC, details.epic());
+        assertEquals("EDITS_ONLY", details.marketStatus(), "IG's own word for the closed evening");
+        assertTrue(details.streamingPricesAvailable());
+        assertTrue(details.dealingRules().containsKey("minNormalStopOrLimitDistance"));
     }
 }

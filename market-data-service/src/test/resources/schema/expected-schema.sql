@@ -1,3 +1,27 @@
+CREATE TABLE public.archives (
+    id bigint NOT NULL,
+    user_id smallint NOT NULL,
+    source_id smallint,
+    instrument_id smallint,
+    kind text NOT NULL,
+    covers_date date,
+    object_key text NOT NULL,
+    bytes bigint NOT NULL,
+    sha256 text NOT NULL,
+    created_at_utc timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT archives_bytes CHECK ((bytes >= 0)),
+    CONSTRAINT archives_day_shape CHECK ((((kind = 'pg_dump'::text) AND (instrument_id IS NULL) AND (source_id IS NULL)) OR ((kind <> 'pg_dump'::text) AND (instrument_id IS NOT NULL) AND (source_id IS NOT NULL) AND (covers_date IS NOT NULL)))),
+    CONSTRAINT archives_kind CHECK ((kind = ANY (ARRAY['parquet_ticks_day'::text, 'parquet_bars_day'::text, 'pg_dump'::text]))),
+    CONSTRAINT archives_sha256 CHECK ((sha256 ~ '^[0-9a-f]{64}$'::text))
+);
+ALTER TABLE public.archives ALTER COLUMN id ADD GENERATED ALWAYS AS IDENTITY (
+    SEQUENCE NAME public.archives_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1
+);
 CREATE TABLE public.bar_gaps (
     id bigint NOT NULL,
     user_id smallint NOT NULL,
@@ -80,7 +104,12 @@ CREATE TABLE public.job_runs (
     started_utc timestamp with time zone NOT NULL,
     finished_utc timestamp with time zone,
     status text NOT NULL,
-    detail jsonb
+    detail jsonb,
+    user_id smallint NOT NULL,
+    source_id smallint,
+    instrument_id smallint,
+    covers_date date,
+    CONSTRAINT job_runs_status CHECK ((status = ANY (ARRAY['succeeded'::text, 'failed'::text])))
 );
 ALTER TABLE public.job_runs ALTER COLUMN id ADD GENERATED ALWAYS AS IDENTITY (
     SEQUENCE NAME public.job_runs_id_seq
@@ -153,6 +182,10 @@ ALTER TABLE public.users ALTER COLUMN id ADD GENERATED ALWAYS AS IDENTITY (
     NO MAXVALUE
     CACHE 1
 );
+ALTER TABLE ONLY public.archives
+    ADD CONSTRAINT archives_object_key_key UNIQUE (object_key);
+ALTER TABLE ONLY public.archives
+    ADD CONSTRAINT archives_pkey PRIMARY KEY (id);
 ALTER TABLE ONLY public.bar_gaps
     ADD CONSTRAINT bar_gaps_pkey PRIMARY KEY (id);
 ALTER TABLE ONLY public.bar_gaps
@@ -183,12 +216,21 @@ ALTER TABLE ONLY public.users
     ADD CONSTRAINT users_name_key UNIQUE (name);
 ALTER TABLE ONLY public.users
     ADD CONSTRAINT users_pkey PRIMARY KEY (id);
+CREATE INDEX archives_by_day ON public.archives USING btree (covers_date DESC);
+CREATE UNIQUE INDEX archives_market_day ON public.archives USING btree (user_id, source_id, instrument_id, kind, covers_date);
 CREATE INDEX bar_gaps_open_idx ON public.bar_gaps USING btree (instrument_id) WHERE (healed_at_utc IS NULL);
 CREATE INDEX flyway_schema_history_s_idx ON public.flyway_schema_history USING btree (success);
+CREATE INDEX job_runs_by_market_day ON public.job_runs USING btree (job_name, user_id, source_id, instrument_id, covers_date, started_utc);
 CREATE INDEX service_events_feed_idx ON public.service_events USING btree (event_time_utc DESC);
 CREATE INDEX service_events_mkt_idx ON public.service_events USING btree (instrument_id, event_time_utc DESC);
 CREATE INDEX service_events_sev_idx ON public.service_events USING btree (severity, event_time_utc DESC);
 CREATE INDEX ticks_series_idx ON public.ticks USING btree (instrument_id, source_id, user_id, ts_utc);
+ALTER TABLE ONLY public.archives
+    ADD CONSTRAINT archives_instrument_id_fkey FOREIGN KEY (instrument_id) REFERENCES public.instruments(id);
+ALTER TABLE ONLY public.archives
+    ADD CONSTRAINT archives_source_id_fkey FOREIGN KEY (source_id) REFERENCES public.sources(id);
+ALTER TABLE ONLY public.archives
+    ADD CONSTRAINT archives_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.users(id);
 ALTER TABLE ONLY public.bar_gaps
     ADD CONSTRAINT bar_gaps_instrument_id_fkey FOREIGN KEY (instrument_id) REFERENCES public.instruments(id);
 ALTER TABLE ONLY public.bar_gaps
@@ -203,6 +245,12 @@ ALTER TABLE ONLY public.bars_1m
     ADD CONSTRAINT bars_1m_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.users(id);
 ALTER TABLE ONLY public.capture_status
     ADD CONSTRAINT capture_status_instrument_id_fkey FOREIGN KEY (instrument_id) REFERENCES public.instruments(id);
+ALTER TABLE ONLY public.job_runs
+    ADD CONSTRAINT job_runs_instrument_id_fkey FOREIGN KEY (instrument_id) REFERENCES public.instruments(id);
+ALTER TABLE ONLY public.job_runs
+    ADD CONSTRAINT job_runs_source_id_fkey FOREIGN KEY (source_id) REFERENCES public.sources(id);
+ALTER TABLE ONLY public.job_runs
+    ADD CONSTRAINT job_runs_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.users(id);
 ALTER TABLE ONLY public.service_events
     ADD CONSTRAINT service_events_instrument_id_fkey FOREIGN KEY (instrument_id) REFERENCES public.instruments(id);
 ALTER TABLE ONLY public.service_events

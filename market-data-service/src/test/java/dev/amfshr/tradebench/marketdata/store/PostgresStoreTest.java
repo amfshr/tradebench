@@ -83,7 +83,7 @@ class PostgresStoreTest extends PostgresTestBase {
                 ResultSet r = s.executeQuery(
                         "SELECT string_agg(name, ',' ORDER BY name) FROM sources")) {
             r.next();
-            assertEquals("ig-rest-heal,ig-stream-demo,ig-stream-live", r.getString(1));
+            assertEquals("ig-rest-demo,ig-rest-heal,ig-rest-live,ig-stream-demo,ig-stream-live", r.getString(1));
         }
         try (Connection c = database.dataSource().getConnection();
                 Statement s = c.createStatement();

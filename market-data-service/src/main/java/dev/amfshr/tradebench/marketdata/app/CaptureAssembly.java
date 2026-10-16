@@ -6,12 +6,16 @@ import java.util.function.BooleanSupplier;
 import java.util.function.Consumer;
 import java.util.function.DoubleSupplier;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
+
 import dev.amfshr.tradebench.core.time.Clock;
 import dev.amfshr.tradebench.ig.session.IgSessions;
 import dev.amfshr.tradebench.ig.stream.IgStreamClient;
 import dev.amfshr.tradebench.ig.stream.StreamTransport;
 import dev.amfshr.tradebench.ig.time.Sleeper;
 import dev.amfshr.tradebench.marketdata.coverage.GapDetector;
+import dev.amfshr.tradebench.marketdata.events.EventType;
+import dev.amfshr.tradebench.marketdata.events.ServiceEvent;
 import dev.amfshr.tradebench.marketdata.ingest.Buffers;
 import dev.amfshr.tradebench.marketdata.ingest.Pump;
 import dev.amfshr.tradebench.marketdata.store.BestEffortEventLog;
@@ -46,6 +50,7 @@ public final class CaptureAssembly {
     public static final Duration BOOT_RETRY = Duration.ofSeconds(30);
     /** The Tier-2 event queue's bound (D29 (3)) — hours of normal traffic; past it, drops are counted. */
     public static final int EVENT_QUEUE_CAPACITY = 1_000;
+    private static final ObjectMapper MAPPER = new ObjectMapper();
 
     /** Everything the pipeline is composed from — the application supplies the real ones, a test
      * the fakes; nothing here is machine-specific. */
@@ -67,6 +72,9 @@ public final class CaptureAssembly {
     // Best-effort by type (E1-T10 #26): one per producer, so the heartbeat says whose writes failed.
     private final BestEffortEventLog pumpEvents;
     private final BestEffortEventLog beltEvents;
+    private final BestEffortEventLog lifecycleEvents;
+    private final String instance;
+    private final Clock clock;
     private final List<String> epics;
     private final CaptureStore sink;
     private final Consumer<String> log;
@@ -77,10 +85,13 @@ public final class CaptureAssembly {
 
     private CaptureAssembly(Ports p) {
         this.epics = List.copyOf(p.epics());
+        this.instance = p.instance();
+        this.clock = p.clock();
         this.sink = p.sink();
         this.log = p.log();
         queues = new Buffers(p.tickCapacity(), p.clock()::monotonicNanos);
         pumpEvents = new BestEffortEventLog(p.events(), p.log());
+        lifecycleEvents = new BestEffortEventLog(p.events(), p.log());
         pump = new Pump(queues, p.sink(), new GapDetector(), p.gaps(), pumpEvents, p.sleeper(),
                 p.clock(), new BackoffPolicy(p.tuning(), p.jitter()), p.log(), p.onPumpDeath());
         control = new IgStreamControl(p.sessions(), new IgStreamClient(p.transport()), queues, epics,
@@ -96,6 +107,9 @@ public final class CaptureAssembly {
     /** Boot, in order: connect the stream (bounded; fails loud), then watch every market. Threads
      * are the caller's: start them after this returns. */
     public void boot() throws InterruptedException {
+        // The record's word that the collector is observing from here: the daily heal treats the
+        // span from the last sign of life before a boot to this row as unknown, never as closed.
+        lifecycleEvents.write(lifecycle(EventType.SERVICE_START));
         control.start();
         for (String epic : epics) {
             supervisor.watch(epic);
@@ -112,6 +126,7 @@ public final class CaptureAssembly {
      * the caller knows what else it may close.
      */
     public boolean shutdown(BooleanSupplier joinSweep, BooleanSupplier joinPump, BooleanSupplier joinWriter) {
+        lifecycleEvents.write(lifecycle(EventType.SERVICE_STOP)); // dated when the stop began
         supervisor.stop();
         if (!joinSweep.getAsBoolean()) {
             log.accept("supervisor did not stop within 5s — closing the stream anyway");
@@ -143,6 +158,11 @@ public final class CaptureAssembly {
     }
 
     /** The heartbeat line — the honest numbers, every minute. */
+    private ServiceEvent lifecycle(EventType type) {
+        return ServiceEvent.of(type, clock.wallInstant())
+                .withDetail(MAPPER.createObjectNode().put("instance", instance));
+    }
+
     public String summary() {
         return "ticks=" + queues.tickCount() + " bars=" + queues.barCount()
                 + " written=" + pump.writtenCount()
@@ -150,7 +170,7 @@ public final class CaptureAssembly {
                 + " sinkFailures=" + pump.sinkFailures()
                 + " obsFailures=" + (pump.gapWriteFailures() + pumpEvents.failures())
                 + " eventsQueued=" + events.queued()
-                + " eventWriteFailures=" + (beltEvents.failures() + events.writeFailures())
+                + " eventWriteFailures=" + (beltEvents.failures() + events.writeFailures() + lifecycleEvents.failures())
                 + " statusFailures=" + probe.statusFailures();
     }
 }

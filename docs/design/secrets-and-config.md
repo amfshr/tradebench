@@ -60,6 +60,8 @@
 - `IG_DEMO_IDENTIFIER / PASSWORD / API_KEY / ACCOUNT_ID` and the `IG_LIVE_*` mirror — only
   the selected set is read.
 - `TRADEBENCH_INSTANCE` — every process names itself before acting.
+- `TRADEBENCH_ARCHIVE_ENDPOINT / REGION / BUCKET / ACCESS_KEY_ID / SECRET_ACCESS_KEY` — the daily
+  archive's S3-protocol bucket (E1-T6): all five or none; the access key and secret are secrets.
 - `TRADEBENCH_USER` — the owner of every row the instance writes (the platform tier's `platform`
   until jobs carry real users, D31); required, never defaulted in code.
 - `TRADEBENCH_*` for all service config (`_CAPTURE_DIR`, `_EPICS`; later `_DB_URL`,

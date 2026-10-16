@@ -195,7 +195,7 @@ pass-with-findings F1–F10, fixed on-branch except F9 (a declared residual). Te
 · market-data-service 143 · docs site 63 · 0 failures. The 2026-10-03 rulings above are logged as **D27**.
 **Residuals (recorded 2026-10-04 — not tickets; Alex decides whether to ticket). Update 2026-10-05: residuals
 2 and 3 are now E1-T11's DoD** — the scenario harness; the PR #14 review confirmed the missing composed-loop test
-as the root of its findings 1, 2, 4, 5, 8 and 11. Residual 1 stays unticketed. **Update 2026-10-08: residual 2 is closed,
+as the root of its findings 1, 2, 4, 5, 8 and 11. Residual 1 is folded into E1-T6 by its nod (ruling 5, 2026-10-16). **Update 2026-10-08: residual 2 is closed,
 final at T11's merge (PR #16); residual 3 is closed in its rebaseline half at the same merge, and its rebuild half
 closed with T10 A2 on 2026-10-09 — ruled 2026-10-08 (Alex); the 2026-10-09 update below** (`BeltScenariosTest` drives the composed loop over `CaptureAssembly`;
 the host-suspend scenario pins the rebaseline — a 16-minute wall jump raises no `WATCHDOG_STALE` and is annotated
@@ -226,9 +226,9 @@ rebuild at 60, not 180); its rebaseline half at T11 (PR #16, 2026-10-08).**
    from the ruling's ordering, for that reason: the host wakes with the Lightstreamer client stuck in `DISCONNECTED:WILL-RETRY`
    and the escalator rebuilds it, measured in awake time. **Residual 3 is closed, final (2026-10-09).**
 
-## T6 — Daily completeness + archive (D6 amended, D30) ⬜ ready to start (re-scoped 2026-10-11 by D30; unblocked 2026-10-11 by E1-T13's merge, PR #25; trued 2026-10-15 — no Spring, R7; the calendar-source nod item; T14 first — ✅ merged 2026-10-16, PR #26)
+## T6 — Daily completeness + archive (D6 amended, D30) 🔶 in review — PR #27 open 2026-10-17, CI green (build, web, GitGuardian), awaiting Alex's merge (started 2026-10-16; design nod held 2026-10-16, Alex; ruling 4 re-ruled and ruling 5 verified the same evening; re-scoped 2026-10-11 by D30; unblocked 2026-10-11 by E1-T13's merge, PR #25; trued 2026-10-15 — no Spring, R7; T14 first — ✅ merged 2026-10-16, PR #26)
 
-**Type** build · **Branch** `e1-t6-heal-and-archive` · **Started** — · **Blocked by** —
+**Type** build · **Branch** `e1-t6-heal-and-archive` · **Started** 2026-10-16 · **Blocked by** —
 
 **Re-scoped 2026-10-11 (Alex — D30; D6 amended):** the collection service streams and stores; it
 does not email, alert or report. The digest phase leaves this ticket for **E9-T5** — the capture
@@ -256,8 +256,9 @@ run — or the row's absence itself alarms (P9).
 **Approach:** one EOD job on **a plain scheduled executor in the existing process — no Spring in the
 collector** (D6 amended 2026-10-15, R7; NOT Spring Batch, never was), two phases, each run
 writing its audited `job_runs` row, clean or not:
-1. **Heal**: diff expected-vs-present 1m bars (expected = the expected calendar — its *source* is
-   this nod's new item, below); REST v3 backfill window-clipped and paced
+1. **Heal**: diff expected-vs-present 1m bars (expected = IG's own word — recorded `DEAL` spans open,
+   other flags' spans closed, unobserved windows unknown and asked of IG's REST history — the nod's
+   ruling (4) as re-ruled, below); gap-sized dated requests (ruling 5, verified); REST v3 backfill window-clipped and paced
    (the ~10k-points/week allowance is real — §4.3); outcomes classified
    `healed / tickless-at-source / failed`. **Ticks are stream-only** — provably
    unrecoverable from IG REST; the job never claims otherwise.
@@ -271,44 +272,103 @@ checked by hand each evening (the runbook documents the check: heartbeat line ·
 `capture_status` freshness · the day's `job_runs` row).
 **Tests:** heal classification table-driven and exact; allowance/pacing boundary tests; a failed
 phase still writes its `job_runs` row (failure-mode test — the row is the audit, clean or not);
-Parquet golden file for the day-export contract.
-**In-ticket decisions (named on the board):** object store — **R2 vs B2**; also: Parquet writer
-lib. Settle both in-ticket, log any that grow durable consequences. *(Email transport — SMTP vs
-API service — moved to E9-T5 by D30.)*
-**Design item queued for this ticket's nod (Alex, 2026-09-28):** the schema/role story —
-named schema vs Postgres `public` (currently `public`; likely: dedicated schema +
-`search_path`, `public` revoked), owner-vs-app role split (D22, with the T7 ops script),
-and DataGrip/read-only role for humans. Decide at this nod — Spring never lands in the collector
-(R7, 2026-10-15) — and migrate via Flyway.
-**Design item added for this ticket's nod (the 2026-10-15 session — handed, not ruled):** the
-**expected calendar's source** — what decides a "real gap" for the heal, and for E9-T3's coverage map
-(one truth about "open"). Alex's 24-hour concern ("how does the belt know the market is quiet and the
-feed is not dead") is answered by D25's three clocks (the generous stream window; the deal flag, which
-stands the watchdog down on a closed market, bounded by the 12-hour teaching resubscribe; the expected
-calendar that defines a gap) and chapter 11 §5.1. The open piece is where the calendar comes from.
-**Recommendation on record:** derive the open spans from the recorded `market_state_change` events
-(every flag transition is a row since E1-T5), count gaps only inside open spans, and keep a **static
-per-market calendar** (D25's `market_calendar` — XETRA sessions + German holidays) as the **fallback
-for hours the collector itself was down** (no rows to derive from). A quiet-but-open market that ticks
-less than once per 90s earns harmless surgical resubscribes; the first weeks' `watchdog_stale` rows at
-quiet hours are the evidence for tuning `tickSilent` per market (T7's soak). Decide at the nod; the
-heal's classification tests then anchor on the chosen source's boundaries (a gap on a span's edge; a
-closed hour never a gap).
+Parquet schema-and-values contract (as built — a byte golden was dropped: DuckDB's bytes carry its version, so a golden would break on every upgrade without the contract changing) for the day-export contract.
+**Nod (Alex, 2026-10-16)** — the design nod (D13), held the day the ticket started; it replaces the
+open in-ticket decisions and the two queued nod items (the schema/role story, 2026-09-28; the expected
+calendar's source, 2026-10-15) and the B2 retry choice this § carried:
+1. **Object store: Cloudflare R2 for now**, written through an **`ObjectStore` port over the S3
+   protocol** (R2, AWS S3, GCS, Backblaze B2 and Hetzner all speak it) — T6 is provider-neutral; the
+   bucket, endpoint and keys are env config chosen at T7. Tests run against **MinIO in Testcontainers**.
+2. **The S3 client: the AWS SDK v2 S3 module** — a code library only, pointed at R2's endpoint; no AWS
+   account.
+3. **Parquet stays in T6** — the offsite, backtest-ready copy and the console's download (E9-T6);
+   Postgres stays the primary store (D17). Writer **`parquet-java` with Hadoop trimmed**; the jar is
+   measured in the archive increment (④); **DuckDB JDBC the fallback**.
+4. **The calendar — re-ruled the same evening on the wire's evidence (Alex, 2026-10-16; D25 amended):
+   no hand-kept `market_calendar`.** IG publishes no hours for the epic (`GET /markets/IX.D.DAX.DAILY.IP`
+   returns `openingHours: null` — the probe, below), and a calendar nobody can source cannot be
+   maintained. "Open" is IG's own word: inside a recorded `DEAL` span a missing bar is a gap; inside any
+   other flag's span it is not; where the collector was not observing — its last sign of life before a
+   boot → that boot's `service_start` — the window is **unknown** and the heal asks IG's REST history,
+   whose candles say whether the market was open (this answers the original objection: derivation
+   failed exactly when the collector was down). Holidays need no list — IG never flags them `DEAL`.
+   Auto-heal on by default for the platform tier; the off switch and an on-demand heal are E9-T8's.
+   Revisit once weeks of history show what is wanted (Alex: "not a major thing until we use it every
+   day"). The heal's classification tests anchor on the flag spans' boundaries (a gap on a `DEAL`
+   span's edge; a minute under another flag never a gap; an unobserved minute unknown).
+   *Superseded wording (the nod, earlier that day): D25 R5's static `market_calendar` the primary truth,
+   refined by recorded CLOSED/SUSPEND flags, seeded with IG's hours for the epic.*
+5. **Dated REST requests**: verified first by a **demo smoke call** (this folds in T5 residual 1 — the
+   gated `IG_SMOKE=1 ./gradlew :ig-client:demoSmoke`, re-golden `application-allowance.json`);
+   gap-sized requests if they hold, last-N bounded by the scan otherwise.
+   **Verified 2026-10-16** — `MarketHoursAndDatedPricesProbe` (ig-client smoke, gated `IG_SMOKE=1`),
+   run once against demo: a dated `GET /prices?from&to` works, reads `from`/`to` in the **account's
+   local time** (asked 08:00–08:10, got 07:00–07:10Z — BST), both ends inclusive, one allowance point
+   per candle (9,957 of 10,000 left this week). The heal therefore asks **exactly a gap's minutes**,
+   converting UTC to the account's zone; the last-N fallback is not needed.
+6. **REST retry: Resilience4j's retry** — one standard for resilience across every service, as for logs
+   and metrics (Alex; D33's reasoning). A plain-Java library: ig-client stays framework-free (never Spring
+   Retry / Spring Cloud CB). The belt's own `BackoffPolicy` stays for session rebuilds. This supersedes
+   the plan's "hand-roll vs Resilience4j" and backlog B2's first slice (noted in B2). The weekly
+   `exceeded-account-historical-data-allowance` stays budget-exhausted, never retried (below).
+7. **Archive day = the UTC calendar day**, one file per market per day per kind (ticks, bars);
+   cross-day indicator warm-up reads several days — no weekly files.
+8. **No `TRADEBENCH_EOD_AT`**: the job is driven at runtime — it wakes every few minutes and does every
+   market-day that has closed and has no `job_runs` row (catch-up for free). *Trued by ruling 4's
+   re-ruling:* "closed" is read off the recorded flags, not a calendar, and the clause about editing
+   the calendar from the platform lapses with the calendar.
+9. **Database roles: owner / app (DML only) / read-only**, per service database, created by T7's ops
+   script; stay on `public` with `CREATE` revoked from the app and read-only roles (no named schema).
+
+**Increments (revised 2026-10-16 with ruling 4's re-ruling):** ① migration (the `archives` table only —
+no `market_calendar`) · ② the job runner, driven by the recorded flags, + `job_runs` per phase, plus
+**`SERVICE_START` at boot and `SERVICE_STOP` on an orderly stop** (catalogued since D25, never written —
+they bound the unknown windows) · ③ the heal (scan, classify open / closed / unknown, fetch exactly the
+gap's minutes, upsert) · ④ the archive (Parquet schema-and-values contract (as built — a byte golden was dropped: DuckDB's bytes carry its version, so a golden would break on every upgrade without the contract changing), upload, manifest row) · ⑤ docs + runbook.
+The probe's captures become the **re-goldened `/markets` and `/prices` wire fixtures** (the wire
+README asked T6 to re-golden them from captured bytes).
+
+**Alongside (Alex asked at this nod):** a **platform architecture page** — context, deployables,
+ownership of databases/streams/buckets, identity at three levels (people, services, database roles) —
+is being written docs-only to `main` first.
+
 **Post-sweep refinement (2026-09-28):** `exceeded-account-historical-data-allowance` resets
 *weekly* — the heal treats it as budget-exhausted (plan via the parsed `Allowance` metadata
 before firing), never as a backoff-and-retry error.
 **ig-client REST resilience (backlog B2):** the healer is the **first consumer of transient
-REST retry-with-backoff** on the ig-client. Decide here: hand-roll (reuse `BackoffPolicy` +
-the error taxonomy, allowance-aware) vs standalone Resilience4j — never Spring Retry/Cloud CB
-(ig-client stays framework-free). This is the first slice of the platform-wide ig-client REST
-resilience that B2 tracks (the broad OMS/enquiries surface rolls it out at E6).
-**T5 residual 1 stays** (T5 §): the gated demo smoke (`IG_SMOKE=1 ./gradlew :ig-client:demoSmoke`,
-re-golden `application-allowance.json`) comes first if the heal budget leans on pacer discovery.
+REST retry** on the ig-client — Resilience4j's retry (ruling 6); the broad OMS/enquiries surface rolls
+it out at E6.
 
 
-## T7 — Deploy ⬜ (gains 2026-10-15 from the design session: Redis in the stack, the OTel agent + Grafana Cloud export, the dead-man ping)
+
+**Decision: (TBD) — for Alex at the T6 PR (the re-review's N6, 2026-10-16).** Observation reads only the
+connection's status, so two cases still count as observing: a **quarantined** market (its pair unsubscribed,
+`MARKET_QUARANTINED`, never released within a process) and a **long CLOSED stand-down** the 12-hour teaching
+resubscribe has not yet confirmed (a reopen during it reads as closed until the next teach). Treating both as
+*unknown* would ask IG — free on closed spans, since IG returns no candles there. Not built: it extends ruling 4
+beyond D27's one streaming rule.
+
+**At the PR (2026-10-17) — 🔶 in review, not done.** PR #27 open 2026-10-17, CI green (`build`, `web`, GitGuardian), awaiting Alex's merge (GitHub stamps 2026-10-16T23:45Z). Commits on the
+branch: ① `6915f5d` · ② `c12ccbb` · ③ `dae3e38` · ④ `a37039e` · ⑤ `4f6e772` · the doctrine review's fixes `b9dc94e` ·
+the re-review's fixes `babfd5b` · board `a8bc216` `5ba663c` `87a7bef` · main merged in `f176dd1`. `./gradlew build` 449
+tests (+74 on main); `replayAcceptance` 6/6; docs site 65/65; 66 mutations. Doctrine review FAIL (12 findings), all fixed;
+the focused re-review PASS-WITH-FINDINGS, its code findings fixed (its N6 is the Decision (TBD) above). **DoD not fully
+met by this PR:** "staging produces the archive end-to-end" — staging is E1-T7's; the path is proven in tests against
+real Postgres and an S3-protocol server, not on staging. **For Alex at the merge:** (a) the proposed refinement of
+ruling 4 — observing = streaming (D25, marked proposed; merging rules it); (b) the Decision (TBD) above. **Surfaced at
+the PR as decisions:** the archive's Parquet writer is DuckDB JDBC (ruling 3's fallback, not `parquet-java`); the heal
+keeps a 2,000-point allowance reserve.
+
+## T7 — Deploy ⬜ (gains 2026-10-15 from the design session: Redis in the stack, the OTel agent + Grafana Cloud export, the dead-man ping; opens with a provider analysis + design session — Alex, 2026-10-16)
 
 **Type** ops · **Branch** `—` · **Started** — · **Blocked by** T6
+
+**Opens with a provider analysis and design session (Alex, 2026-10-16):** AWS, GCP, Cloudflare, Hetzner
+and others compared first, then the deploy steps designed against the chosen platform. D24 R3 fixed a
+direction only (a small VPS, Hetzner leading); the formal host ruling is this session's. It also
+chooses the object store's bucket, endpoint and keys (E1-T6 nod (1) — T6 is S3-protocol and
+provider-neutral) and its ops script creates each service database's owner / app / read-only roles
+(E1-T6 nod (9)).
 
 **Goal:** staging + prod, promoted by release tag; runs unattended — and observable from its first day (D33).
 **Pre-cloud runway (Alex, 2026-09-28):** before any cloud deploy, the deployable stack
@@ -330,8 +390,8 @@ leave no row (`kill -9`, OOM, a reboot, a database down at the moment of death �
 already write theirs). B15's judgment 1 rides with it: a testable `heartbeat()` on `CaptureAssembly`
 taking the lock and the ping as ports, so the harness drives the heartbeat's checks and the ping
 (proposed, settle in-ticket: a failed ping logs and never stops the collector — the check's silence is
-the alarm, not the collector's). Host: revisit the build-plan §6 analysis (Lightsail $12 vs Hetzner ~€4)
-against the ~£20/mo envelope — **decision recorded in-ticket**.
+the alarm, not the collector's). Host: the provider analysis + design session above (the build-plan §6 analysis — Lightsail $12 vs
+Hetzner ~€4 — an input) against the ~£20/mo envelope — **decision recorded in-ticket**.
 **DoD anchor:** staging runs 24/7 for 3 consecutive unattended days, each evening's hand check
 clean — the heartbeat line, `capture_status` freshness, the day's `job_runs` rows, and the
 healthchecks.io check green on the ping (D30: no digest until E9-T5 lands; D33).

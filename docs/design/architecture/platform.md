@@ -96,7 +96,7 @@ databases, so ownership is enforced by the engine, not by discipline.
 
 | Database | Owner (sole writer) | Holds | Readers |
 |---|---|---|---|
-| `market_data` | `market-data-service` | ticks, `bars_1m`, `bar_gaps`, `service_events`, `capture_status`, `job_runs`, `archives`, `market_calendar` | `control-service` (read-only — the published data product); later the backtester (read-only, bulk) |
+| `market_data` | `market-data-service` | ticks, `bars_1m`, `bar_gaps`, `service_events`, `capture_status`, `job_runs`, `archives` | `control-service` (read-only — the published data product); later the backtester (read-only, bulk) |
 | `control` | `control-service` | users, roles, jobs and their versions, settings | nobody else — the collector fetches job definitions over the API (D32) |
 | *(future)* `strategies`, `backtests` | `control-service` until a service splits out | saved strategies, DSL indicators, backtest runs | — |
 
@@ -181,10 +181,13 @@ fetches the job from `control-service`'s internal endpoint, and applies it, idem
 `(job id, version)` → what the job then does is written to `market_data`, where the console
 reads it.
 
-**The end of a market's day** (E1-T6). The collector's job runner finds a market-day that has
-closed by the calendar and has no `job_runs` row → it heals the day's missing bars from IG's
-REST history → writes the day's Parquet files to the bucket and a manifest row → writes the
-`job_runs` row, clean or failed. The console lists the manifest and hands out links.
+**The end of a market's day** (E1-T6). Ten minutes after a market's UTC day ends, the collector's
+job runner finds it has no successful `job_runs` row → it classifies every minute open, closed or
+unknown from IG's own recorded flags and the collector's boots, asks IG's REST history for the
+missing open-or-unknown minutes, writes them under the REST source, and closes each gap row with
+IG's answer → writes the day's two Parquet files to the bucket and a manifest row each → a
+`job_runs` row per phase, clean or failed. The console lists the manifest and hands out links
+(Field Manual chapter 12).
 
 **Watching it.** Domain truth is in the rows the console renders (D25). Operational telemetry
 (logs and metrics) leaves every JVM through the OpenTelemetry agent to Grafana Cloud. The
