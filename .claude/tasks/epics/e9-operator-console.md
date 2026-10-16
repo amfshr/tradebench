@@ -320,7 +320,7 @@ with a seeded fake).
 **DoD:** on the local stack an edited job reaches the running collector by nudge and by resync
 alone, applied exactly once per `(job id, version)`; credentials saved encrypted and never leaked;
 the allowance view renders; the collector unchanged in its posture (no inbound port, no `control`
-credential).
+credential). With auto-heal off for a market, a gap is recorded and stays open; the manual fetch-and-heal command heals that market-day through E1-T6's healer entry point, idempotently (Alex, 2026-10-16).
 
 ## T9 — mTLS-for-practice 🧊 (gated 2026-10-15 — R5: a second Spring app)
 
