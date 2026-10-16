@@ -226,7 +226,7 @@ rebuild at 60, not 180); its rebaseline half at T11 (PR #16, 2026-10-08).**
    from the ruling's ordering, for that reason: the host wakes with the Lightstreamer client stuck in `DISCONNECTED:WILL-RETRY`
    and the escalator rebuilds it, measured in awake time. **Residual 3 is closed, final (2026-10-09).**
 
-## T6 — Daily completeness + archive (D6 amended, D30) 🔶 in progress (started 2026-10-16; design nod held 2026-10-16, Alex; re-scoped 2026-10-11 by D30; unblocked 2026-10-11 by E1-T13's merge, PR #25; trued 2026-10-15 — no Spring, R7; T14 first — ✅ merged 2026-10-16, PR #26)
+## T6 — Daily completeness + archive (D6 amended, D30) 🔶 in progress (started 2026-10-16; design nod held 2026-10-16, Alex; ruling 4 re-ruled and ruling 5 verified the same evening; re-scoped 2026-10-11 by D30; unblocked 2026-10-11 by E1-T13's merge, PR #25; trued 2026-10-15 — no Spring, R7; T14 first — ✅ merged 2026-10-16, PR #26)
 
 **Type** build · **Branch** `e1-t6-heal-and-archive` · **Started** 2026-10-16 · **Blocked by** —
 
@@ -256,8 +256,9 @@ run — or the row's absence itself alarms (P9).
 **Approach:** one EOD job on **a plain scheduled executor in the existing process — no Spring in the
 collector** (D6 amended 2026-10-15, R7; NOT Spring Batch, never was), two phases, each run
 writing its audited `job_runs` row, clean or not:
-1. **Heal**: diff expected-vs-present 1m bars (expected = D25 R5's static `market_calendar`, refined
-   by recorded CLOSED/SUSPEND flags — the nod's ruling (4), below); REST v3 backfill window-clipped and paced
+1. **Heal**: diff expected-vs-present 1m bars (expected = IG's own word — recorded `DEAL` spans open,
+   other flags' spans closed, unobserved windows unknown and asked of IG's REST history — the nod's
+   ruling (4) as re-ruled, below); gap-sized dated requests (ruling 5, verified); REST v3 backfill window-clipped and paced
    (the ~10k-points/week allowance is real — §4.3); outcomes classified
    `healed / tickless-at-source / failed`. **Ticks are stream-only** — provably
    unrecoverable from IG REST; the job never claims otherwise.
@@ -283,15 +284,28 @@ calendar's source, 2026-10-15) and the B2 retry choice this § carried:
 3. **Parquet stays in T6** — the offsite, backtest-ready copy and the console's download (E9-T6);
    Postgres stays the primary store (D17). Writer **`parquet-java` with Hadoop trimmed**; the jar is
    measured in the archive increment (④); **DuckDB JDBC the fallback**.
-4. **The calendar: D25 R5's static `market_calendar` is the primary truth**, refined by recorded
-   CLOSED/SUSPEND flags so a minute IG said was closed is never a gap. The 2026-10-15 recommendation
-   (derive open spans from the recorded flags, the static calendar only a fallback) was **not taken**:
-   derivation fails exactly when the collector was down. Seeded with **IG's hours for the epic, not
-   XETRA's** — R5's "XETRA sessions" wording is trued by this ruling. The heal's classification tests
-   anchor on the calendar's boundaries (a gap on a session's edge; a closed minute never a gap).
+4. **The calendar — re-ruled the same evening on the wire's evidence (Alex, 2026-10-16; D25 amended):
+   no hand-kept `market_calendar`.** IG publishes no hours for the epic (`GET /markets/IX.D.DAX.DAILY.IP`
+   returns `openingHours: null` — the probe, below), and a calendar nobody can source cannot be
+   maintained. "Open" is IG's own word: inside a recorded `DEAL` span a missing bar is a gap; inside any
+   other flag's span it is not; where the collector was not observing — its last sign of life before a
+   boot → that boot's `service_start` — the window is **unknown** and the heal asks IG's REST history,
+   whose candles say whether the market was open (this answers the original objection: derivation
+   failed exactly when the collector was down). Holidays need no list — IG never flags them `DEAL`.
+   Auto-heal on by default for the platform tier; the off switch and an on-demand heal are E9-T8's.
+   Revisit once weeks of history show what is wanted (Alex: "not a major thing until we use it every
+   day"). The heal's classification tests anchor on the flag spans' boundaries (a gap on a `DEAL`
+   span's edge; a minute under another flag never a gap; an unobserved minute unknown).
+   *Superseded wording (the nod, earlier that day): D25 R5's static `market_calendar` the primary truth,
+   refined by recorded CLOSED/SUSPEND flags, seeded with IG's hours for the epic.*
 5. **Dated REST requests**: verified first by a **demo smoke call** (this folds in T5 residual 1 — the
    gated `IG_SMOKE=1 ./gradlew :ig-client:demoSmoke`, re-golden `application-allowance.json`);
    gap-sized requests if they hold, last-N bounded by the scan otherwise.
+   **Verified 2026-10-16** — `MarketHoursAndDatedPricesProbe` (ig-client smoke, gated `IG_SMOKE=1`),
+   run once against demo: a dated `GET /prices?from&to` works, reads `from`/`to` in the **account's
+   local time** (asked 08:00–08:10, got 07:00–07:10Z — BST), both ends inclusive, one allowance point
+   per candle (9,957 of 10,000 left this week). The heal therefore asks **exactly a gap's minutes**,
+   converting UTC to the account's zone; the last-N fallback is not needed.
 6. **REST retry: Resilience4j's retry** — one standard for resilience across every service, as for logs
    and metrics (Alex; D33's reasoning). A plain-Java library: ig-client stays framework-free (never Spring
    Retry / Spring Cloud CB). The belt's own `BackoffPolicy` stays for session rebuilds. This supersedes
@@ -299,16 +313,20 @@ calendar's source, 2026-10-15) and the B2 retry choice this § carried:
    `exceeded-account-historical-data-allowance` stays budget-exhausted, never retried (below).
 7. **Archive day = the UTC calendar day**, one file per market per day per kind (ticks, bars);
    cross-day indicator warm-up reads several days — no weekly files.
-8. **No `TRADEBENCH_EOD_AT`**: the job is driven by the calendar at runtime — it wakes every few minutes
-   and does every market-day that has closed and has no `job_runs` row (catch-up for free); when
-   `control-service` lands the calendar is edited from the platform and the job follows without a
-   restart.
+8. **No `TRADEBENCH_EOD_AT`**: the job is driven at runtime — it wakes every few minutes and does every
+   market-day that has closed and has no `job_runs` row (catch-up for free). *Trued by ruling 4's
+   re-ruling:* "closed" is read off the recorded flags, not a calendar, and the clause about editing
+   the calendar from the platform lapses with the calendar.
 9. **Database roles: owner / app (DML only) / read-only**, per service database, created by T7's ops
    script; stay on `public` with `CREATE` revoked from the app and read-only roles (no named schema).
 
-**Increments:** ① migration (`archives`, `market_calendar` + the epic's seed) · ② the calendar-driven
-job runner + `job_runs` per phase · ③ the heal (scan, fetch, upsert, classify) · ④ the archive (Parquet
-golden file, upload, manifest row) · ⑤ docs + runbook.
+**Increments (revised 2026-10-16 with ruling 4's re-ruling):** ① migration (the `archives` table only —
+no `market_calendar`) · ② the job runner, driven by the recorded flags, + `job_runs` per phase, plus
+**`SERVICE_START` at boot and `SERVICE_STOP` on an orderly stop** (catalogued since D25, never written —
+they bound the unknown windows) · ③ the heal (scan, classify open / closed / unknown, fetch exactly the
+gap's minutes, upsert) · ④ the archive (Parquet golden file, upload, manifest row) · ⑤ docs + runbook.
+The probe's captures become the **re-goldened `/markets` and `/prices` wire fixtures** (the wire
+README asked T6 to re-golden them from captured bytes).
 
 **Alongside (Alex asked at this nod):** a **platform architecture page** — context, deployables,
 ownership of databases/streams/buckets, identity at three levels (people, services, database roles) —

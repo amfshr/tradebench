@@ -266,7 +266,7 @@ token in a log line or a metric label (a seeded fake value must trip it — muta
 staging; the admin area's link resolves; the leak check green. Lands with or right before T4's
 deploy.
 
-## T8 — The command plane + jobs control ⬜ (cut 2026-10-15 from D32 (3))
+## T8 — The command plane + jobs control ⬜ (cut 2026-10-15 from D32 (3); gained heal control 2026-10-16)
 
 **Type** build · **Branch** `—` · **Started** — · **Blocked by** T3, E1-T7
 
@@ -295,6 +295,11 @@ Confirms D24 R5 — control on the command plane, never REST into the collector.
 - **B9's allowance view folded in** (R11): the IG request allowances (`GET /operations/application`
   → `ApplicationAllowance`) and the ~10,000 points/week historical budget the heal spends, shown
   in the admin area beside the jobs. B9's REST-fetch job type itself stays in the backlog.
+- **Heal control (gained 2026-10-16 — D25 amended, E1-T6's ruling 4 re-ruled; Alex).** The
+  **auto-heal toggle** per market — on by default for the platform tier; off → gaps are recorded
+  and left open — and a **manual "fetch and heal this market-day"** command that calls E1-T6's
+  healer entry point. Both travel the command plane like any job edit (never REST into the
+  collector, D24 R5).
 
 **In-ticket decisions:** the allowance figures' source — the collector's recorded budget events
 (D25's rate/budget kinds: `pacer-discovered`, `allowance-low/exhausted`) vs `control-service`
