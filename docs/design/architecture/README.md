@@ -9,6 +9,9 @@
 >
 > Status: v2, 2026-09-28 — reflects E1-T1..T4 (all merged; live capture → Postgres).
 >
+> **The system level:** [the platform](platform.md) — every deployable, what each owns, and
+> identity at three levels (people, services, database roles).
+>
 > **Per-module reference:** the [component reference](components/README.md) has a spec page
 > per built module (core · ig-client · market-data-service) — the lookup companion to this
 > overview and to the Field Manual's narrative (D22).

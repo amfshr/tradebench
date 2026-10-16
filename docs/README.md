@@ -10,6 +10,7 @@ evidence (the prototype's read-only seed pack) — plus the working layer in `.c
 |---|---|
 | What Tradebench is and how it works, in prose | [`product/overview.md`](product/overview.md) |
 | To *understand* a mechanism (sockets, threads, queues, locks, clocks, resilience, busses) | [The Field Manual](field-manual/README.md) |
+| The platform — deployables, ownership, identity and roles | [`design/architecture/platform.md`](design/architecture/platform.md) |
 | The system's shape — modules, seams, data flows | [`design/architecture/README.md`](design/architecture/README.md) |
 | Why a decision was made (and its status) | [`decisions.md`](decisions.md) |
 | What's being built right now | [`.claude/tasks/board.md`](../.claude/tasks/board.md) |
