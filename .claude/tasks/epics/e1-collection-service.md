@@ -372,9 +372,9 @@ T7's; the path proven in tests against real Postgres and an S3-protocol server).
 the pre-T6 main), `replayAcceptance` 6/6, docs site 65/65, 66 mutations killed (each listed in its commit). Record: the board's
 Done history entry tagged E1-T6.
 
-## T7 — Deploy ⬜ next — the build (T6 ✅ 2026-10-17; the provider analysis + design session held 2026-10-17 → D34; re-scoped 2026-10-17 to one environment, production on IG demo, no Mac soak — Alex; gains 2026-10-17 from E1-T6: the archive DoD item and three notes; gains 2026-10-15 from the design session: Redis in the stack, the OTel agent + Grafana Cloud export, the dead-man ping)
+## T7 — Deploy 🔶 started 2026-10-17 on `e1-t7-deploy` — the build; its nod held 2026-10-17, Alex (T6 ✅ 2026-10-17; the provider analysis + design session held 2026-10-17 → D34; re-scoped 2026-10-17 to one environment, production on IG demo, no Mac soak — Alex; gains 2026-10-17 from E1-T6: the archive DoD item and three notes; gains 2026-10-15 from the design session: Redis in the stack, the OTel agent + Grafana Cloud export, the dead-man ping)
 
-**Type** ops · **Branch** `—` · **Started** — · **Blocked by** —
+**Type** ops · **Branch** `e1-t7-deploy` · **Started** 2026-10-17 · **Blocked by** —
 
 **Carried from E1-T6 (2026-10-17, at its merge — PR #27):** the DoD item **"staging produces the archive end-to-end"** (T6
 proved the path in tests against real Postgres and an S3-protocol server; staging is this ticket's) — **now "production produces
@@ -423,7 +423,8 @@ committed; outbound-only network posture — no public inbound port, SSH over Ta
 the ping, GHCR, OS updates. **Shipping (D34 R6):** the release workflow builds `linux/arm64` on a tag → GHCR; the deploy/rollback
 script on the box.
 **Operational telemetry (D33, R8) — this ticket wires the collector; E9-T7 wires `control-service`:**
-structured JSON logs; the OpenTelemetry Java agent attached to the collector's JVM in its container,
+structured JSON logs (for the collector, as ruled at the nod, 2026-10-17 — ruling (2) below: its log lines go through
+`java.util.logging` so the agent exports them, plain text on the console); the OpenTelemetry Java agent attached to the collector's JVM in its container,
 exporting metrics + logs over OTLP to Grafana Cloud's free tier, its EU stack (D34 R9; the account stood up here; the
 endpoint + credentials in `.env`, G1; service name + instance as resource attributes). Domain truth
 stays in the rows (D25) — this is exhaust, not reporting (D30 stands). **The dead-man ping (D33, R9):**
@@ -433,7 +434,7 @@ leave no row (`kill -9`, OOM, a reboot, a database down at the moment of death �
 already write theirs). B15's judgment 1 rides with it: a testable `heartbeat()` on `CaptureAssembly`
 taking the lock and the ping as ports, so the harness drives the heartbeat's checks and the ping
 (proposed, settle in-ticket: a failed ping logs and never stops the collector — the check's silence is
-the alarm, not the collector's). Host: **settled by D34** — the Hetzner CAX11 in Nuremberg, ~€7.20/month against the ~£20/mo envelope (the build-plan §6
+the alarm, not the collector's — **settled at the nod, 2026-10-17: ruling (4) below**). Host: **settled by D34** — the Hetzner CAX11 in Nuremberg, ~€7.20/month against the ~£20/mo envelope (the build-plan §6
 analysis — Lightsail $12 vs Hetzner ~€4 — an input; the plan's "decision recorded in-ticket" met by the 2026-10-17 session).
 Host metrics: a weekly hand check (D34 R8).
 **DoD anchor:** production produces E1-T6's archive end-to-end (carried from E1-T6); production runs 24/7 for 3 consecutive unattended days, each evening's hand check
@@ -443,6 +444,26 @@ healthchecks.io check green on the ping (D30: no digest until E9-T5 lands; D33).
 included), the evening check (heartbeat line · `capture_status` freshness · the day's `job_runs` rows ·
 the healthchecks.io check · a glance at Grafana Cloud) and the `job_runs`-absence response (D30;
 the digest and its absence alarm are E9-T5's).
+
+**Started 2026-10-17** on `e1-t7-deploy`, cut from `main` at `0d4852d` the same day.
+
+**Nod (Alex, 2026-10-17 — "I agree, proceed")** — the build's nod, held the day the ticket started, on the increments and
+the five in-ticket rulings below.
+
+**Increments:** ① the image + release workflow (a Temurin 25 Dockerfile; the `linux_arm64` DuckDB jar selected by a Gradle
+property; the OpenTelemetry agent pinned and checksum-verified; `linux/arm64` pushed to GHCR on `v*` tags) · ② the production
+compose + provisioning + the deploy/rollback script · ③ the nightly dump to R2 + the database roles · ④ telemetry + the ping in
+the collector · ⑤ the runbook, then the real deploy.
+
+**In-ticket rulings:**
+1. **Database roles:** optional `TRADEBENCH_DB_MIGRATE_USER` / `TRADEBENCH_DB_MIGRATE_PASSWORD` — Flyway runs as the owner, the
+   pool as the DML-only app role; unchanged when unset.
+2. **Logs:** the collector's log lines go through `java.util.logging` so the OTel agent exports them; plain text on the console.
+3. **The nightly dump:** a host systemd timer — `pg_dump` from the Postgres container, compressed, to R2 with rclone configured
+   from env vars; retention: dailies older than 8 days and weeklies older than 29 days deleted.
+4. **The ping:** one optional `TRADEBENCH_PING_URL` — absent: no ping, said at boot; a failed ping logs and never stops the
+   collector.
+5. **The agent:** the image attaches the OTel agent only when `OTEL_EXPORTER_OTLP_ENDPOINT` is set.
 
 ## T8 — Acceptance: shadow-diff week
 
