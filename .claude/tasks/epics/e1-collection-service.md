@@ -465,6 +465,14 @@ the collector · ⑤ the runbook, then the real deploy.
    collector.
 5. **The agent:** the image attaches the OTel agent only when `OTEL_EXPORTER_OTLP_ENDPOINT` is set.
 
+**B15's judgment 1 — narrowed 2026-10-17** (the T7 doctrine re-review, PASS-WITH-FINDINGS, finding F2: record the narrowing,
+don't leave it implied). This ticket took the **step-order part** only: `Heartbeat` (`market-data-service/…/app/Heartbeat.java`,
+a class of its own rather than a `heartbeat()` on `CaptureAssembly`) and `HeartbeatTest`, `480b22d` — one heartbeat's steps in
+order, as ports (re-verify the single-instance lock, publish `capture_status`, ping the dead-man check, log the summary line), a
+step the instance lacks skipped; two mutations killed (the order, the skips). **Not delivered — stays open on B15** (backlog),
+none driven by a test yet: the thread-liveness backstops (the pump and supervisor `isAlive` exits stay in `Main`), the
+lock-refused-to-exit path, and `Main`'s null wiring of the lock and the ping into `Heartbeat`.
+
 ## T8 — Acceptance: shadow-diff week
 
 **Goal:** the trust gate. Both systems (this service in the cloud, the Python appliance on
