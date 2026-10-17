@@ -1,0 +1,55 @@
+# The production stack (E1-T7, D34): one environment — production on IG demo — on the Hetzner box. No port is
+# published: Postgres and Redis are reached only on the stack's private network, the collector only dials out.
+# Secrets come from env files in /etc/tradebench (0600, never in git — D16); the image tag from the deploy
+# script (TRADEBENCH_TAG). Container logs are capped so they cannot fill the disk.
+name: tradebench
+
+x-logs: &logs
+  driver: json-file
+  options: { max-size: "10m", max-file: "5" }
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    env_file: /etc/tradebench/postgres.env # POSTGRES_PASSWORD + the three role passwords
+    environment:
+      POSTGRES_DB: market_data
+      POSTGRES_USER: postgres
+    volumes:
+      - pg-data:/var/lib/postgresql/data
+      - ./postgres/init-roles.sh:/docker-entrypoint-initdb.d/10-roles.sh:ro # first start only
+      - ./postgres/roles.sql:/opt/tradebench/roles.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d market_data"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    logging: *logs
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes"] # the command stream's home (D32); durable across restarts
+    volumes:
+      - redis-data:/data
+    logging: *logs
+
+  market-data:
+    image: ghcr.io/amfshr/tradebench-market-data:${TRADEBENCH_TAG:?set by deploy/deploy.sh}
+    restart: unless-stopped # a FEED_DEAD exit(1) is restarted — the belt's outer loop (D27)
+    env_file: /etc/tradebench/market-data.env
+    environment:
+      JAVA_OPTS: "-XX:MaxRAMPercentage=50"
+    mem_limit: 1g
+    stop_grace_period: 30s # the shutdown hook joins the pump, the sweep and the writer
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_started
+    logging: *logs
+
+volumes:
+  pg-data:
+  redis-data:

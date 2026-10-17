@@ -12,6 +12,10 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
+import java.util.logging.StreamHandler;
+import java.util.logging.Logger;
+import java.util.logging.LogRecord;
+import java.util.logging.Formatter;
 import java.util.concurrent.ThreadLocalRandom;
 
 import dev.amfshr.tradebench.core.time.SystemClock;
@@ -111,7 +115,7 @@ public final class Main {
             case "db" -> {
                 String dbUrl = required(env, "TRADEBENCH_DB_URL");
                 database = Database.connect(dbUrl, required(env, "TRADEBENCH_DB_USER"),
-                        required(env, "TRADEBENCH_DB_PASSWORD"));
+                        required(env, "TRADEBENCH_DB_PASSWORD"), migrator(env));
                 lock = SingleInstanceLock.acquire(database);
                 sink = new PostgresStore(database.dataSource(), user, source);
                 PostgresObservabilityStore observability = new PostgresObservabilityStore(
@@ -207,6 +211,10 @@ public final class Main {
                 new BestEffortEventLog(eventLog, message -> log(instance, message)),
                 message -> log(instance, message), clock).discover(sessions.current());
 
+        URI pingTo = pingUrl(env);
+        DeadManPing ping = pingTo == null ? null : new DeadManPing(pingTo, message -> log(instance, message));
+        log(instance, pingTo == null ? "dead-man ping off — no TRADEBENCH_PING_URL set"
+                : "dead-man ping on — once a heartbeat");
         while (true) {
             Sleeper.SYSTEM.sleep(CaptureAssembly.HEARTBEAT);
             if (!pumpThread.isAlive()) { // the backstop — onPumpDeath has normally exited already
@@ -222,6 +230,9 @@ public final class Main {
                 verifyLock(instance, instanceLock);
             }
             capture.probe.publish();
+            if (ping != null) {
+                ping.ping();
+            }
             log(instance, capture.summary());
         }
     }
@@ -298,6 +309,20 @@ public final class Main {
         return afterFailure -> afterFailure ? sessions.afterFailure() : sessions.current();
     }
 
+    /** The owner's login for migrations, when the service itself runs as the DML-only app role (E1-T7):
+     * both or neither — one without the other is a mistake, refused before anything runs. */
+    static Database.@Nullable Credentials migrator(Map<String, String> env) {
+        String user = env.get("TRADEBENCH_DB_MIGRATE_USER");
+        String password = env.get("TRADEBENCH_DB_MIGRATE_PASSWORD");
+        boolean hasUser = user != null && !user.isBlank();
+        boolean hasPassword = password != null && !password.isBlank();
+        if (hasUser != hasPassword) {
+            throw new IgFatalConfigException("TRADEBENCH_DB_MIGRATE_USER and TRADEBENCH_DB_MIGRATE_PASSWORD go together"
+                    + " — set both, or neither to migrate with the service's own login");
+        }
+        return hasUser ? new Database.Credentials(user, password) : null;
+    }
+
     /** Points of the week's 10,000 the daily heal never spends: kept for manual heals (E9-T8) and anything
      * else that shares the key's historical allowance. */
     static final long HEAL_ALLOWANCE_RESERVE = 2_000;
@@ -335,7 +360,36 @@ public final class Main {
         return value;
     }
 
-    private static void log(String instance, String message) {
-        System.out.println(Instant.now() + " [" + instance + "] " + message);
+    /** Every line the collector says, through java.util.logging (E1-T7, in-ticket ruling 2): plain text on
+     * the console as before, and — when the OpenTelemetry agent rides — exported to Grafana with it. */
+    static final Logger LOG = consoleLogger();
+
+    private static Logger consoleLogger() {
+        Logger logger = Logger.getLogger("tradebench.market-data");
+        logger.setUseParentHandlers(false);
+        StreamHandler console = new StreamHandler(System.out, new Formatter() {
+            @Override
+            public String format(LogRecord record) {
+                return record.getInstant() + " " + record.getMessage() + System.lineSeparator();
+            }
+        }) {
+            @Override
+            public synchronized void publish(LogRecord record) {
+                super.publish(record);
+                flush(); // a line at a time, as println was
+            }
+        };
+        logger.addHandler(console);
+        return logger;
+    }
+
+    static void log(String instance, String message) {
+        LOG.info("[" + instance + "] " + message);
+    }
+
+    /** The dead-man ping's URL, if this instance has one (D33): absent leaves the ping off, said at boot. */
+    static @Nullable URI pingUrl(Map<String, String> env) {
+        String url = env.get("TRADEBENCH_PING_URL");
+        return url == null || url.isBlank() ? null : URI.create(url);
     }
 }

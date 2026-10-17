@@ -1,0 +1,8 @@
+[Unit]
+Description=Tradebench nightly market_data dump to R2 (E1-T7)
+After=docker.service
+Requires=docker.service
+
+[Service]
+Type=oneshot
+ExecStart=/opt/tradebench/deploy/backup.sh

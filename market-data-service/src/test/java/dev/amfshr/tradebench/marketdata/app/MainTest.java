@@ -81,4 +81,42 @@ class MainTest {
         Main.healSessions(sessions).get(true);
         assertEquals(1, sessions.reLogins, "a retry takes the failure path");
     }
+
+    @Test
+    void migrationCredentialsGoTogether() {
+        assertEquals(null, Main.migrator(Map.of()), "neither: the service's own login migrates");
+        assertThrows(IgFatalConfigException.class, () -> Main.migrator(Map.of("TRADEBENCH_DB_MIGRATE_USER", "owner")));
+        assertThrows(IgFatalConfigException.class, () -> Main.migrator(Map.of("TRADEBENCH_DB_MIGRATE_PASSWORD", "x")));
+        assertEquals("a-synthetic-owner", Main.migrator(Map.of("TRADEBENCH_DB_MIGRATE_USER", "a-synthetic-owner",
+                "TRADEBENCH_DB_MIGRATE_PASSWORD", "x")).user());
+    }
+
+    @Test
+    void theCollectorsLinesGoThroughJavaLoggingSoTheAgentCanExportThem() {
+        // E1-T7, in-ticket ruling 2: the OpenTelemetry agent exports java.util.logging records, not println
+        java.util.List<java.util.logging.LogRecord> seen = new java.util.ArrayList<>();
+        java.util.logging.Handler capture = new java.util.logging.Handler() {
+            @Override
+            public void publish(java.util.logging.LogRecord record) {
+                seen.add(record);
+            }
+
+            @Override
+            public void flush() {
+            }
+
+            @Override
+            public void close() {
+            }
+        };
+        Main.LOG.addHandler(capture);
+        try {
+            Main.log("capture-demo-01", "boot");
+        } finally {
+            Main.LOG.removeHandler(capture);
+        }
+        assertEquals(1, seen.size());
+        assertEquals("[capture-demo-01] boot", seen.getFirst().getMessage());
+        assertEquals(java.util.logging.Level.INFO, seen.getFirst().getLevel());
+    }
 }
