@@ -19,3 +19,4 @@ jobs:
           java-version: 25
       - uses: gradle/actions/setup-gradle@v4
       - run: ./gradlew build
+      - run: deploy/test/deploy-test.sh # deploy.sh's record keeping against stubbed tools

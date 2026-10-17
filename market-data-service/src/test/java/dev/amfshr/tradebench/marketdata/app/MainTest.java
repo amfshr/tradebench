@@ -121,7 +121,7 @@ class MainTest {
     }
 
     @Test
-    void aLineReachesTheConsoleEvenAfterTheLoggingSystemShutsDown() {
+    void aLineReachesTheConsoleEvenAfterTheLoggingSystemShutsDown() throws Exception {
         // the doctrine review's finding 2: at exit the JDK's logging hook closes every handler — a console
         // handler would close System.out and lose the shutdown hook's own last lines
         java.io.PrintStream real = System.out;
@@ -132,6 +132,7 @@ class MainTest {
             Main.log("capture-demo-01", "shutting down");
         } finally {
             System.setOut(real);
+            java.util.logging.LogManager.getLogManager().readConfiguration(); // the rest of the JVM's tests get logging back
         }
         assertTrue(captured.toString(java.nio.charset.StandardCharsets.UTF_8).contains("[capture-demo-01] shutting down"));
     }

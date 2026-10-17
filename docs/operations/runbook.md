@@ -52,7 +52,9 @@
    every later `docker compose` command on the box — this runbook's and the nightly dump's — finds the same image.
 
    **If Postgres's first start failed** (a typo in `postgres.env`, say), its role script never runs again on that
-   volume. Before any data exists, and only then, start the database afresh:
+   volume — and Postgres comes back healthy on it, so the deploy can look fine. The sign is the collector's FATAL
+   on password authentication, or a missing role `market_data_app`. Before any data exists, and only then, start
+   the database afresh:
    `docker compose -f /opt/tradebench/deploy/compose.prod.yaml down -v`, fix the file, and deploy again.
 9. **Prove the nightly dump once**, rather than waiting for 02:30:
    ```
@@ -90,6 +92,8 @@ docker system df              # images: prune old releases with `docker image pr
 /opt/tradebench/deploy/rollback.sh          # the tag before the current one
 /opt/tradebench/deploy/deploy.sh v0.1.0     # or any tag, by name
 ```
+A deploy that fails part-way puts the box back on the release it replaced and says so; the rollback target is
+untouched, so `rollback.sh` still means the release before the running one.
 A release only ever adds Flyway migrations, so an older collector runs against a newer schema only if no
 migration broke it — check the release notes before rolling back across a migration.
 

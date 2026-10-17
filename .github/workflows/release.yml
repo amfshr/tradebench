@@ -1,6 +1,6 @@
 name: Release
 
-# A tag v* builds and tests the collector on a native ARM runner, then publishes its linux/arm64 image to
+# A release tag vX.Y.Z builds and tests the collector on a native ARM runner, then publishes its linux/arm64 image to
 # GHCR under that tag (E1-T7, D34 R6). The tests run against the same ARM DuckDB jar the image ships.
 on:
   push:
@@ -35,7 +35,7 @@ jobs:
           context: .
           file: deploy/market-data/Dockerfile
           platforms: linux/arm64
-          push: ${{ startsWith(github.ref, 'refs/tags/v') }}
+          push: ${{ github.event_name == 'push' }} # only a pushed release tag publishes; a manual run builds and tests
           tags: |
             ghcr.io/amfshr/tradebench-market-data:${{ github.ref_name }}
           labels: |
