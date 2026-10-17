@@ -384,3 +384,13 @@ to the process run's end, as **unknown**, so the heal asks IG (free on closed sp
 single-market collector never quarantines its last market — the belt rebuilds the session instead — so the
 case cannot arise until a second market streams beside it.
 
+
+## B18 — CI keeps no test reports; an intermittent store test
+
+**Captured** 2026-10-17 (E1-T6's merge — a CI `build` attempt on PR #27's head `19bfebc` failed, then passed on re-run) · **Likely home** a small ops/test ticket in E1, or folded into E1-T7 (the CI lane is next touched there) — Alex's call · **Trigger** now (small), or the next CI failure · **Relates to** `.github/workflows/ci.yml` (the `build` job runs `./gradlew build` and uploads nothing; `replay-acceptance.yml` already uploads its test results — the pattern to copy) · `market-data-service/src/test/java/dev/amfshr/tradebench/marketdata/store/PostgresStoreTest.java` (`aTickHeldBeforeItsBindFailsIsStillRecovered`) · E1-T9 / D28 (the sink's hold-and-retry the test pins) · G5 (a test that can fail or pass for the wrong reason)
+
+**Observed once** on CI 2026-10-17 (run 39049703557, attempt 1, head `19bfebc`); passed on re-run (attempt 2); 0 of 20
+local runs failed. The error was at line 236 — `sink.recover()` — a `PSQLException` whose message CI did not keep, so the
+cause is **unknown**. Two steps, in order: **(1)** make the CI workflow upload the test reports (JUnit XML,
+`**/build/test-results/**`) when a build fails (`actions/upload-artifact`, `if: failure()`); **(2)** fix the test (or the
+store) from that evidence the next time it fails — not before, since nothing on record says why it failed.

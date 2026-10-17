@@ -226,9 +226,9 @@ rebuild at 60, not 180); its rebaseline half at T11 (PR #16, 2026-10-08).**
    from the ruling's ordering, for that reason: the host wakes with the Lightstreamer client stuck in `DISCONNECTED:WILL-RETRY`
    and the escalator rebuilds it, measured in awake time. **Residual 3 is closed, final (2026-10-09).**
 
-## T6 — Daily completeness + archive (D6 amended, D30) 🔶 in review — PR #27 open 2026-10-17, CI green (build, web, GitGuardian), awaiting Alex's merge (started 2026-10-16; design nod held 2026-10-16, Alex; ruling 4 re-ruled and ruling 5 verified the same evening; re-scoped 2026-10-11 by D30; unblocked 2026-10-11 by E1-T13's merge, PR #25; trued 2026-10-15 — no Spring, R7; T14 first — ✅ merged 2026-10-16, PR #26)
+## T6 — Daily completeness + archive (D6 amended, D30) ✅ (done 2026-10-17 — PR #27, merged by Alex, merge `de62833`; the DoD's staging item carried to T7; started 2026-10-16; design nod held 2026-10-16, Alex; ruling 4 re-ruled and ruling 5 verified the same evening; re-scoped 2026-10-11 by D30; unblocked 2026-10-11 by E1-T13's merge, PR #25; trued 2026-10-15 — no Spring, R7; T14 first — ✅ merged 2026-10-16, PR #26)
 
-**Type** build · **Branch** `e1-t6-heal-and-archive` · **Started** 2026-10-16 · **Blocked by** —
+**Type** build · **Branch** `e1-t6-heal-and-archive` (cut from main 2026-10-11; merged from it, PR #27 → `main`, 2026-10-17 — branch deleted) · **Started** 2026-10-16 · **Blocked by** —
 
 **Re-scoped 2026-10-11 (Alex — D30; D6 amended):** the collection service streams and stores; it
 does not email, alert or report. The digest phase leaves this ticket for **E9-T5** — the capture
@@ -348,7 +348,7 @@ resubscribe has not yet confirmed (a reopen during it reads as closed until the 
 *unknown* would ask IG — free on closed spans, since IG returns no candles there. Not built: it extends ruling 4
 beyond D27's one streaming rule.
 
-**At the PR (2026-10-17) — 🔶 in review, not done.** PR #27 open 2026-10-17, CI green (`build`, `web`, GitGuardian), awaiting Alex's merge (GitHub stamps 2026-10-16T23:45Z). Commits on the
+**At the PR (2026-10-17)** — superseded by the close-out below. PR #27 opened (GitHub stamps 2026-10-16T23:45Z), CI green (`build`, `web`, GitGuardian). Commits on the
 branch: ① `6915f5d` · ② `c12ccbb` · ③ `dae3e38` · ④ `a37039e` · ⑤ `4f6e772` · the doctrine review's fixes `b9dc94e` ·
 the re-review's fixes `babfd5b` · board `a8bc216` `5ba663c` `87a7bef` · main merged in `f176dd1`. `./gradlew build` 449
 tests (+74 on main); `replayAcceptance` 6/6; docs site 65/65; 66 mutations. Doctrine review FAIL (12 findings), all fixed;
@@ -359,9 +359,28 @@ ruling 4 — observing = streaming (D25, marked proposed; merging rules it); (b)
 the PR as decisions:** the archive's Parquet writer is DuckDB JDBC (ruling 3's fallback, not `parquet-java`); the heal
 keeps a 2,000-point allowance reserve.
 
-## T7 — Deploy ⬜ (gains 2026-10-15 from the design session: Redis in the stack, the OTel agent + Grafana Cloud export, the dead-man ping; opens with a provider analysis + design session — Alex, 2026-10-16)
+**Closed out 2026-10-17 — ✅ merged.** PR #27 merged by Alex (GitHub stamps 2026-10-17T17:19:45Z), merge `de62833`; the
+branch deleted locally and on origin; CI green on the merged head (`build`, `web`, GitGuardian) — one `build` attempt on
+`19bfebc` failed on the pre-existing intermittent `PostgresStoreTest.aTickHeldBeforeItsBindFailsIsStillRecovered` and passed
+on re-run (0 of 20 local runs failed; cause unknown — CI keeps no test reports; backlog B18). **Ruled at the merge (Alex,
+2026-10-17; `19bfebc`):** (a) D25 refined — observing means streaming; (b) a quarantined market is unknown (backlog B17, built
+at the second market), a long CLOSED stand-down stays observed (the paragraph above). The decisions surfaced at the PR —
+DuckDB JDBC as the writer, the 2,000-point reserve, the schema-and-values Parquet contract in place of a byte golden — merged as
+built. **DoD:** a `job_runs` row every run, clean or not — met (failure-mode tests); the row's absence the alarm, the evening
+hand check documented in the runbook — met; **"staging produces the archive end-to-end" — carried to E1-T7** (staging is
+T7's; the path proven in tests against real Postgres and an S3-protocol server). Evidence: `./gradlew build` 449 tests (+74 on
+the pre-T6 main), `replayAcceptance` 6/6, docs site 65/65, 66 mutations killed (each listed in its commit). Record: the board's
+Done history entry tagged E1-T6.
 
-**Type** ops · **Branch** `—` · **Started** — · **Blocked by** T6
+## T7 — Deploy ⬜ next (T6 ✅ 2026-10-17; gains 2026-10-17 from E1-T6: the staging-archive DoD item and three notes; gains 2026-10-15 from the design session: Redis in the stack, the OTel agent + Grafana Cloud export, the dead-man ping; opens with a provider analysis + design session — Alex, 2026-10-16)
+
+**Type** ops · **Branch** `—` · **Started** — · **Blocked by** —
+
+**Carried from E1-T6 (2026-10-17, at its merge — PR #27):** the DoD item **"staging produces the archive end-to-end"** (T6
+proved the path in tests against real Postgres and an S3-protocol server; staging is this ticket's). Notes for the build, from
+T6: **pick the Linux DuckDB jar for the host's CPU** (the archive's Parquet writer loads a native library) · **confirm the chosen
+bucket verifies `x-amz-checksum-sha256` from AWS SDK 2.56** · **capture `application-allowance.json` and the login's
+`timezoneOffset` at the gated demo smoke** (the wire README's open items — `ig-client/src/test/resources/wire/README.md`).
 
 **Opens with a provider analysis and design session (Alex, 2026-10-16):** AWS, GCP, Cloudflare, Hetzner
 and others compared first, then the deploy steps designed against the chosen platform. D24 R3 fixed a
@@ -392,7 +411,7 @@ taking the lock and the ping as ports, so the harness drives the heartbeat's che
 (proposed, settle in-ticket: a failed ping logs and never stops the collector — the check's silence is
 the alarm, not the collector's). Host: the provider analysis + design session above (the build-plan §6 analysis — Lightsail $12 vs
 Hetzner ~€4 — an input) against the ~£20/mo envelope — **decision recorded in-ticket**.
-**DoD anchor:** staging runs 24/7 for 3 consecutive unattended days, each evening's hand check
+**DoD anchor:** staging produces E1-T6's archive end-to-end (carried from E1-T6); staging runs 24/7 for 3 consecutive unattended days, each evening's hand check
 clean — the heartbeat line, `capture_status` freshness, the day's `job_runs` rows, and the
 healthchecks.io check green on the ping (D30: no digest until E9-T5 lands; D33).
 **Runbook:** deploy, rollback (re-tag), secrets rotation (the OTLP credentials and the ping URL
