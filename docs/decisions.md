@@ -587,3 +587,21 @@ moment of death); the orderly ones already write theirs. Neither is reporting: D
 OpenTelemetry is vendor-neutral and needs no framework in the collector; self-hosting the Grafana
 stack is gigabytes of RAM on a €5 box while the free tier keeps the NFR; the ping is the only thing
 that tells Alex the box died at 02:00 before E9-T5 exists. Amends D25's metrics line.
+
+## D34 — The deploy: Hetzner CAX11 in Nuremberg, R2 for the archive and backups, Tailscale-only access, images from GitHub Actions — **Accepted** (2026-10-17, Alex)
+
+One environment — production on IG demo — runs on a **Hetzner CAX11** (ARM, 2 vCPU, 4 GB, 40 GB;
+€5.99/month; the x86 CX23 the fallback) in **Nuremberg**, Ubuntu 24.04 LTS, one `docker compose` stack.
+The archive and the nightly `pg_dump` (seven daily, four weekly) go to **Cloudflare R2**; Hetzner's daily
+whole-box backups are the fast restore. **No public inbound port**: SSH over **Tailscale**, Hetzner's
+firewall blocking all inbound. **GitHub Actions builds the `linux/arm64` image on a release tag** and
+pushes it to **GHCR**; a deploy script on the box pulls a tag and restarts, and a rollback re-runs it with
+the previous one. A plain Dockerfile on the Temurin 25 JRE carries the OpenTelemetry agent and the ARM
+DuckDB jar. Host metrics are a weekly hand check until E9; Grafana Cloud's stack is in the EU. About
+€7.20/month (~£6.30) against the ~£20 envelope. **Why:** twice the memory of the $12 x86 alternatives for
+half the price, and IG's own timestamps make London latency irrelevant to the data; the offsite copy
+belongs at a different company from the box; zero inbound ports keeps D24's posture; a tag always means
+the same tested bytes. **Accepted risk:** Hetzner raised prices twice in 2026 — the compose stack makes a
+move a weekend's work. Makes D24 R3's direction formal. Session record:
+`docs/design/sessions/2026-10-17-the-deploy-provider-analysis.md`.
+
