@@ -372,35 +372,59 @@ T7's; the path proven in tests against real Postgres and an S3-protocol server).
 the pre-T6 main), `replayAcceptance` 6/6, docs site 65/65, 66 mutations killed (each listed in its commit). Record: the board's
 Done history entry tagged E1-T6.
 
-## T7 — Deploy ⬜ next (T6 ✅ 2026-10-17; gains 2026-10-17 from E1-T6: the staging-archive DoD item and three notes; gains 2026-10-15 from the design session: Redis in the stack, the OTel agent + Grafana Cloud export, the dead-man ping; opens with a provider analysis + design session — Alex, 2026-10-16)
+## T7 — Deploy ⬜ next — the build (T6 ✅ 2026-10-17; the provider analysis + design session held 2026-10-17 → D34; re-scoped 2026-10-17 to one environment, production on IG demo, no Mac soak — Alex; gains 2026-10-17 from E1-T6: the archive DoD item and three notes; gains 2026-10-15 from the design session: Redis in the stack, the OTel agent + Grafana Cloud export, the dead-man ping)
 
 **Type** ops · **Branch** `—` · **Started** — · **Blocked by** —
 
 **Carried from E1-T6 (2026-10-17, at its merge — PR #27):** the DoD item **"staging produces the archive end-to-end"** (T6
-proved the path in tests against real Postgres and an S3-protocol server; staging is this ticket's). Notes for the build, from
-T6: **pick the Linux DuckDB jar for the host's CPU** (the archive's Parquet writer loads a native library) · **confirm the chosen
-bucket verifies `x-amz-checksum-sha256` from AWS SDK 2.56** · **capture `application-allowance.json` and the login's
+proved the path in tests against real Postgres and an S3-protocol server; staging is this ticket's) — **now "production produces
+the archive end-to-end"**, re-worded with the 2026-10-17 re-scope below. Notes for the build, from
+T6: **pick the Linux DuckDB jar for the host's CPU** (the archive's Parquet writer loads a native library) — settled by D34 R7:
+the `linux_arm64` jar for the CAX11 · **confirm R2 (D34 R3) verifies `x-amz-checksum-sha256` from AWS SDK 2.56** · **capture `application-allowance.json` and the login's
 `timezoneOffset` at the gated demo smoke** (the wire README's open items — `ig-client/src/test/resources/wire/README.md`).
 
-**Opens with a provider analysis and design session (Alex, 2026-10-16):** AWS, GCP, Cloudflare, Hetzner
-and others compared first, then the deploy steps designed against the chosen platform. D24 R3 fixed a
-direction only (a small VPS, Hetzner leading); the formal host ruling is this session's. It also
-chooses the object store's bucket, endpoint and keys (E1-T6 nod (1) — T6 is S3-protocol and
-provider-neutral) and its ops script creates each service database's owner / app / read-only roles
-(E1-T6 nod (9)).
+**Opened with a provider analysis and design session (Alex, 2026-10-16) — held 2026-10-17 → D34** (Alex: "I think I agree
+with all"; record `docs/design/sessions/2026-10-17-the-deploy-provider-analysis.md`, `95d5490`). AWS, GCP, Cloudflare, Hetzner
+and others compared; D24 R3's direction (a small VPS, Hetzner leading) made formal. The rulings the build works against:
+- **R1 the box:** Hetzner **CAX11** (ARM, 2 vCPU, 4 GB, 40 GB, €5.99/month); the x86 **CX23** the fallback if ARM stock is short;
+  Ubuntu 24.04 LTS with unattended security upgrades. **R2 the region:** Nuremberg.
+- **R3 the bucket:** Cloudflare **R2** for the archive (the bucket, endpoint and keys env config — E1-T6 nod (1), T6 is S3-protocol
+  and provider-neutral). **R4 backups, two layers:** a nightly `pg_dump` to R2 keeping seven daily and four weekly copies, and
+  Hetzner's daily whole-box backups.
+- **R5 access:** SSH over **Tailscale**; no public inbound port — Hetzner's cloud firewall blocks all inbound. Outbound only: IG,
+  R2, Grafana Cloud, healthchecks.io, the image registry, OS updates (Cloudflare Tunnel joins at E9-T4).
+- **R6 shipping:** GitHub Actions builds the `linux/arm64` image on a release tag and pushes it to **GHCR**; a deploy script on the
+  box pulls the tag and restarts the stack; a rollback re-runs it with the previous tag.
+- **R7 the image:** a plain Dockerfile on the **Temurin 25 JRE** carrying the OpenTelemetry agent and the `linux_arm64` DuckDB jar.
+- **R8 host metrics:** a weekly hand check from the runbook (disk, memory); Grafana Alloy waits for E9. **R9:** Grafana Cloud's
+  stack in the **EU**.
 
-**Goal:** staging + prod, promoted by release tag; runs unattended — and observable from its first day (D33).
-**Pre-cloud runway (Alex, 2026-09-28):** before any cloud deploy, the deployable stack
-runs a multi-day soak on Alex's Mac — the confidence gate T3's single-day capture no
-longer carries.
-**Approach:** Dockerfile (jib or buildpacks — pick in-ticket) + `docker compose`
+The ops script still creates each service database's owner / app / read-only roles (E1-T6 nod (9)).
+
+**Re-scoped 2026-10-17 (both Alex, at the session's start):** **one environment** — production on IG demo; staging is added when
+a second environment earns its keep — superseding this plan's "staging + prod, promoted by release tag" (a release tag still
+promotes, to the one environment); and **no Mac soak** — a week of local running stands as the soak — superseding the 2026-09-28
+pre-cloud runway below.
+
+**Prerequisite — the accounts Alex creates** (no secret reaches the repository, G1): Hetzner Cloud · Cloudflare R2 (a bucket and
+an access key) · Grafana Cloud, EU stack (the OTLP endpoint and token) · healthchecks.io (one check) · Tailscale.
+
+**Goal:** one environment — production on IG demo — promoted by release tag (was "staging + prod, promoted by release tag";
+superseded 2026-10-17, Alex); runs unattended — and observable from its first day (D33).
+**Pre-cloud runway (Alex, 2026-09-28) — superseded 2026-10-17 (Alex): no Mac soak.** It read: before any cloud deploy, the
+deployable stack runs a multi-day soak on Alex's Mac — the confidence gate T3's single-day capture no longer carries.
+**Approach:** a plain Dockerfile on the Temurin 25 JRE with the OTel agent and the `linux_arm64` DuckDB jar (D34 R7 — settles
+the plan's "jib or buildpacks — pick in-ticket") + `docker compose`
 (service + `postgres:16` + **Redis** — the command stream's home, in the stack from the first deploy
-so E9-T8's nudge has somewhere to land (D32 (3), R6) — + `cloudflared` (E9-T4 wires it) + nightly
-`pg_dump` → object storage); separate DBs per env; secrets injected via env files on the box, never
-committed; outbound-only network posture (SSH/Tailscale in; IG, the OTLP export and the ping out).
+so E9-T8's nudge has somewhere to land (D32 (3), R6) — + nightly
+`pg_dump` → R2, seven daily and four weekly kept, beside Hetzner's whole-box backups — D34 R4); one environment's databases
+(separate DBs per env return with staging); secrets injected via env files on the box, never
+committed; outbound-only network posture — no public inbound port, SSH over Tailscale (D34 R5); out: IG, R2, the OTLP export,
+the ping, GHCR, OS updates. **Shipping (D34 R6):** the release workflow builds `linux/arm64` on a tag → GHCR; the deploy/rollback
+script on the box.
 **Operational telemetry (D33, R8) — this ticket wires the collector; E9-T7 wires `control-service`:**
 structured JSON logs; the OpenTelemetry Java agent attached to the collector's JVM in its container,
-exporting metrics + logs over OTLP to Grafana Cloud's free tier (the account stood up here; the
+exporting metrics + logs over OTLP to Grafana Cloud's free tier, its EU stack (D34 R9; the account stood up here; the
 endpoint + credentials in `.env`, G1; service name + instance as resource attributes). Domain truth
 stays in the rows (D25) — this is exhaust, not reporting (D30 stands). **The dead-man ping (D33, R9):**
 the heartbeat loop makes one outbound HTTPS GET per minute to a healthchecks.io check — the URL
@@ -409,12 +433,13 @@ leave no row (`kill -9`, OOM, a reboot, a database down at the moment of death �
 already write theirs). B15's judgment 1 rides with it: a testable `heartbeat()` on `CaptureAssembly`
 taking the lock and the ping as ports, so the harness drives the heartbeat's checks and the ping
 (proposed, settle in-ticket: a failed ping logs and never stops the collector — the check's silence is
-the alarm, not the collector's). Host: the provider analysis + design session above (the build-plan §6 analysis — Lightsail $12 vs
-Hetzner ~€4 — an input) against the ~£20/mo envelope — **decision recorded in-ticket**.
-**DoD anchor:** staging produces E1-T6's archive end-to-end (carried from E1-T6); staging runs 24/7 for 3 consecutive unattended days, each evening's hand check
+the alarm, not the collector's). Host: **settled by D34** — the Hetzner CAX11 in Nuremberg, ~€7.20/month against the ~£20/mo envelope (the build-plan §6
+analysis — Lightsail $12 vs Hetzner ~€4 — an input; the plan's "decision recorded in-ticket" met by the 2026-10-17 session).
+Host metrics: a weekly hand check (D34 R8).
+**DoD anchor:** production produces E1-T6's archive end-to-end (carried from E1-T6); production runs 24/7 for 3 consecutive unattended days, each evening's hand check
 clean — the heartbeat line, `capture_status` freshness, the day's `job_runs` rows, and the
 healthchecks.io check green on the ping (D30: no digest until E9-T5 lands; D33).
-**Runbook:** deploy, rollback (re-tag), secrets rotation (the OTLP credentials and the ping URL
+**Runbook:** deploy, rollback (the deploy script re-run with the previous tag), the weekly host hand check (disk, memory — D34 R8), secrets rotation (the OTLP credentials and the ping URL
 included), the evening check (heartbeat line · `capture_status` freshness · the day's `job_runs` rows ·
 the healthchecks.io check · a glance at Grafana Cloud) and the `job_runs`-absence response (D30;
 the digest and its absence alarm are E9-T5's).

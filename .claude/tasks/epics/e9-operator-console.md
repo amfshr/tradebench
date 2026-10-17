@@ -224,7 +224,7 @@ liveness signal, not a report. **Blocked by** T2 (its home is `control-service` 
 plane sends the digest and alerts; a scheduled task inside it, the shape settled in-ticket) and E1-T6
 (the heal/archive `job_runs` rows it reports). **In-ticket decisions:** email transport (SMTP vs API
 service); the reporter's shape inside `control-service`; the heartbeat alarm's staleness window (reuse
-D25's `capture_status` freshness). **DoD:** on staging a day's digest arrives built from the rows; a
+D25's `capture_status` freshness). **DoD:** on production a day's digest arrives built from the rows; a
 suppressed digest (the reporter down, or the collector silent) is alarmed — the failure-mode tests
 mutation-verified; the evening hand check retires from the runbook.
 
