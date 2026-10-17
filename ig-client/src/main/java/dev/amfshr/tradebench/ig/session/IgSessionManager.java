@@ -2,6 +2,7 @@ package dev.amfshr.tradebench.ig.session;
 
 import java.io.IOException;
 import java.net.URI;
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -112,11 +113,14 @@ public final class IgSessionManager implements IgSessions {
         String currentAccountId = root.path("currentAccountId").asText();
         List<IgAccount> accounts = accountsFrom(root);
         String lightstreamerEndpoint = root.path("lightstreamerEndpoint").asText();
+        Duration accountUtcOffset = root.hasNonNull("timezoneOffset")
+                ? Duration.ofMinutes(Math.round(root.get("timezoneOffset").asDouble() * 60))
+                : null; // hours, as IG sends it
 
         if (!credentials.accountId().equals(currentAccountId)) {
             tokens = switchAccount(tokens);
         }
-        return new IgSession(tokens, credentials.accountId(), lightstreamerEndpoint, accounts);
+        return new IgSession(tokens, credentials.accountId(), lightstreamerEndpoint, accounts, accountUtcOffset);
     }
 
     /**

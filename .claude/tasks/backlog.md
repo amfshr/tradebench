@@ -108,6 +108,12 @@ short-circuit after the first pool-timeout failure); no longer a B1 item.
 
 **Captured** 2026-10-02 · **First consumer** E1-T6 (heal retry) · **Broad surface** E6 Execution (OMS) · **Relates to** E1-T2 (ig-client), D16, `docs/design/architecture/components/ig-client.md`, the trading-ig research (retry patterns)
 
+**First slice ruled 2026-10-16 (E1-T6's design nod, ruling 6 — Alex):** **Resilience4j's retry** — one
+standard for resilience across every service, as for logs and metrics (D33's reasoning); a plain-Java
+library, so ig-client stays framework-free; the belt's own `BackoffPolicy` stays for session rebuilds.
+This settles the "hand-roll vs standalone Resilience4j" choice below for the healer; the broad rollout
+(the wrapper's shape, the "resilience-in-the-consumer" revisit) stays open here until E6.
+
 The **ig-client is the platform's REST foundation, not just the stream wrapper.** As the platform
 grows, it carries the whole IG REST surface — OMS orders, market enquiries, dealing rules,
 account/positions, activity & transaction history, watchlists, `/operations/application` — consumed
@@ -127,6 +133,17 @@ largely the wrong tool for IG** (single downstream, no fallback, no inbound load
 rather than per-consumer loops. **First concrete slice: E1-T6's healer** — transient REST retry,
 allowance-aware (weekly `exceeded-allowance` = budget-exhausted, *not* retry). Broad rollout: E6.
 
+
+**The next slice, ruled 2026-10-16 (Alex):** HTTP-level resilience — retries *and* rate limits on every
+IG REST call, logins included — is one standard library everywhere, Resilience4j, as the heal's retry
+already is. So `RequestPacer` (IG's requests-per-minute allowance, adjusted at runtime by discovery) and
+`LoginRateGate` (≥ 61 s between logins) become Resilience4j `RateLimiter`s, and every ig-client REST call
+gets a Resilience4j `Retry` with an explicit transient-only predicate (never a lockout, never an exhausted
+allowance). ig-client stays framework-free: Resilience4j is a plain library. **Not** the belt: it decides
+*when* the stream session needs rebuilding — silence, deal flags, stuck SDK states, the give-up budget —
+domain logic no library knows; the login inside a rebuild is just a REST call through the same limiter
+and retry. **Timing:** after E1-T7's first deploy, not before — the pacer and the gate are IG-specific,
+tested and proven live, and replacing working code the week of a first deploy is risk for no data benefit.
 ## B3 — Component-reference docs: full per-jar coverage (the pages are too thin)
 
 **Captured** 2026-10-02 · **Likely home** an Architecture docs pass (D22; docs-only → main, G4), per component as it matures · **Relates to** E2-T6 (component reference born), D22
@@ -286,6 +303,17 @@ further once both apps are deployed and past v0 —
 
 Not scheduled. Trigger: after E1 (T6, T7) and E9's platform app are deployed and off v0 — Alex's call when.
 
+
+**Placement, discussed 2026-10-16 (Alex asked where a scheduled Databento download would live):** a
+scheduled REST fetch is a second *job type* of `market-data-service` — the data plane, provider-neutral by
+name — not a new service and not a reason for Spring there. The job and the user's provider credentials
+are saved in `control-service` (D31, D16); the provider client is its own framework-free library jar
+(`databento-client`, like `ig-client`); the collector runs the job on its plain scheduled executor (E1-T6's
+runner gains a second job type), learns of it by notify-then-fetch (D32) and writes under a `databento-…`
+source (P8). **Split into its own deployable** only when bulk downloads need their own lifecycle — memory,
+restarts or cost competing with the 24/7 stream (P7). **Open for that epic's design:** D16 decrypts a
+user's provider credentials only inside the service that talks to the provider, so how `control-service`
+hands the collector a user's Databento key, and who holds the decryption key, is unruled.
 ## B10 — `Jdbc.lookupId`'s fail-closed refusal of an unknown user/source is unpinned
 
 **Captured** 2026-10-10 (an observation of E1-T10 slice C's doctrine review, outside the slice — a pre-existing gap) · **Likely home** a small E1 test ticket, or folded into E1-T12's acceptance-mode work (the same Testcontainers rig) · **Trigger** the next time a store test is touched, or when E1-T12 stands up the acceptance rig — Alex's call; not scheduled · **Relates to** `market-data-service/src/main/java/dev/amfshr/tradebench/marketdata/store/Jdbc.java` (`lookupId` — E1-T10 #10's shared helper) · engineering playbook §2.3 (fail-closed paths get failure-mode tests) · P9 (fail closed, fail loud) · the seeded `users`/`sources` rows (`V1__baseline.sql` — "schema seeds are the source of truth")
@@ -344,3 +372,15 @@ models the rebuilt connection as *not* streaming, which is why `everyMarketRejec
 would meet the ceiling — the belt re-logs in about once a minute (the login gate) indefinitely: loud in the record (a
 `subscription_rejected` row per rebuild, markets never `connected_streaming`) but never `FEED_DEAD`. **Fix candidates:** count
 "connected but nothing confirmed for N minutes" toward the ceiling, or a config-shaped give-up.
+
+## B17 — A quarantined market's span counts as not observing
+
+**Captured** 2026-10-17 (Alex's ruling at the E1-T6 PR; the re-review's N6) · **Likely home** the ticket that adds a second market (Dad's NASDAQ the likely trigger) · **Trigger** a second market in one collector · **Relates to** D25 (refined 2026-10-17), E1-T6's heal, `PostgresHealStore.observed`, `MARKET_QUARANTINED`
+
+The heal counts a minute as observed while the connection streams. A **quarantined** market — its pair
+unsubscribed by the belt, never re-admitted within a process — still reads as observed, so a missing bar
+there could be read as closed. Ruled: treat a quarantined market's span, from its `market_quarantined` row
+to the process run's end, as **unknown**, so the heal asks IG (free on closed spans). Not built now: a
+single-market collector never quarantines its last market — the belt rebuilds the session instead — so the
+case cannot arise until a second market streams beside it.
+

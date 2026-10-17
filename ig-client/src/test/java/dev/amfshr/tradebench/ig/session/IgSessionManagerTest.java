@@ -64,6 +64,19 @@ class IgSessionManagerTest {
                 new IgAccount("AB12CD", "CFD", true),
                 new IgAccount("AB12CE", "SPREADBET", false)), session.accounts());
         assertEquals("CST-switchedCst|XST-switchedXst", session.tokens().lightstreamerPassword());
+        assertEquals(java.time.Duration.ofHours(1), session.accountUtcOffset(),
+                "timezoneOffset, in hours as IG sends it — the zone a dated request is read in (E1-T6)");
+    }
+
+    @Test
+    void aLoginWithoutATimezoneOffsetLeavesItUnknownNotZero() throws Exception {
+        String noOffset = Wire.fixture("login-response.json").replaceAll("\"timezoneOffset\"\\s*:\\s*[-0-9.]+\\s*,?", "");
+        transport.enqueue(FakeTransport.jsonWithTokens(200, noOffset, "loginCst", "loginXst"));
+        transport.enqueue(FakeTransport.jsonWithTokens(200, SWITCH_OK_BODY, "switchedCst", "switchedXst"));
+
+        IgSession session = manager.current();
+
+        assertEquals(null, session.accountUtcOffset(), "unknown, so a dated request refuses — never assumed UTC");
     }
 
     @Test

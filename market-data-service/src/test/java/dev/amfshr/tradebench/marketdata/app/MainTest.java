@@ -45,4 +45,40 @@ class MainTest {
     void thePlatformUserIsTheEnvironmentsWord() {
         assertEquals("a-synthetic-owner", Main.platformUser(Map.of("TRADEBENCH_USER", "a-synthetic-owner")));
     }
+
+    @Test
+    void noArchiveSettingsLeaveTheArchiveOff() {
+        assertEquals(null, Main.archiveConfig(Map.of("TRADEBENCH_USER", "platform")));
+    }
+
+    @Test
+    void halfAnArchiveConfigurationRefusesToStartNamingWhatIsMissing() {
+        IgFatalConfigException thrown = assertThrows(IgFatalConfigException.class, () -> Main.archiveConfig(Map.of(
+                "TRADEBENCH_ARCHIVE_ENDPOINT", "https://bucket.example", "TRADEBENCH_ARCHIVE_BUCKET", "archive")));
+        assertTrue(thrown.getMessage().contains("TRADEBENCH_ARCHIVE_ACCESS_KEY_ID"), thrown.getMessage());
+        assertTrue(thrown.getMessage().contains("TRADEBENCH_ARCHIVE_REGION"));
+    }
+
+    @Test
+    void theFullArchiveConfigurationIsTheEnvironmentsWord() {
+        Map<String, String> env = new java.util.HashMap<>();
+        for (String key : Main.ARCHIVE_KEYS) {
+            env.put(key, "a-synthetic-" + key.toLowerCase());
+        }
+        env.put("TRADEBENCH_ARCHIVE_ENDPOINT", "https://bucket.example");
+        Main.ArchiveConfig config = Main.archiveConfig(env);
+        assertEquals("https://bucket.example", config.endpoint().toString());
+        assertEquals("a-synthetic-tradebench_archive_bucket", config.bucket());
+        assertEquals("a-synthetic-tradebench_archive_secret_access_key", config.secretAccessKey());
+    }
+
+    @Test
+    void theHealsRetryTakesTheSessionsFailurePathAndItsFirstAskTheCurrentSession() throws Exception {
+        // the re-review's N7: swapping these would reuse a dead token on every retry
+        dev.amfshr.tradebench.marketdata.testutil.FakeSessions sessions = new dev.amfshr.tradebench.marketdata.testutil.FakeSessions();
+        Main.healSessions(sessions).get(false);
+        assertEquals(0, sessions.reLogins, "a first ask takes the current session");
+        Main.healSessions(sessions).get(true);
+        assertEquals(1, sessions.reLogins, "a retry takes the failure path");
+    }
 }

@@ -145,8 +145,10 @@ class ReplayAcceptanceTest extends PostgresTestBase {
         assertEquals(List.of(0L), o.secondsOf("connect"));
         assertTrue(o.remedies("subscribe").stream().noneMatch(r -> r.at().toSeconds() > 0), "no remedy");
         assertTrue(o.events.stream().allMatch(e -> e.type() == EventType.MARKET_STATE_CHANGE
-                || e.type() == EventType.CONNECTION_STATUS),
-                "the boot's status transition and the two DEAL flags are the only rows — nothing else was recorded");
+                || e.type() == EventType.CONNECTION_STATUS || e.type() == EventType.SERVICE_START),
+                "the boot's start (E1-T6), its status transition and the two DEAL flags are the only rows"
+                        + " — nothing else was recorded");
+        assertEquals(1, o.events(EventType.SERVICE_START).size(), "one boot, one start row");
         assertEquals(1, o.events(EventType.CONNECTION_STATUS).size(), "one connection, one transition");
         assertEquals(distinctTicks(busy), o.landed.stream().filter(l -> l.startsWith("tick@")).count(), "every distinct tick a row");
         assertEquals(bars(busy), o.landed.stream().filter(l -> l.startsWith("bar@")).count(), "every candle a row");
