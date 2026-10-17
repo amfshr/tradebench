@@ -364,12 +364,18 @@ until we use it every day").*
 which were never gaps); a failed heal writes no outcome — the row stays open for the retry and the
 failure is in `job_runs`. `job_runs` gains user, source, market and day (V5); `archives` gains user and
 source (V4).*
-*Refinement proposed 2026-10-16 (Claude, from E1-T6's doctrine review, finding 1) — **for Alex's ruling at the
-T6 PR, not yet ruled**: "observing" means streaming, not merely running —
+*Refined 2026-10-17 (Alex, ruled at the E1-T6 PR; proposed from its doctrine review, finding 1): "observing" means
+streaming, not merely running —
 within each run of the process, the spans a recorded `connection_status` says streaming (D27's one rule).
 A stream outage inside one run is therefore unknown, so a reopen the stream missed is asked of IG rather
 than read as the closed flag still in force; closed spans cost nothing, since IG returns no candles there.
 History recorded before boots and statuses were written is taken as observed.*
+*Ruled the same day (Alex, 2026-10-17), the two cases left open: a **quarantined** market counts as not
+observing — the belt deliberately dropped its subscription — built when a second market arrives (a
+single-market collector never quarantines its last market; it rebuilds the session instead); a **long
+CLOSED stand-down** stays observed — a reopen arrives as a recorded flag change on the live stream, and the
+zombie-item case already has its guard, the 12-hour teaching resubscribe; revisit only if production shows
+that guard catching real zombies.*
 *Amended 2026-10-15 (D33): the "Prometheus/Grafana additive, later" line becomes operational telemetry
 over OpenTelemetry to Grafana Cloud's free tier, wired at E1-T7; the healthchecks.io dead-man ping is sent
 by the collector's heartbeat (D30 clarified). Domain truth stays in the rows.*

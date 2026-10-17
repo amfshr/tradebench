@@ -372,3 +372,15 @@ models the rebuilt connection as *not* streaming, which is why `everyMarketRejec
 would meet the ceiling — the belt re-logs in about once a minute (the login gate) indefinitely: loud in the record (a
 `subscription_rejected` row per rebuild, markets never `connected_streaming`) but never `FEED_DEAD`. **Fix candidates:** count
 "connected but nothing confirmed for N minutes" toward the ceiling, or a config-shaped give-up.
+
+## B17 — A quarantined market's span counts as not observing
+
+**Captured** 2026-10-17 (Alex's ruling at the E1-T6 PR; the re-review's N6) · **Likely home** the ticket that adds a second market (Dad's NASDAQ the likely trigger) · **Trigger** a second market in one collector · **Relates to** D25 (refined 2026-10-17), E1-T6's heal, `PostgresHealStore.observed`, `MARKET_QUARANTINED`
+
+The heal counts a minute as observed while the connection streams. A **quarantined** market — its pair
+unsubscribed by the belt, never re-admitted within a process — still reads as observed, so a missing bar
+there could be read as closed. Ruled: treat a quarantined market's span, from its `market_quarantined` row
+to the process run's end, as **unknown**, so the heal asks IG (free on closed spans). Not built now: a
+single-market collector never quarantines its last market — the belt rebuilds the session instead — so the
+case cannot arise until a second market streams beside it.
+

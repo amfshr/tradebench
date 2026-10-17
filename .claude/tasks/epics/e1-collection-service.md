@@ -341,7 +341,7 @@ it out at E6.
 
 
 
-**Decision: (TBD) — for Alex at the T6 PR (the re-review's N6, 2026-10-16).** Observation reads only the
+**Ruled 2026-10-17 (Alex, at the T6 PR) — was Decision (TBD), the re-review's N6:** quarantined → *unknown*, built when a second market arrives (backlog B17); long CLOSED stand-down → *stays observed* (the teaching resubscribe is its guard). The question as it was put: Observation reads only the
 connection's status, so two cases still count as observing: a **quarantined** market (its pair unsubscribed,
 `MARKET_QUARANTINED`, never released within a process) and a **long CLOSED stand-down** the 12-hour teaching
 resubscribe has not yet confirmed (a reopen during it reads as closed until the next teach). Treating both as
