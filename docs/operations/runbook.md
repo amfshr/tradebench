@@ -37,13 +37,32 @@
    in `market-data.env`. Pick a new `TRADEBENCH_INSTANCE` name for the box.
 6. **Release.** On your Mac: `git tag v0.1.0 && git push origin v0.1.0`. GitHub Actions builds and tests on ARM and
    publishes `ghcr.io/amfshr/tradebench-market-data:v0.1.0` (the Release workflow; a few minutes). The first time,
-   make the package public in GitHub's package settings, or log the box in to GHCR with a read-only token.
-7. **Deploy.** On the box: `/opt/tradebench/deploy/deploy.sh v0.1.0`, then watch it:
+   either make the package public in GitHub's package settings, or log the box in to GHCR once with a classic
+   token that has only `read:packages` (paste it at the prompt, never on the command line):
+   ```
+   docker login ghcr.io -u <your GitHub username> --password-stdin
+   ```
+7. **Stop the local collector** on your Mac *before* the box starts: two collectors on one IG key is a second
+   Lightstreamer connection on the shared key, and the advisory lock cannot see across two databases. The minutes
+   between are a gap the box's first heal fills from IG's history.
+8. **Deploy.** On the box: `/opt/tradebench/deploy/deploy.sh v0.1.0`, then watch it:
    `docker compose -f /opt/tradebench/deploy/compose.prod.yaml logs -f market-data`. You want `capturing to …
    (migrated; advisory lock held)`, `daily job: heal, then archive to bucket …`, `dead-man ping on`, and the
-   stream's `CONNECTED:WS-STREAMING`.
-8. **Stop the local collector** on your Mac once the box is streaming: two collectors on one IG key is a second
-   Lightstreamer connection on the shared key (the advisory lock cannot see across two databases).
+   stream's `CONNECTED:WS-STREAMING`. The deploy writes the running tag to `/opt/tradebench/deploy/.env`, so
+   every later `docker compose` command on the box — this runbook's and the nightly dump's — finds the same image.
+
+   **If Postgres's first start failed** (a typo in `postgres.env`, say), its role script never runs again on that
+   volume. Before any data exists, and only then, start the database afresh:
+   `docker compose -f /opt/tradebench/deploy/compose.prod.yaml down -v`, fix the file, and deploy again.
+9. **Prove the nightly dump once**, rather than waiting for 02:30:
+   ```
+   systemctl start tradebench-backup.service
+   journalctl -u tradebench-backup --no-pager | tail     # no error; then `rclone ls r2:<bucket>/dumps` shows it
+   systemctl list-timers tradebench-backup.timer          # the next run, tonight
+   ```
+10. **The first day's check** (carried from E1-T6, which could only fake it): the first archive lands in R2 with
+    its checksum accepted. R2 verifies `x-amz-checksum-sha256` on upload, so the day's `archive` row `succeeded` in
+    `job_runs`, and its two Parquet files listed under the archive's key prefix in the bucket, are the proof.
 
 ## 2. Every evening (until E9's digest — D30)
 
@@ -79,10 +98,13 @@ migration broke it — check the release notes before rolling back across a migr
 Edit the value in `/etc/tradebench/<file>.env`, then restart the one service that reads it:
 `docker compose -f /opt/tradebench/deploy/compose.prod.yaml up -d market-data`. For the IG password, the R2 key,
 the Grafana token or the ping URL that is all. **A database role's password** changes in Postgres too — the env
-file is read only at the volume's first start:
+file is read only at the volume's first start. `\password` prompts for it, so the new value never lands in the
+shell's history or the process list:
 ```
-docker compose … exec postgres psql -U postgres -d market_data -c "ALTER ROLE market_data_app PASSWORD '<new>'"
+docker compose -f /opt/tradebench/deploy/compose.prod.yaml exec postgres psql -U postgres -d market_data
+market_data=# \password market_data_app
 ```
+Then put the same value in both env files and restart `market-data`.
 
 ## 6. Restoring from a dump
 

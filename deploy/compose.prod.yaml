@@ -21,7 +21,7 @@ services:
       - ./postgres/init-roles.sh:/docker-entrypoint-initdb.d/10-roles.sh:ro # first start only
       - ./postgres/roles.sql:/opt/tradebench/roles.sql:ro
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres -d market_data"]
+      test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -U postgres -d market_data"] # over TCP: the socket answers during the first start's setup
       interval: 10s
       timeout: 5s
       retries: 10
@@ -38,7 +38,7 @@ services:
   market-data:
     image: ghcr.io/amfshr/tradebench-market-data:${TRADEBENCH_TAG:?set by deploy/deploy.sh}
     restart: unless-stopped # a FEED_DEAD exit(1) is restarted — the belt's outer loop (D27)
-    env_file: /etc/tradebench/market-data.env
+    env_file: /etc/tradebench/market-data.env # TRADEBENCH_TAG comes from deploy/.env, written by deploy.sh
     environment:
       JAVA_OPTS: "-XX:MaxRAMPercentage=50"
     mem_limit: 1g

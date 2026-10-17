@@ -17,18 +17,27 @@ final class DeadManPing {
 
     static final Duration TIMEOUT = Duration.ofSeconds(10);
 
-    private final HttpClient http = HttpClient.newBuilder().connectTimeout(TIMEOUT).build();
+    private final HttpClient http;
     private final URI url;
     private final Consumer<String> log;
+    private final Duration timeout;
 
     DeadManPing(URI url, Consumer<String> log) {
+        this(url, log, TIMEOUT);
+    }
+
+    /** As above, bounded by {@code timeout} — the heartbeat thread also carries the lock check and the
+     * thread-death backstops, so a stalled check must never hold it. */
+    DeadManPing(URI url, Consumer<String> log, Duration timeout) {
         this.url = url;
         this.log = log;
+        this.timeout = timeout;
+        this.http = HttpClient.newBuilder().connectTimeout(timeout).build();
     }
 
     void ping() {
         try {
-            HttpResponse<Void> response = http.send(HttpRequest.newBuilder(url).timeout(TIMEOUT).GET().build(),
+            HttpResponse<Void> response = http.send(HttpRequest.newBuilder(url).timeout(timeout).GET().build(),
                     HttpResponse.BodyHandlers.discarding());
             if (response.statusCode() / 100 != 2) {
                 log.accept("dead-man ping refused — HTTP " + response.statusCode() + "; the check will alarm if it persists");

@@ -97,7 +97,16 @@ class DatabaseRolesTest extends PostgresTestBase {
     @Test
     void withoutAMigratorThePoolsOwnLoginMigratesAsBefore() {
         // the local case: one superuser, no separate owner — unchanged by E1-T7
-        Database.connect(postgres.getJdbcUrl(), postgres.getUsername(), postgres.getPassword()).close();
+        Database local = Database.connect(postgres.getJdbcUrl(), postgres.getUsername(), postgres.getPassword());
+        try (Connection c = local.dataSource().getConnection(); Statement s = c.createStatement();
+             ResultSet result = s.executeQuery("SELECT count(*) FROM flyway_schema_history WHERE success")) {
+            result.next();
+            assertTrue(result.getInt(1) >= 6, "migrated by its own login, every version applied");
+        } catch (SQLException e) {
+            throw new AssertionError(e);
+        } finally {
+            local.close();
+        }
     }
 
     private static Connection superuser(String jdbcUrl) throws SQLException {

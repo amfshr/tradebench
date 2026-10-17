@@ -11,6 +11,7 @@ import java.util.List;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.Timeout;
 
 import com.sun.net.httpserver.HttpServer;
 
@@ -54,6 +55,23 @@ class DeadManPingTest {
         assertDoesNotThrow(ping::ping);
 
         assertTrue(log.getFirst().contains("dead-man ping failed"), log.toString());
+    }
+
+    @Test
+    @Timeout(10) // an unbounded ping would hang here for ever; fail instead
+    void aCheckThatAcceptsButNeverAnswersIsBoundedByTheTimeout() throws Exception {
+        // the review's finding 6: the heartbeat thread carries the lock check and the thread backstops too
+        try (java.net.ServerSocket stalled = new java.net.ServerSocket(0, 1, java.net.InetAddress.getLoopbackAddress())) {
+            DeadManPing ping = new DeadManPing(URI.create("http://127.0.0.1:" + stalled.getLocalPort() + "/ping"),
+                    log::add, java.time.Duration.ofMillis(500));
+            long started = System.nanoTime();
+
+            ping.ping();
+
+            long tookMs = (System.nanoTime() - started) / 1_000_000;
+            assertTrue(tookMs < 3_000, "bounded by its timeout, took " + tookMs + " ms");
+            assertTrue(log.getFirst().contains("dead-man ping failed"), log.toString());
+        }
     }
 
     @Test

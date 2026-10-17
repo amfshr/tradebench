@@ -119,4 +119,26 @@ class MainTest {
         assertEquals("[capture-demo-01] boot", seen.getFirst().getMessage());
         assertEquals(java.util.logging.Level.INFO, seen.getFirst().getLevel());
     }
+
+    @Test
+    void aLineReachesTheConsoleEvenAfterTheLoggingSystemShutsDown() {
+        // the doctrine review's finding 2: at exit the JDK's logging hook closes every handler — a console
+        // handler would close System.out and lose the shutdown hook's own last lines
+        java.io.PrintStream real = System.out;
+        java.io.ByteArrayOutputStream captured = new java.io.ByteArrayOutputStream();
+        System.setOut(new java.io.PrintStream(captured, true, java.nio.charset.StandardCharsets.UTF_8));
+        try {
+            java.util.logging.LogManager.getLogManager().reset(); // what the JDK's shutdown hook does
+            Main.log("capture-demo-01", "shutting down");
+        } finally {
+            System.setOut(real);
+        }
+        assertTrue(captured.toString(java.nio.charset.StandardCharsets.UTF_8).contains("[capture-demo-01] shutting down"));
+    }
+
+    @Test
+    void migrationCredentialsNeverPrintTheirPassword() {
+        assertEquals("Credentials[user=owner, password=***]", new dev.amfshr.tradebench.marketdata.store.Database
+                .Credentials("owner", "a-synthetic-secret").toString());
+    }
 }

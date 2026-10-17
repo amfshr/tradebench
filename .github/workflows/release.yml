@@ -4,7 +4,7 @@ name: Release
 # GHCR under that tag (E1-T7, D34 R6). The tests run against the same ARM DuckDB jar the image ships.
 on:
   push:
-    tags: ['v*']
+    tags: ['v[0-9]+.[0-9]+.[0-9]+'] # the release tags deploy.sh accepts — vX.Y.Z only
   workflow_dispatch:
 
 permissions:

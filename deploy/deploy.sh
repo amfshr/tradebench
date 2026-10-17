@@ -1,17 +1,30 @@
 #!/usr/bin/env bash
-# Deploy a release tag (E1-T7, D34 R6): check out the repository's deploy files at that tag, pull the image
-# GitHub Actions published for it, and restart the stack. The tag deployed before is kept, so
-# `deploy/rollback.sh` re-runs this with it.   Usage: deploy/deploy.sh v0.1.0
+# Deploy a release tag (E1-T7, D34 R6). In order, so a failure part-way leaves the running release and its
+# rollback target as they were: pull the image GitHub Actions published for the tag (fails before anything
+# changes if it is not published yet); check the repository's deploy files out at the tag; refresh the systemd
+# units; restart the stack at the tag; and only once it is up, record the tag — the one it replaced becomes
+# the rollback target. The tag is also written to deploy/.env (gitignored), which compose reads by itself, so
+# every later compose command — the nightly backup's, the runbook's — resolves the same image.
+#   Usage: deploy/deploy.sh v0.1.0
 set -euo pipefail
 tag="${1:?usage: deploy.sh <tag, e.g. v0.1.0>}"
 [[ "$tag" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo "deploy: '$tag' is not a release tag (vX.Y.Z)" >&2; exit 2; }
 repo=/opt/tradebench
+image="ghcr.io/amfshr/tradebench-market-data:$tag"
+running=$(cat /etc/tradebench/release 2>/dev/null || true)
+
+docker pull --quiet "$image" > /dev/null || { echo "deploy: $image is not pullable — is the release build finished?" >&2; exit 1; }
 git -C "$repo" fetch --quiet --tags origin
 git -C "$repo" -c advice.detachedHead=false checkout --quiet "$tag"
+install -m 0644 "$repo"/deploy/systemd/tradebench-backup.{service,timer} /etc/systemd/system/
+systemctl daemon-reload
+
 cd "$repo/deploy"
-[ -f /etc/tradebench/release ] && cp /etc/tradebench/release /etc/tradebench/release.previous
-export TRADEBENCH_TAG="$tag"
-docker compose -f compose.prod.yaml pull --quiet market-data
+echo "TRADEBENCH_TAG=$tag" > .env
 docker compose -f compose.prod.yaml up -d --remove-orphans
+
+if [ -n "$running" ] && [ "$running" != "$tag" ]; then
+    echo "$running" > /etc/tradebench/release.previous
+fi
 echo "$tag" > /etc/tradebench/release
-echo "deploy: $tag running — watch it with: docker compose -f $repo/deploy/compose.prod.yaml logs -f market-data"
+echo "deploy: $tag running${running:+ (replacing $running)} — watch it: docker compose -f $repo/deploy/compose.prod.yaml logs -f market-data"

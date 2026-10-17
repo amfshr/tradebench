@@ -43,6 +43,10 @@ public final class Database implements AutoCloseable {
     /** A login for the database's owner, kept apart from the app's (E1-T7): Flyway's DDL needs it, the
      * running service never should. */
     public record Credentials(String user, String password) {
+        @Override
+        public String toString() {
+            return "Credentials[user=" + user + ", password=***]"; // never a password in a log line (G1)
+        }
     }
 
     public static Database connect(String jdbcUrl, String user, String password) {

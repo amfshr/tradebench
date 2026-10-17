@@ -12,10 +12,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
-import java.util.logging.StreamHandler;
 import java.util.logging.Logger;
-import java.util.logging.LogRecord;
-import java.util.logging.Formatter;
 import java.util.concurrent.ThreadLocalRandom;
 
 import dev.amfshr.tradebench.core.time.SystemClock;
@@ -215,6 +212,9 @@ public final class Main {
         DeadManPing ping = pingTo == null ? null : new DeadManPing(pingTo, message -> log(instance, message));
         log(instance, pingTo == null ? "dead-man ping off — no TRADEBENCH_PING_URL set"
                 : "dead-man ping on — once a heartbeat");
+        Heartbeat heartbeat = new Heartbeat(instanceLock == null ? null : () -> verifyLock(instance, instanceLock),
+                capture.probe::publish, ping == null ? null : ping::ping, capture::summary,
+                message -> log(instance, message));
         while (true) {
             Sleeper.SYSTEM.sleep(CaptureAssembly.HEARTBEAT);
             if (!pumpThread.isAlive()) { // the backstop — onPumpDeath has normally exited already
@@ -226,14 +226,7 @@ public final class Main {
                 log(instance, "FATAL: capture supervisor died — resilience is void from here");
                 System.exit(1);
             }
-            if (instanceLock != null) {
-                verifyLock(instance, instanceLock);
-            }
-            capture.probe.publish();
-            if (ping != null) {
-                ping.ping();
-            }
-            log(instance, capture.summary());
+            heartbeat.beat();
         }
     }
 
@@ -360,31 +353,22 @@ public final class Main {
         return value;
     }
 
-    /** Every line the collector says, through java.util.logging (E1-T7, in-ticket ruling 2): plain text on
-     * the console as before, and — when the OpenTelemetry agent rides — exported to Grafana with it. */
-    static final Logger LOG = consoleLogger();
+    /** Every line the collector says goes to two places (E1-T7, in-ticket ruling 2): the console, by
+     * println as ever — which survives the JDK's logging shutdown hook, the one that closes every handler and
+     * would take the shutdown hook's own last lines with it — and java.util.logging, handler-less, for the
+     * OpenTelemetry agent to export to Grafana when it rides. */
+    static final Logger LOG = exportOnlyLogger();
 
-    private static Logger consoleLogger() {
+    private static Logger exportOnlyLogger() {
         Logger logger = Logger.getLogger("tradebench.market-data");
-        logger.setUseParentHandlers(false);
-        StreamHandler console = new StreamHandler(System.out, new Formatter() {
-            @Override
-            public String format(LogRecord record) {
-                return record.getInstant() + " " + record.getMessage() + System.lineSeparator();
-            }
-        }) {
-            @Override
-            public synchronized void publish(LogRecord record) {
-                super.publish(record);
-                flush(); // a line at a time, as println was
-            }
-        };
-        logger.addHandler(console);
+        logger.setUseParentHandlers(false); // no console handler: the console line is println's
         return logger;
     }
 
     static void log(String instance, String message) {
-        LOG.info("[" + instance + "] " + message);
+        String line = "[" + instance + "] " + message;
+        System.out.println(Instant.now() + " " + line);
+        LOG.info(line);
     }
 
     /** The dead-man ping's URL, if this instance has one (D33): absent leaves the ping off, said at boot. */
