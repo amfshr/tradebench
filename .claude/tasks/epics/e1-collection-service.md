@@ -372,7 +372,7 @@ T7's; the path proven in tests against real Postgres and an S3-protocol server).
 the pre-T6 main), `replayAcceptance` 6/6, docs site 65/65, 66 mutations killed (each listed in its commit). Record: the board's
 Done history entry tagged E1-T6.
 
-## T7 — Deploy 🔶 started 2026-10-17 on `e1-t7-deploy` — the build; its nod held 2026-10-17, Alex (T6 ✅ 2026-10-17; the provider analysis + design session held 2026-10-17 → D34; re-scoped 2026-10-17 to one environment, production on IG demo, no Mac soak — Alex; gains 2026-10-17 from E1-T6: the archive DoD item and three notes; gains 2026-10-15 from the design session: Redis in the stack, the OTel agent + Grafana Cloud export, the dead-man ping)
+## T7 — Deploy 🔶 in review — PR #28, opened 2026-10-17; the DoD's two items after the merge, on the box (started 2026-10-17 on `e1-t7-deploy`; its nod held 2026-10-17, Alex; T6 ✅ 2026-10-17; the provider analysis + design session held 2026-10-17 → D34; re-scoped 2026-10-17 to one environment, production on IG demo, no Mac soak — Alex; gains 2026-10-17 from E1-T6: the archive DoD item and three notes; gains 2026-10-15 from the design session: Redis in the stack, the OTel agent + Grafana Cloud export, the dead-man ping)
 
 **Type** ops · **Branch** `e1-t7-deploy` · **Started** 2026-10-17 · **Blocked by** —
 
@@ -431,7 +431,7 @@ stays in the rows (D25) — this is exhaust, not reporting (D30 stands). **The d
 the heartbeat loop makes one outbound HTTPS GET per minute to a healthchecks.io check — the URL
 carries a random secret and lives in `.env` (G1); no data leaves; a liveness signal for the deaths that
 leave no row (`kill -9`, OOM, a reboot, a database down at the moment of death — the orderly ones
-already write theirs). B15's judgment 1 rides with it: a testable `heartbeat()` on `CaptureAssembly`
+already write theirs). B15's judgment 1 rides with it (**narrowed 2026-10-17** — this ticket took the step order only, as `Heartbeat`; see "B15's judgment 1 — narrowed 2026-10-17" below): a testable `heartbeat()` on `CaptureAssembly`
 taking the lock and the ping as ports, so the harness drives the heartbeat's checks and the ping
 (proposed, settle in-ticket: a failed ping logs and never stops the collector — the check's silence is
 the alarm, not the collector's — **settled at the nod, 2026-10-17: ruling (4) below**). Host: **settled by D34** — the Hetzner CAX11 in Nuremberg, ~€7.20/month against the ~£20/mo envelope (the build-plan §6
@@ -472,6 +472,25 @@ order, as ports (re-verify the single-instance lock, publish `capture_status`, p
 step the instance lacks skipped; two mutations killed (the order, the skips). **Not delivered — stays open on B15** (backlog),
 none driven by a test yet: the thread-liveness backstops (the pump and supervisor `isAlive` exits stay in `Main`), the
 lock-refused-to-exit path, and `Main`'s null wiring of the lock and the ping into `Heartbeat`.
+
+**In review (2026-10-17) — PR #28** (https://github.com/amfshr/tradebench/pull/28), `e1-t7-deploy` → `main`, opened by Claude;
+Alex merges. Commits: `f85074f` ① the image + release workflow · `64ea7b4` ②–④ the production stack, the box's setup,
+deploy/rollback, the nightly dump, the database roles, the logs and the ping · `9982f90` ⑤ the runbook
+(`docs/operations/runbook.md`) · `480b22d` the doctrine review's fixes · `0ad3c87` the re-review's fixes · `bc26e35` the roles
+test's passwords made at run time · `250d163`, `4769ef7` board.
+- **Doctrine review 2026-10-17: FAIL**, 12 findings, all fixed in `480b22d`. **Re-review the same day: PASS-WITH-FINDINGS**, no
+  high — F1 and F3–F7 fixed in `0ad3c87`; F2 (B15's narrowed scope) recorded on the backlog and in the paragraph above.
+- **Evidence:** 18 mutations killed (8 + 7 + 3); `./gradlew build` 464 tests; the new `deploy/test/deploy-test.sh` runs in CI;
+  CI on the head: `build` and `web` pass.
+- **GitGuardian fails** — a false positive: a generic-password hit on a synthetic Testcontainers role password in `64ea7b4`'s
+  `DatabaseRolesTest`. The literal is removed in `bc26e35`, but the old commit stays flagged until Alex resolves the incident in
+  the GitGuardian dashboard.
+- **Not re-run:** the production-stack rehearsal, on the review fixes — local Docker hung.
+- **Open:** the DoD's two items come after the merge, on the box — production produces the archive end-to-end, and three
+  consecutive unattended days — so T7 stays 🔶 until they are met. From T6, still open: capture `application-allowance.json` and
+  the login's `timezoneOffset` with the gated demo smoke, on the Mac; R2's `x-amz-checksum-sha256` check is the first day's
+  check in the runbook §1 (step 10).
+- **Next:** Alex resolves the GitGuardian incident, merges #28 and creates the accounts; then the first deploy, by the runbook §1.
 
 ## T8 — Acceptance: shadow-diff week
 
