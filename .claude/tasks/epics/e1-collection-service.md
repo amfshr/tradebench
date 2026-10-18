@@ -15,7 +15,7 @@
 
 **Dependency spine:** T2 (session/REST) → T3 (streaming) → T4 (persistence) → T5 (resilience)
 → T14 (the platform user — the `platform` seed before the first production rows, R10/D31) → T6 (EOD cycle)
-→ T7 (deploy) → T8 (shadow-diff acceptance). Genuine parallelism: T4's
+→ T7 (deploy — its first production deploy after T15, the first live weekend's findings: Alex, 2026-10-18) → T8 (shadow-diff acceptance). Genuine parallelism: T4's
 schema/migrations can start alongside T3; T6's Parquet half only needs T2+T4 (its digest left for E9 — D30).
 **Risk concentrates in T5** (the resilience belt is most of what the playbook exists to
 transfer — budget it as the long tail) and in T6's provider-allowance realities.
@@ -372,9 +372,9 @@ T7's; the path proven in tests against real Postgres and an S3-protocol server).
 the pre-T6 main), `replayAcceptance` 6/6, docs site 65/65, 66 mutations killed (each listed in its commit). Record: the board's
 Done history entry tagged E1-T6.
 
-## T7 — Deploy 🔶 in review — PR #28, opened 2026-10-17; the DoD's two items after the merge, on the box (started 2026-10-17 on `e1-t7-deploy`; its nod held 2026-10-17, Alex; T6 ✅ 2026-10-17; the provider analysis + design session held 2026-10-17 → D34; re-scoped 2026-10-17 to one environment, production on IG demo, no Mac soak — Alex; gains 2026-10-17 from E1-T6: the archive DoD item and three notes; gains 2026-10-15 from the design session: Redis in the stack, the OTel agent + Grafana Cloud export, the dead-man ping)
+## T7 — Deploy 🔶 merged 2026-10-18, not done — PR #28, merge `9da0961`; the first production deploy waits for T15 (Alex, 2026-10-18); the DoD's two items on the box (started 2026-10-17 on `e1-t7-deploy`; its nod held 2026-10-17, Alex; T6 ✅ 2026-10-17; the provider analysis + design session held 2026-10-17 → D34; re-scoped 2026-10-17 to one environment, production on IG demo, no Mac soak — Alex; gains 2026-10-17 from E1-T6: the archive DoD item and three notes; gains 2026-10-15 from the design session: Redis in the stack, the OTel agent + Grafana Cloud export, the dead-man ping)
 
-**Type** ops · **Branch** `e1-t7-deploy` · **Started** 2026-10-17 · **Blocked by** —
+**Type** ops · **Branch** `e1-t7-deploy` · **Started** 2026-10-17 · **Blocked by** T15
 
 **Carried from E1-T6 (2026-10-17, at its merge — PR #27):** the DoD item **"staging produces the archive end-to-end"** (T6
 proved the path in tests against real Postgres and an S3-protocol server; staging is this ticket's) — **now "production produces
@@ -491,6 +491,14 @@ test's passwords made at run time · `250d163`, `4769ef7` board.
   the login's `timezoneOffset` with the gated demo smoke, on the Mac; R2's `x-amz-checksum-sha256` check is the first day's
   check in the runbook §1 (step 10).
 - **Next:** Alex resolves the GitGuardian incident, merges #28 and creates the accounts; then the first deploy, by the runbook §1.
+
+**Merged (2026-10-18) — not done.** PR #28 merged by Alex — GitHub stamps 2026-10-18T13:24:23Z — merge `9da0961`; `CI` green on
+the merged head. The branch `e1-t7-deploy` is not yet deleted, locally or on origin. The PR's GitGuardian check reads skipped on
+the head `f7d7c90` at the merge; whether the dashboard incident is resolved is not verified here.
+- **Stays 🔶:** the DoD — production produces the archive end-to-end, then three consecutive unattended days — is met only on the box.
+- **Ruled (Alex, 2026-10-18): the first production deploy waits for T15**, the first live weekend's three findings — "will happily spend today fixing these issues before pushing to prod — that is my decision".
+- **Next, after T15's merge:** Alex creates the accounts; the first release tag, `v0.1.0`; the first deploy, by the runbook §1.
+  No Done history entry until the DoD is met.
 
 ## T8 — Acceptance: shadow-diff week
 
@@ -1760,3 +1768,61 @@ would have truncated `--out`; `run-capture.sh`'s required list; the component do
 name the variable; `MainTest` uses a synthetic owner). Evidence: 3 mutations killed; docs site 65/65; the
 doctrine review pass-with-findings, four fixed on-branch; G1 clean. Closes backlog B1's gap 2. **B10 not
 folded in** — it stays in `backlog.md`. Its close-out the Done history entry tagged E1-T14.
+
+## T15 — The first live weekend's three findings ⬜ (born 2026-10-18; blocks T7's deploy — Alex, 2026-10-18)
+
+**Type** build · **Branch** `e1-t15-first-weekend-findings` (to be cut) · **Started** — · **Blocked by** —
+
+**Source.** The local collector's own database, which ran the pre-T6 main build (schema V3) from Fri 2026-10-16 19:23 UTC; Alex
+asked to look at it. Every figure below was observed by query and is quoted. Each finding is an **observation with an open
+cause** — none is a diagnosed defect (observe before recording). **Alex ruled on 2026-10-18 that the first production deploy
+waits for this ticket:** "will happily spend today fixing these issues before pushing to prod — that is my decision".
+
+**Finding 1 — the watchdog does not stand down for IG's weekend flags.**
+- At the Friday close (2026-10-16 21:00:00Z), `market_state_change` rows show DAX's flag going to `CALL`, then `EDIT`.
+- The last tick was at 21:18:24Z.
+- From 21:01:31Z there are 504 `watchdog_stale` rows (`resubscribe`, `TICK_SILENT`), about 40 an hour, at a steady ~90 s. They
+  run until the database went away on Sat 22:05Z.
+- `StalenessWatchdog`'s `SUPPRESSING_FLAGS` is `CLOSED` and `SUSPEND` only.
+- The heal is not affected: T6 treats only `DEAL` as open.
+
+**Finding 2 — two silent-while-connected stretches drew no watchdog verdict.**
+- First stretch: ticks stopped at about 19:40Z. A 145-tick burst in the 19:49 minute, then nothing until 20:05Z.
+- Second stretch: from about 20:30Z to 20:47Z, with one burst at 20:39.
+- `connection_status` read `CONNECTED:WS-STREAMING` throughout. Zero `watchdog_stale` rows in either window.
+- Each stretch ended at a Lightstreamer server-side reconnect: `DISCONNECTED:TRYING-RECOVERY`, then streaming again at 19:49:06,
+  20:05:41, 20:39:06 and 20:47:11.
+- `bar_gap` rows were recorded: 26 minutes (19:39–20:04) and 17 minutes (20:30–20:46).
+
+**Finding 3 — the live tick counter is ahead of the stored rows.**
+- `capture_status.ticks_total` is 4,613 since the boot at 19:23:06Z; 3,967 tick rows are stored for that span.
+- `dropped_ticks` is 0 and `db_pending` is 0.
+- **Hypothesis, unverified:** a resubscribe or reconnect snapshot re-sends the last tick — counted live, collapsed by the tick
+  table's dedupe. If so, the same repeated tick may reset the watchdog's episode, which would be why finding 1 never backed off
+  past 90 s.
+
+**Plan — four phases; implementation only after the nod.**
+- **A — fixtures:**
+  - Extend `scripts/export-replay.sh`'s Tradebench query (`replays/export-tradebench.sql`) to carry the `market_state_change`
+    flags. Today it omits the deal flag, and the rig defaults ticks to `DEAL`.
+  - Export three windows from the local database: the Friday close (~20:55–21:30Z), the first silence (~19:36–20:10Z) and the
+    second (~20:26–20:50Z).
+  - Market data and statuses only, with no instance name (G1).
+- **B — observe:**
+  - Run each fixture on the T12 rig in acceptance mode and set its output beside the production rows.
+  - Expected divergence for finding 2: the stored record has no ticks in the silence, so the rig should judge it silent at ~90 s.
+    If it does, the live process saw updates the database did not keep, and the database alone cannot say what they were.
+  - Then a raw-arrival capture is needed — **a decision for Alex**: a diagnostic tap logging each raw update and its arrival time,
+    run on the live market when it reopens.
+- **C — design nod (D13):** the findings written up with their evidence, and the rulings proposed:
+  - which IG flags stand the watchdog down (the recommendation: everything except `DEAL`, matching T6);
+  - whether a snapshot's repeated tick counts as fresh evidence (the recommendation: no);
+  - finding 2's remedy, once its cause is known.
+- **D — build:** fixes, tests and mutations; doctrine review; the PR; Alex merges; then `v0.1.0` and T7's deploy.
+
+**DoD:**
+- Each finding is reproduced or explained from a fixture, and the actual behaviour quoted, before any fix is designed.
+- Each fix is ruled at a design nod (D13).
+- Each fix has an exposing test and a killed mutation.
+- Doctrine review before the PR. `./gradlew build` and `replayAcceptance` green.
+- After the merge: the first release tag and T7's deploy.
