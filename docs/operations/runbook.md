@@ -1,7 +1,7 @@
 # Runbook — the collector in production
 
 > The operating manual for the deployed collection service (E1-T7, D34): one environment, production on IG
-> demo, on a Hetzner CAX11 in Nuremberg. Every secret lives in `/etc/tradebench/*.env` on the box and in no
+> demo, on a Hetzner CPX22 (x86) in Nuremberg. Every secret lives in `/etc/tradebench/*.env` on the box and in no
 > repository (G1, D16). The design behind it: `docs/design/sessions/2026-10-17-the-deploy-provider-analysis.md`;
 > the platform's shape: `docs/design/architecture/platform.md`.
 
@@ -17,7 +17,8 @@
 | healthchecks.io | one check: period 1 minute, grace 5 minutes (a second, period 1 day, for the nightly dump — optional) | each check's ping URL |
 | Tailscale | a free personal account, installed on your Mac | — |
 
-**The box.** In Hetzner's console: a **CAX11** (Arm64) in **Nuremberg**, image **Ubuntu 24.04**, your SSH key,
+**The box.** In Hetzner's console: a **CPX22** (x86, 2 vCPU, 4 GB) in **Nuremberg**, image **Ubuntu 26.04 LTS** (24.04
+also works), public IPv4 and IPv6 both on, your SSH key,
 **Backups on**, and a **firewall** allowing inbound SSH (22) only — it is removed again in step 4. Then:
 
 1. SSH in as root and run the provisioning script from the repository:

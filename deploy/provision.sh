@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# One-time setup of a fresh Hetzner CAX11 on Ubuntu 24.04 (E1-T7, D34), run as root from the Hetzner console:
+# One-time setup of a fresh Hetzner CPX22 on Ubuntu 26.04 or 24.04 LTS (E1-T7, D34 as amended 2026-10-18), run as root from the Hetzner console:
 # Docker, rclone, automatic security updates, a swap file, UTC, the repository, the env-file directory, the
 # nightly backup timer — and Tailscale, which becomes the only way in (D34 R5): once `tailscale up` has run,
 # remove the firewall's SSH rule so the box has no public inbound port at all.

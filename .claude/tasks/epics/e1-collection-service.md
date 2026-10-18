@@ -386,7 +386,7 @@ the `linux_arm64` jar for the CAX11 · **confirm R2 (D34 R3) verifies `x-amz-che
 **Opened with a provider analysis and design session (Alex, 2026-10-16) — held 2026-10-17 → D34** (Alex: "I think I agree
 with all"; record `docs/design/sessions/2026-10-17-the-deploy-provider-analysis.md`, `95d5490`). AWS, GCP, Cloudflare, Hetzner
 and others compared; D24 R3's direction (a small VPS, Hetzner leading) made formal. The rulings the build works against:
-- **R1 the box:** Hetzner **CAX11** (ARM, 2 vCPU, 4 GB, 40 GB, €5.99/month); the x86 **CX23** the fallback if ARM stock is short;
+- **R1 the box** (*amended 2026-10-18, D34: a **CPX22**, x86, since the cost-optimized line is unorderable*): Hetzner **CAX11** (ARM, 2 vCPU, 4 GB, 40 GB, €5.99/month); the x86 **CX23** the fallback if ARM stock is short;
   Ubuntu 24.04 LTS with unattended security upgrades. **R2 the region:** Nuremberg.
 - **R3 the bucket:** Cloudflare **R2** for the archive (the bucket, endpoint and keys env config — E1-T6 nod (1), T6 is S3-protocol
   and provider-neutral). **R4 backups, two layers:** a nightly `pg_dump` to R2 keeping seven daily and four weekly copies, and
