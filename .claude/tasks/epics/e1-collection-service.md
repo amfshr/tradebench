@@ -372,9 +372,9 @@ T7's; the path proven in tests against real Postgres and an S3-protocol server).
 the pre-T6 main), `replayAcceptance` 6/6, docs site 65/65, 66 mutations killed (each listed in its commit). Record: the board's
 Done history entry tagged E1-T6.
 
-## T7 — Deploy 🔶 merged 2026-10-18, not done — PR #28, merge `9da0961`; the first production deploy waits for T15 (Alex, 2026-10-18); the DoD's two items on the box (started 2026-10-17 on `e1-t7-deploy`; its nod held 2026-10-17, Alex; T6 ✅ 2026-10-17; the provider analysis + design session held 2026-10-17 → D34; re-scoped 2026-10-17 to one environment, production on IG demo, no Mac soak — Alex; gains 2026-10-17 from E1-T6: the archive DoD item and three notes; gains 2026-10-15 from the design session: Redis in the stack, the OTel agent + Grafana Cloud export, the dead-man ping)
+## T7 — Deploy 🔶 merged 2026-10-18, not done — PR #28, merge `9da0961`; the first production deploy waited for T15 (Alex, 2026-10-18) — unblocked 2026-10-18 by T15's merge, PR #29; the DoD's two items on the box (started 2026-10-17 on `e1-t7-deploy`; its nod held 2026-10-17, Alex; T6 ✅ 2026-10-17; the provider analysis + design session held 2026-10-17 → D34; re-scoped 2026-10-17 to one environment, production on IG demo, no Mac soak — Alex; gains 2026-10-17 from E1-T6: the archive DoD item and three notes; gains 2026-10-15 from the design session: Redis in the stack, the OTel agent + Grafana Cloud export, the dead-man ping)
 
-**Type** ops · **Branch** `e1-t7-deploy` · **Started** 2026-10-17 · **Blocked by** T15
+**Type** ops · **Branch** `e1-t7-deploy` · **Started** 2026-10-17 · **Blocked by** —
 
 **Carried from E1-T6 (2026-10-17, at its merge — PR #27):** the DoD item **"staging produces the archive end-to-end"** (T6
 proved the path in tests against real Postgres and an S3-protocol server; staging is this ticket's) — **now "production produces
@@ -499,6 +499,15 @@ the head `f7d7c90` at the merge; whether the dashboard incident is resolved is n
 - **Ruled (Alex, 2026-10-18): the first production deploy waits for T15**, the first live weekend's three findings — "will happily spend today fixing these issues before pushing to prod — that is my decision".
 - **Next, after T15's merge:** Alex creates the accounts; the first release tag, `v0.1.0`; the first deploy, by the runbook §1.
   No Done history entry until the DoD is met.
+
+**Unblocked (2026-10-18).** T15 merged — PR #29, merge `d69cdf1`. The next steps, by the runbook §1 (`docs/operations/runbook.md`):
+1. Alex creates the accounts: Hetzner Cloud, the Cloudflare R2 bucket and its token, Grafana Cloud EU, healthchecks.io, Tailscale — plus a
+   GitHub classic token with `read:packages` only, if the GHCR package stays private.
+2. Provision the box.
+3. Tag `v0.1.0` from `main`.
+4. Stop the Mac collector.
+5. Deploy.
+6. The DoD on the box: the first archive end-to-end, then three consecutive unattended days, each evening's hand check clean.
 
 ## T8 — Acceptance: shadow-diff week
 
@@ -1769,9 +1778,9 @@ name the variable; `MainTest` uses a synthetic owner). Evidence: 3 mutations kil
 doctrine review pass-with-findings, four fixed on-branch; G1 clean. Closes backlog B1's gap 2. **B10 not
 folded in** — it stays in `backlog.md`. Its close-out the Done history entry tagged E1-T14.
 
-## T15 — The first live weekend's three findings 🔶 in review — PR #29 (born and started 2026-10-18; blocks T7's deploy — Alex, 2026-10-18)
+## T15 — The first live weekend's three findings ✅ (born and started 2026-10-18; done 2026-10-18 — PR #29, merged by Alex, merge `d69cdf1` — complete; it unblocked T7's deploy)
 
-**Type** build · **Branch** `e1-t15-first-weekend-findings` · **Started** 2026-10-18 · **Blocked by** —
+**Type** build · **Branch** `e1-t15-first-weekend-findings` (merged from it, PR #29 → `main`, 2026-10-18 — branch not yet deleted) · **Started** 2026-10-18 · **Blocked by** —
 
 **Source.** The local collector's own database, which ran the pre-T6 main build (schema V3) from Fri 2026-10-16 19:23 UTC; Alex
 asked to look at it. Every figure below was observed by query and is quoted. Each finding is an **observation with an open
@@ -1844,3 +1853,10 @@ waits for this ticket:** "will happily spend today fixing these issues before pu
 - **Evidence** (as reported in the commits; not re-run for this record): `./gradlew build` 476 tests; `replayAcceptance` 9/9;
   docs site 65/65. 17 mutations in all: 3 in phase A, 12, then 2.
 - **Next:** PR #29 opened 2026-10-18; Alex merges; then `v0.1.0` and T7's deploy.
+
+**Merged (2026-10-18) — done.** PR #29 merged by Alex — GitHub stamps 2026-10-18T14:45:53Z — merge `d69cdf1`. CI green on the PR head:
+`build`, `web` and GitGuardian passed. The branch `e1-t15-first-weekend-findings` is not yet deleted, locally or on origin.
+- **DoD:** met — the findings reproduced or explained from fixtures; the fixes ruled (D35), each with an exposing test and a killed mutation;
+  doctrine review before the PR; `./gradlew build` and `replayAcceptance` green. Its last item — the first release tag and T7's deploy — is T7's.
+- **Deferred:** backlog B19 (a CHART snapshot) and B20 (the reconnect row's host-sleep label).
+- **Next:** T7's first deploy, by the runbook §1 (the T7 § "Unblocked (2026-10-18)"). Its close-out is the Done history entry tagged E1-T15.
