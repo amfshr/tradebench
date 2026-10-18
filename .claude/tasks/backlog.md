@@ -417,3 +417,21 @@ watchdog itself was right and rendered no verdict. Cosmetic for the record.
 
 The line logs `session.activeAccountId()` in full. The account id is an `.env` value, so personal under G1. It reaches
 the console and Grafana Cloud's logs — neither is public. **Fix:** log the account masked, or omit it.
+
+## B22 — Leave the archived days out of the nightly dump
+
+**Captured** 2026-10-18 (Alex, after the first deploy: "erase previous dumps … keep the latest three") · **Likely home** an ops follow-up (E1) — small · **Trigger** R2 storage passing the free 10 GB · **Relates to** E1-T7 (`deploy/backup.sh`: dailies > 8 days and weeklies > 29 days deleted, D34 R4) · E1-T6 (the Parquet archive) · runbook §6 (restores)
+
+Ticks dominate the dump's size, and every closed day's ticks and bars are already in R2 as Parquet, the permanent
+copy. Shrinking retention to three dumps would cost restore points for the small tables that exist nowhere else
+(events, `job_runs`, later profiles and configuration). Excluding archived days keeps every restore point and a
+small dump. A restore then needs the archive re-imported for history — the runbook would say how.
+
+## B23 — Review a managed Postgres against the box's own
+
+**Captured** 2026-10-18 (Alex: "maybe look at other providers for the dbs") · **Likely home** E9 or later — a design question · **Trigger** real money trading, or the box's Postgres outgrowing its disk · **Relates to** D17 (database topology) · D34 (the box) · B22
+
+Market data is the heavy database and grows every trading second; profiles, configuration and analytics stay light.
+Postgres on the box costs nothing beyond the server. Managed free tiers stop around half a gigabyte, and paid
+plans start above the box's whole price. A managed service earns its keep when someone else should own uptime
+and point-in-time recovery.
