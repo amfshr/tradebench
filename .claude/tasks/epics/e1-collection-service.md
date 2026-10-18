@@ -372,7 +372,7 @@ T7's; the path proven in tests against real Postgres and an S3-protocol server).
 the pre-T6 main), `replayAcceptance` 6/6, docs site 65/65, 66 mutations killed (each listed in its commit). Record: the board's
 Done history entry tagged E1-T6.
 
-## T7 — Deploy 🔶 merged 2026-10-18, not done — PR #28, merge `9da0961`; the first production deploy waited for T15 (Alex, 2026-10-18) — unblocked 2026-10-18 by T15's merge, PR #29; the DoD's two items on the box (started 2026-10-17 on `e1-t7-deploy`; its nod held 2026-10-17, Alex; T6 ✅ 2026-10-17; the provider analysis + design session held 2026-10-17 → D34; re-scoped 2026-10-17 to one environment, production on IG demo, no Mac soak — Alex; gains 2026-10-17 from E1-T6: the archive DoD item and three notes; gains 2026-10-15 from the design session: Redis in the stack, the OTel agent + Grafana Cloud export, the dead-man ping)
+## T7 — Deploy 🔶 deployed 2026-10-18, not done — the first production deploy ran 17:46Z (`v0.1.0`), the soak from then; step 10 and the three unattended days open; PR #28, merge `9da0961`; the first production deploy waited for T15 (Alex, 2026-10-18) — unblocked 2026-10-18 by T15's merge, PR #29; the DoD's two items on the box (started 2026-10-17 on `e1-t7-deploy`; its nod held 2026-10-17, Alex; T6 ✅ 2026-10-17; the provider analysis + design session held 2026-10-17 → D34; re-scoped 2026-10-17 to one environment, production on IG demo, no Mac soak — Alex; gains 2026-10-17 from E1-T6: the archive DoD item and three notes; gains 2026-10-15 from the design session: Redis in the stack, the OTel agent + Grafana Cloud export, the dead-man ping)
 
 **Type** ops · **Branch** `e1-t7-deploy` · **Started** 2026-10-17 · **Blocked by** —
 
@@ -508,6 +508,31 @@ the head `f7d7c90` at the merge; whether the dashboard incident is resolved is n
 4. Stop the Mac collector.
 5. Deploy.
 6. The DoD on the box: the first archive end-to-end, then three consecutive unattended days, each evening's hand check clean.
+
+**First production deploy (2026-10-18) — not done.** The runbook §1 steps 1–9 done; T7 stays 🔶. Nothing below names the IG
+account, the box's address, the Grafana stack, the instance or any env-file URL (G1) — "the box" and "the instance".
+- **The box:** a Hetzner CPX22 in Nuremberg (D34 as amended 2026-10-18), Ubuntu 24.04, provisioned by `deploy/provision.sh`;
+  packages upgraded and rebooted; joined to Tailscale with SSH, key expiry disabled; the Hetzner firewall's SSH rule deleted —
+  a probe of port 22 on the public address timed out, so no public inbound port remains (D34 R5).
+- **The env files:** all three written on the box, mode 0600; the four Postgres passwords generated on the box with openssl.
+- **The release:** `v0.1.0` tagged on `main` at `c8cad7a`, PR #30's merge (the x86 release — GitHub stamps 2026-10-18T17:13:44Z).
+  The Release run (39150550002) published `ghcr.io/amfshr/tradebench-market-data:v0.1.0`, `linux/amd64`. The package is public:
+  an anonymous manifest fetch returned HTTP 200, so the box needs no `read:packages` token.
+- **The Mac collector** was already stopped before the deploy (step 7).
+- **The deploy:** `deploy.sh v0.1.0` started 17:46Z. Flyway applied V1–V6 as the owner role (ruling (1)). The log read
+  "capturing … (migrated; advisory lock held)", "daily job: heal, then archive to bucket …" and "dead-man ping on"; the stream
+  reached `CONNECTED:WS-STREAMING`; heartbeats followed each minute with `dropped=0 sinkFailures=0`. The market was closed and no
+  `watchdog_stale` resubscribe appeared — the T15 fix (D35) holding live. healthchecks.io's collector check went green; Grafana
+  Cloud received the log lines, labelled `deployment_environment=production`.
+- **The nightly dump, proven by hand (step 9):** the 17:56Z run uploaded the daily and the weekly copy, 39,275 bytes each; each
+  upload was refused once with R2 `501 NotImplemented` and succeeded on rclone's retry — Ubuntu's rclone was v1.60.1. After the
+  current rclone was installed from rclone.org, the 17:59Z run was clean. **PR #31** (`e1-t7-rclone-current`, opened 2026-10-18)
+  makes provisioning install it that way — open; Alex merges.
+- **Open:** step 10, tomorrow (2026-10-19) — the first archive: its `job_runs` `archive` row `succeeded` and its Parquet files in
+  R2 (R2's `x-amz-checksum-sha256` check, carried from T6) · then the DoD's three consecutive unattended days, each evening's hand
+  check clean — the soak started 2026-10-18 17:46Z · PR #31's merge. From T6, still open: the gated demo smoke's captures
+  (`application-allowance.json`, the login's `timezoneOffset`), on the Mac. Found at the deploy: the `stream connected` log line
+  prints the IG account id — backlog **B21**. No Done history entry until the DoD is met.
 
 ## T8 — Acceptance: shadow-diff week
 

@@ -410,3 +410,10 @@ no record shows a CHART snapshot.
 On 2026-10-16 the reconnect rows after an eight-minute suspension read `hostSlept:false`, with `wallOutageMs` of about
 600. The connection noticed the drop only after waking, so the outage measured was the short one after the wake. The
 watchdog itself was right and rendered no verdict. Cosmetic for the record.
+
+## B21 — The `stream connected` log line prints the IG account id
+
+**Captured** 2026-10-18 (E1-T7's first production deploy) · **Likely home** the next collector release (E1) — small · **Trigger** the next collector release · **Relates to** G1 (everything in `.env*` is personal — Alex, 2026-10-10) · E1-T7 (the logs exported to Grafana Cloud, D33) · `market-data-service/src/main/java/dev/amfshr/tradebench/marketdata/supervise/IgStreamControl.java` (`stream connected: account …`)
+
+The line logs `session.activeAccountId()` in full. The account id is an `.env` value, so personal under G1. It reaches
+the console and Grafana Cloud's logs — neither is public. **Fix:** log the account masked, or omit it.
