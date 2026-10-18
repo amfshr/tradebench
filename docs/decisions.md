@@ -605,6 +605,13 @@ the same tested bytes. **Accepted risk:** Hetzner raised prices twice in 2026 �
 move a weekend's work. Makes D24 R3's direction formal. Session record:
 `docs/design/sessions/2026-10-17-the-deploy-provider-analysis.md`.
 
+**Amended 2026-10-18 (Alex):** the box is a **Hetzner CPX22** — x86 (AMD), 2 vCPU, 4 GB, 80 GB, €23.39/month as the
+console quoted it — because Hetzner's whole cost-optimized line, the CAX11 and the CX23 fallback included, has been
+unorderable since 2026-09-02. Alex: "that gives room to grow, is what it is". So the release builds `linux/amd64`
+with DuckDB's `linux_amd64` jar on an x86 runner. The rest of D34 stands. With Hetzner's backups (+20%) the box
+is about €28/month, over the ~£20 envelope (about €23) — accepted by Alex as the price of the 4 GB the design needs;
+a CAX11 back in stock is a cheaper move later, not a reason to wait.
+
 
 ## D35 — One word for dealing; a snapshot is not news — **Accepted** (2026-10-18, Alex)
 

@@ -30,8 +30,8 @@ dependencies {
     implementation(libs.jackson.databind)
     implementation(libs.resilience4j.retry)
     // The archive's Parquet writer (E1-T6 nod ruling 3's fallback: parquet-java needs Hadoop at runtime).
-    // The all-platforms jar (81 MB) runs anywhere; -PduckdbPlatform=linux_arm64 takes the one platform's
-    // (20 MB) for the deploy image (E1-T7, D34).
+    // The all-platforms jar (81 MB) runs anywhere; -PduckdbPlatform=<platform> (linux_amd64 for the box since
+    // D34's 2026-10-18 amendment) takes the one platform's (about 20 MB) for the deploy image (E1-T7).
     val duckdbPlatform = providers.gradleProperty("duckdbPlatform").orNull
     if (duckdbPlatform == null) {
         implementation(libs.duckdb.jdbc)
