@@ -7,7 +7,10 @@ set -euo pipefail
 export DEBIAN_FRONTEND=noninteractive
 timedatectl set-timezone UTC
 apt-get update -q
-apt-get install -y -q ca-certificates curl git rclone unattended-upgrades
+apt-get install -y -q ca-certificates curl git unattended-upgrades
+# rclone from rclone.org, not Ubuntu's package: 24.04 ships v1.60 (2022), whose first request to R2 is refused with
+# 501 NotImplemented and only lands on rclone's retry (seen on the first box, 2026-10-18)
+command -v rclone > /dev/null || curl -fsSL https://rclone.org/install.sh | bash
 dpkg-reconfigure -f noninteractive unattended-upgrades
 install -m 0755 -d /etc/apt/keyrings
 curl -fsSL https://download.docker.com/linux/ubuntu/gpg -o /etc/apt/keyrings/docker.asc
