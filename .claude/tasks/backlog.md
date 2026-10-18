@@ -394,3 +394,19 @@ local runs failed. The error was at line 236 — `sink.recover()` — a `PSQLExc
 cause is **unknown**. Two steps, in order: **(1)** make the CI workflow upload the test reports (JUnit XML,
 `**/build/test-results/**`) when a build fails (`actions/upload-artifact`, `if: failure()`); **(2)** fix the test (or the
 store) from that evidence the next time it fails — not before, since nothing on record says why it failed.
+
+## B19 — A CHART snapshot may heal a bar-silent episode
+
+**Captured** 2026-10-18 (E1-T15's doctrine review, finding 6) · **Likely home** the next belt ticket (E1) · **Trigger** observe it on the box's logs, or the next belt ticket · **Relates to** D35 (a snapshot is not news — the PRICE leg) · E1-T15 · `Buffers.onSealedBar`, `lastBarMono`
+
+`Buffers.onSealedBar` stamps `lastBarMono` on every sealed candle. If IG's CHART snapshot repeats the last sealed
+candle, a dead CHART leg would be healed by each resubscribe, the way the PRICE leg was before D35. **Unobserved:**
+no record shows a CHART snapshot.
+
+## B20 — The reconnect row mislabels a host suspension
+
+**Captured** 2026-10-18 (E1-T15 phase B) · **Likely home** a belt follow-up (E1) — Alex's call · **Trigger** none set — it matters only on a host that sleeps, which the box does not · **Relates to** E1-T15 finding 2 (the host suspended — D35) · `ReconnectClassifier`, `Supervisor` (the reconnect row's `wallOutageMs`, `hostSlept`)
+
+On 2026-10-16 the reconnect rows after an eight-minute suspension read `hostSlept:false`, with `wallOutageMs` of about
+600. The connection noticed the drop only after waking, so the outage measured was the short one after the wake. The
+watchdog itself was right and rendered no verdict. Cosmetic for the record.

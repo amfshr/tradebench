@@ -1769,9 +1769,9 @@ name the variable; `MainTest` uses a synthetic owner). Evidence: 3 mutations kil
 doctrine review pass-with-findings, four fixed on-branch; G1 clean. Closes backlog B1's gap 2. **B10 not
 folded in** — it stays in `backlog.md`. Its close-out the Done history entry tagged E1-T14.
 
-## T15 — The first live weekend's three findings ⬜ (born 2026-10-18; blocks T7's deploy — Alex, 2026-10-18)
+## T15 — The first live weekend's three findings 🔶 in review — PR #29 (born and started 2026-10-18; blocks T7's deploy — Alex, 2026-10-18)
 
-**Type** build · **Branch** `e1-t15-first-weekend-findings` (to be cut) · **Started** — · **Blocked by** —
+**Type** build · **Branch** `e1-t15-first-weekend-findings` · **Started** 2026-10-18 · **Blocked by** —
 
 **Source.** The local collector's own database, which ran the pre-T6 main build (schema V3) from Fri 2026-10-16 19:23 UTC; Alex
 asked to look at it. Every figure below was observed by query and is quoted. Each finding is an **observation with an open
@@ -1781,8 +1781,9 @@ waits for this ticket:** "will happily spend today fixing these issues before pu
 **Finding 1 — the watchdog does not stand down for IG's weekend flags.**
 - At the Friday close (2026-10-16 21:00:00Z), `market_state_change` rows show DAX's flag going to `CALL`, then `EDIT`.
 - The last tick was at 21:18:24Z.
-- From 21:01:31Z there are 504 `watchdog_stale` rows (`resubscribe`, `TICK_SILENT`), about 40 an hour, at a steady ~90 s. They
-  run until the database went away on Sat 22:05Z.
+- From 21:01:31Z Friday to 22:04:12Z Saturday there are 503 `watchdog_stale` rows, all resubscribes (`TICK_SILENT`), 90.3 s
+  apart while the host was awake, and never a rebuild. The database went away on Sat 22:05Z. (Trued 2026-10-18 from the
+  query; the "504" and "about 40 an hour" first written here were approximate.)
 - `StalenessWatchdog`'s `SUPPRESSING_FLAGS` is `CLOSED` and `SUSPEND` only.
 - The heal is not affected: T6 treats only `DEAL` as open.
 
@@ -1826,3 +1827,20 @@ waits for this ticket:** "will happily spend today fixing these issues before pu
 - Each fix has an exposing test and a killed mutation.
 - Doctrine review before the PR. `./gradlew build` and `replayAcceptance` green.
 - After the merge: the first release tag and T7's deploy.
+
+**In review (2026-10-18).** PR #29.
+- **Rulings (Alex, 2026-10-18, "can we go with your recommendations pls") → D35:**
+  1. Dealing is `DEAL`, `DEALNOEDIT` or `CLOSINGSONLY`. Every other known flag stands the watchdog down and closes the heal's
+     minute. An unknown flag counts as dealing (P9). One definition, `ig.stream.DealFlag`.
+  2. A snapshot's repeated tick is not news. A tick counts as fresh only if IG's timestamp moved on, or its prices changed at
+     the same instant. Every arrival still counts as an update, which re-teaches the flag after a re-ask, ordered by the update
+     count taken before the new subscription went out.
+  3. Finding 2 needs no code: the host was suspended, and the Mac's power log matches each silence to the second.
+- **Commits:** `0899c2a` phase A — the fixtures, and the exporter carries the deal flag · `2331fc2` the fixes, 12 mutations ·
+  `aacdcc6` the doctrine review's findings, 2 mutations.
+- **Doctrine review 2026-10-18:** PASS-WITH-FINDINGS, none blocking, G1 clean. Findings 1–5 and 7 fixed in `aacdcc6`;
+  finding 6 (a CHART snapshot may heal a bar-silent episode; unobserved) → backlog B19.
+- **Phase B, recorded:** the reconnect rows after a host suspension read `hostSlept:false` → backlog B20 (cosmetic).
+- **Evidence** (as reported in the commits; not re-run for this record): `./gradlew build` 476 tests; `replayAcceptance` 9/9;
+  docs site 65/65. 17 mutations in all: 3 in phase A, 12, then 2.
+- **Next:** PR #29 opened 2026-10-18; Alex merges; then `v0.1.0` and T7's deploy.
