@@ -73,7 +73,7 @@ public final class Supervisor implements StreamObserver, BeltView, Runnable {
     private final Map<String, Long> lastFedBar = new HashMap<>();
     // When each market's pair was last re-asked for: a remembered flag older than that is the old
     // subscription's and is not fed back (D29 (1)).
-    private final Map<String, Long> flagClearedMono = new HashMap<>();
+    private final Map<String, Long> flagClearedAtUpdate = new HashMap<>();
     // Rejections whose verdict waits for a witness (§3.5), kept for the verdict's record.
     private final Map<String, Observation.SubscriptionError> heldVerdicts = new HashMap<>();
     private int consecutiveFailures;
@@ -162,7 +162,7 @@ public final class Supervisor implements StreamObserver, BeltView, Runnable {
         watchdog.forget(epic);
         lastFedTick.remove(epic);
         lastFedBar.remove(epic);
-        flagClearedMono.remove(epic);
+        flagClearedAtUpdate.remove(epic);
     }
 
     // --- capture-supervisor thread ----------------------------------------------------------
@@ -274,9 +274,12 @@ public final class Supervisor implements StreamObserver, BeltView, Runnable {
                 lastFedBar.put(epic, bar);
             }
             String flag = freshness.dealFlag(epic);
-            Long cleared = flagClearedMono.get(epic);
-            if (flag != null && (cleared == null || tick > cleared)) {
-                watchdog.onDealFlag(epic, flag, now); // the flag rides the tick: only a tick after the re-ask is fresh
+            Long cleared = flagClearedAtUpdate.get(epic);
+            if (flag != null && (cleared == null || freshness.updates(epic) > cleared)) {
+                // the flag rides the update: only one after the re-ask teaches — its snapshot does (E1-T15);
+                // counted from before the new subscription went out, so a snapshot cannot be mistaken for an
+                // old update, whatever the clock reads; a dead item sends nothing, so stays untaught
+                watchdog.onDealFlag(epic, flag, now);
             }
         }
         for (StalenessWatchdog.Remedy remedy : watchdog.evaluate(now, wallMillis)) {
@@ -300,8 +303,13 @@ public final class Supervisor implements StreamObserver, BeltView, Runnable {
 
     /** A market's pair is being re-asked for: its remembered flag belongs to the old subscription. */
     private void reasking(String epic) {
+        reasking(epic, freshness.updates(epic)); // before the resubscribe goes out
+    }
+
+    /** @param updatesBefore the market's update count before its new subscription went out */
+    private void reasking(String epic, long updatesBefore) {
         watchdog.clearDealFlag(epic);
-        flagClearedMono.put(epic, clock.monotonicNanos());
+        flagClearedAtUpdate.put(epic, updatesBefore);
     }
 
     /** Execute a subscription-failure {@link WitnessQuarantine.Judgment} — the §3.5 blast-radius
@@ -458,6 +466,12 @@ public final class Supervisor implements StreamObserver, BeltView, Runnable {
         reconnects.rebuilding(now, clock.wallInstant().toEpochMilli()); // the outage opens now, on both clocks (#21)
         rebuilding = true; // the view reads RECONNECTING until the new connection streams
         watchdog.onConnection(false, now); // and the watchdog waits for it
+        // the new session subscribes inside rebuild(): its snapshots may land before it returns, so each
+        // survivor's re-ask is measured from here (E1-T15 review finding 2)
+        Map<String, Long> updatesBefore = new HashMap<>();
+        for (String survivor : watched) {
+            updatesBefore.put(survivor, freshness.updates(survivor));
+        }
         StreamControl.Outcome outcome = stream.rebuild();
         stuck.reset(); // the old connection's substate died with it; a new one reports its own (#18)
         expectedGeneration = stream.generation(); // whatever the old one still says is nobody's (#11)
@@ -484,7 +498,7 @@ public final class Supervisor implements StreamObserver, BeltView, Runnable {
         long resubscribed = clock.monotonicNanos();
         for (String survivor : watched) {
             witness.onSubscribeStarted(survivor, resubscribed); // the survivors re-subscribe now
-            reasking(survivor);
+            reasking(survivor, updatesBefore.getOrDefault(survivor, 0L));
         }
         return true;
     }

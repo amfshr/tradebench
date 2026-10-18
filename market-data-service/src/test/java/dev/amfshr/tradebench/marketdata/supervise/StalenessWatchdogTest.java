@@ -92,10 +92,32 @@ class StalenessWatchdogTest {
 
     @Test
     void unknownFlagDoesNotSuppress() {
-        dog.onDealFlag(DAX, "AUCTION", 0);
+        dog.onDealFlag(DAX, "SOMETHINGNEW", 0);
         runTo(95);
         assertEquals(90, fired.get(0).second(),
-                "a resubscribe on a closed market is harmless and its snapshot teaches");
+                "a word IG has never sent keeps the watchdog watching (E1-T15, P9): judged like an open market"
+                        + " until the word is added to DealFlag");
+    }
+
+    @Test
+    void igsWeekendAndAuctionFlagsStandTheWatchdogDown() {
+        // E1-T15: the 2026-10-16 close read CALL then EDIT, and the watchdog re-asked every 90s all weekend
+        for (String flag : new String[] {"CALL", "EDIT", "AUCTION", "AUCTIONNOEDIT"}) {
+            setUp();
+            dog.onDealFlag(DAX, flag, 0);
+            runTo(500);
+            assertTrue(fired.isEmpty(), flag + " is not dealing: " + fired);
+        }
+    }
+
+    @Test
+    void theDealingFlagsAreWatched() {
+        for (String flag : new String[] {"DEALNOEDIT", "CLOSINGSONLY"}) {
+            setUp();
+            dog.onDealFlag(DAX, flag, 0);
+            runTo(95);
+            assertEquals(90, fired.get(0).second(), flag + " streams prices: its silence is judged");
+        }
     }
 
     @Test

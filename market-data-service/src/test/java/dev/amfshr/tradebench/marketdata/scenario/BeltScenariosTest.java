@@ -576,6 +576,44 @@ class BeltScenariosTest {
     }
 
     @Test
+    void aResubscribesSnapshotIsNotNewsSoADeadFeedStillClimbsToARebuild() throws Exception {
+        // E1-T15: Lightstreamer answers every new subscription with the item's current state — the last
+        // tick again, its timestamp unchanged. Counted as life, it healed the episode it answered, so the
+        // first live weekend's closed feed was re-asked for every 90.3s (503 times in 25 hours) and never rebuilt.
+        // The repeat says nothing new: the ladder runs as if it never came — +90, +210, the session at +450.
+        Scenario dead = Scenario.named("a dead feed answering each resubscribe with its snapshot").markets(DAX)
+                .at(s(0), streaming()).at(s(0), subscribed(DAX))
+                .every(s(1), s(1), s(61), t -> tick(DAX))
+                .snapshots().until(s(600)).build();
+
+        Observed o = ScenarioRunner.run(dead);
+
+        assertEquals(List.of(150L, 150L, 270L, 270L), o.secondsOf("unsubscribe"),
+                "the last tick at 60: re-asked for at +90 and +210, as without any snapshot");
+        assertEquals(List.of(0L, 510L), o.secondsOf("connect"), "then the session, at +450");
+        assertEquals(3, o.snapshotsDelivered, "each re-ask was answered: two resubscribes and the rebuild's");
+    }
+
+    @Test
+    void igsWeekendEditStandsTheWatchdogDownAndTheTeachingSnapshotKeepsItDown() throws Exception {
+        // E1-T15: the 2026-10-16 close — DEAL, then CALL, then EDIT, each on a tick — and nothing until
+        // Monday. EDIT is not dealing, so the watchdog stands down; twelve hours on, the teaching
+        // resubscribe's snapshot re-teaches EDIT and it stays down: one verdict in the whole night.
+        Scenario close = Scenario.named("the Friday close").markets(DAX)
+                .at(s(0), streaming()).at(s(0), subscribed(DAX))
+                .every(s(1), s(1), s(61), t -> tick(DAX))
+                .at(s(61), tick(DAX, "CALL"), tick(DAX, "EDIT"))
+                .snapshots().until(Duration.ofHours(12).plusSeconds(700)).build();
+
+        Observed o = ScenarioRunner.run(close);
+
+        assertEquals(List.of("STAND_DOWN_TEACHING"), o.events(EventType.WATCHDOG_STALE).stream()
+                .map(e -> e.detail().get("signal").asText()).toList(), "the one teach, nothing else");
+        assertEquals(List.of(0L), o.secondsOf("connect"), "never a rebuild");
+        assertEquals(1, o.snapshotsDelivered, "the teach was answered with EDIT again");
+    }
+
+    @Test
     void aDatabaseThatRefusesWritesIsOneEpisodeClimbingTheLadder() throws Exception {
         // D28: a retryable failure is held for, backing off 5s → 60s, as one episode. A database
         // that accepts connections but refuses writes (disk full) must look like the blip at 100

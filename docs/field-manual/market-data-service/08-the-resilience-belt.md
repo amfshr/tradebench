@@ -72,10 +72,18 @@ data freshness is truth, connection status is hearsay. Per market, two signals:
 
 Around the signals, seven pieces of judgment, each visible in the code:
 
-- *Stand-down by the market's own flag*: `DLG_FLAG` values `CLOSED`/`SUSPEND` suppress
-  (`SUPPRESSING_FLAGS`) — weekends need no calendar and no hours config. Unknown flags
-  deliberately do **not** suppress: a spurious resubscribe on a closed market is
-  harmless, and its snapshot teaches us the real flag.
+- *Stand-down by the market's own flag*: any `DLG_FLAG` that is not dealing suppresses —
+  `CLOSED`, `CALL`, `EDIT`, `SUSPEND` and the two auctions (`ig.stream.DealFlag`, the one
+  definition the heal shares; E1-T15) — so weekends need no calendar and no hours config.
+  `DEAL`, `DEALNOEDIT` and `CLOSINGSONLY` are dealing: prices stream under all three. A flag IG
+  has never been seen to send deliberately does **not** suppress (P9): the market is judged like an
+  open one, and since its snapshot only repeats the same word, the ladder climbs loudly — two
+  resubscribes, then rebuilds — until the word is added to `DealFlag`. Loud and wrong beats quiet
+  and wrong.
+- *A snapshot is not news* (E1-T15): Lightstreamer answers every new subscription with the item's
+  state — the last tick again. `Buffers` counts it as an update, never as a fresh tick, so it heals
+  no episode; but it does re-teach the flag after a re-ask, which the Supervisor orders by the
+  update count taken at the re-ask, not by the clock.
 - *The stand-down is bounded* (`standDownTeach`, 12h — D29 (1), E1-T10 #3): a closing flag is
   dated when it arrives (`onDealFlag`); a market that has read it for the whole period gets one
   teaching resubscribe per period (`STAND_DOWN_TEACHING`), its silence counted from the fresh
@@ -99,7 +107,7 @@ Around the signals, seven pieces of judgment, each visible in the code:
   exception runs the other way: when a tick-silence episode heals, the market's CHART clock
   restarts with its ticks — no candle was owed while they were gone — so a market returning from
   a judged silence is not judged bar-silent as it returns (E1-T12 finding 1, the 2026-08-10
-  dawn replay: a spurious pair resubscribe two seconds after DAX came back) — and a market leaving its CLOSED/SUSPEND stand-down starts its CHART clock at
+  dawn replay: a spurious pair resubscribe two seconds after DAX came back) — and a market leaving its stand-down starts its CHART clock at
   the opening, for the same reason (the T12 review's finding 1, ruled 2026-10-10).
 - *Session-shaped verdict*: ≥2 markets stale in the same round is never market noise — one
   `REBUILD`, not N remedies — however far apart they crossed their thresholds (DAX stale from 90,
@@ -133,7 +141,7 @@ stateDiagram-v2
         Rebuild --> Rebuild: grace keeps doubling, capped 30min
     }
     Episode --> Healthy: same-signal-kind data arrives (fresh budget)
-    Healthy --> StoodDown: DLG_FLAG CLOSED / SUSPEND
+    Healthy --> StoodDown: DLG_FLAG not dealing (CLOSED, CALL, EDIT, SUSPEND, auctions)
     StoodDown --> StoodDown: 12h stood down → one teaching resubscribe, flag forgotten
     StoodDown --> Healthy: flag clears, or forgotten at a re-ask
 ```
@@ -383,5 +391,11 @@ the policy and the rulings.
 Silent-while-connected (2h56m) → the escalator and the watchdog's worldview. The remedy
 storm risk → episodes, doubling grace, the session guard. IG's login cache → the backoff
 floor. "0.4s offline" → dual-duration reporting. The 17:00 Sunday outage → GapDetector's
-literal test fixture. None of these numbers are guesses; that is why they live in
+literal test fixture. The first live weekend (2026-10-16, E1-T15) → the stand-down on every flag
+that is not dealing (the Friday close read `CALL` then `EDIT`, which the old `CLOSED`/`SUSPEND` set
+missed) and the snapshot that is not news (each resubscribe's repeated tick healed the episode it
+answered, so the watchdog re-asked every 90.3s whenever the host was awake — 503 rows from 21:01Z Friday to 22:04Z
+Saturday — and never climbed). The same weekend's
+two silences while streaming were the host suspended, not the belt: no verdict across a suspension
+is the design. None of these numbers are guesses; that is why they live in
 `Tuning.playbook()` under version control rather than in anyone's memory.

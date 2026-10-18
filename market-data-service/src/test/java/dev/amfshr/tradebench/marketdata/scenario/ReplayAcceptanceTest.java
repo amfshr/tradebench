@@ -158,6 +158,51 @@ class ReplayAcceptanceTest extends PostgresTestBase {
     }
 
     @Test
+    void theFridayCloseStandsTheWatchdogDownFromCallThroughEdit() throws Exception {
+        // Recorded (2026-10-16): DAX's flag DEAL → CALL (21:00:00.039Z) → EDIT (.082), each on a tick; the
+        // last tick 21:18:24.212Z. The live collector resubscribed every 90.3s from 21:01:31Z all weekend.
+        // Modelled: the server's answers and Lightstreamer's snapshot to each new subscription.
+        Scenario close = Replays.load("/replays/2026-10-16-friday-close-call-edit.jsonl").snapshots().build();
+
+        Observed o = ScenarioRunner.accept(close, database);
+
+        assertTrue(o.events(EventType.WATCHDOG_STALE).isEmpty(), "CALL and EDIT are not dealing: no verdict, "
+                + o.events(EventType.WATCHDOG_STALE));
+        assertEquals(List.of(0L), o.secondsOf("connect"));
+        assertEquals(List.of("DEAL", "CALL", "EDIT"), o.events(EventType.MARKET_STATE_CHANGE).stream()
+                .map(e -> e.detail().get("dealFlag").asText()).toList());
+        assertEquals(distinctTicks(close), o.landed.stream().filter(l -> l.startsWith("tick@")).count());
+        assertTrue(o.exits.isEmpty());
+    }
+
+    @Test
+    void theFirstSilenceWhileStreamingIsJudgedOnAHostThatStaysAwake() throws Exception {
+        // Recorded (2026-10-16): the last tick at 19:40:43.101Z (offset 240s), CONNECTED:WS-STREAMING throughout.
+        // The live collector rendered no verdict: its host was suspended (the power log, E1-T15 finding 2),
+        // and no verdict across a suspension is the design. The box does not sleep, so the record alone
+        // must earn the ladder from the last tick: +90, +210, the session at +450.
+        assertTheLadderFromTheLastTick("/replays/2026-10-16-silent-while-streaming-1.jsonl");
+    }
+
+    @Test
+    void theSecondSilenceWhileStreamingIsJudgedOnAHostThatStaysAwake() throws Exception {
+        // Recorded: the last tick at 20:30:38.208Z (offset 240s); the host again suspended at 20:30:37Z.
+        assertTheLadderFromTheLastTick("/replays/2026-10-16-silent-while-streaming-2.jsonl");
+    }
+
+    private static void assertTheLadderFromTheLastTick(String fixture) throws Exception {
+        Observed o = ScenarioRunner.accept(Replays.load(fixture).build(), database);
+
+        List<Observed.Seen> verdicts = o.events(EventType.WATCHDOG_STALE);
+        assertEquals(List.of(330L, 450L, 690L), verdicts.stream().limit(3).map(v -> v.at().toSeconds()).toList(),
+                "the last tick at 240: resubscribes at +90 and +210, then the session at +450");
+        assertEquals("resubscribe", verdicts.get(0).detail().get("action").asText());
+        assertEquals("resubscribe", verdicts.get(1).detail().get("action").asText());
+        assertEquals(null, verdicts.get(2).detail(), "the third is the session rebuild");
+        assertTrue(o.exits.isEmpty());
+    }
+
+    @Test
     void databaseWeatherIsNotAcceptanceModesToScript() {
         // A real Postgres cannot be made to misbehave on cue; a replay that asks is a fixture error,
         // never answered by pretending (the T12 nod: model nothing that can be real).

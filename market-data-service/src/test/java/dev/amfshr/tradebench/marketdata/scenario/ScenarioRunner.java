@@ -6,6 +6,7 @@ import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.HashSet;
 import java.util.List;
+import java.util.HashMap;
 import java.util.Map;
 import java.util.Set;
 
@@ -69,6 +70,7 @@ public final class ScenarioRunner {
     private final Set<StreamTransport.SubscriptionHandle> handlesSeen = new HashSet<>();
     private final Set<StreamTransport.SubscriptionHandle> inactiveRecorded = new HashSet<>();
     private final Set<FakeStreamTransport.FakeConnection> closedRecorded = new HashSet<>();
+    private final Map<String, Map<String, @Nullable String>> lastPriceFields = new HashMap<>();
 
     /** The policy scenarios' mode: scripted stores, database weather on cue. */
     public static Observed run(Scenario scenario) throws InterruptedException {
@@ -195,8 +197,9 @@ public final class ScenarioRunner {
                     wire.reject(item(epic, leg), code, message);
             case Event.Tick(String epic, String bid, String ask, String flag, Instant tsUtc) -> {
                 Instant stamp = tsUtc != null ? tsUtc : clock.wallInstant();
-                wire.deliver(item(epic, Event.Leg.PRICE),
-                        FakeStreamTransport.Wire.tick(stamp.toEpochMilli(), bid, ask, flag));
+                Map<String, @Nullable String> fields = FakeStreamTransport.Wire.tick(stamp.toEpochMilli(), bid, ask, flag);
+                wire.deliver(item(epic, Event.Leg.PRICE), fields);
+                lastPriceFields.put(item(epic, Event.Leg.PRICE), fields);
                 observed.ticksDelivered++;
             }
             case Event.Bar(String epic, Event.Quote bid, Event.Quote ask, Instant startUtc, Long ltv) -> {
@@ -264,8 +267,15 @@ public final class ScenarioRunner {
                             .filter(e -> item.contains(e.getKey())).map(Map.Entry::getValue).findFirst().orElse(null);
                     if (refusal != null) {
                         connection.reject(item, refusal, "rejected");
-                    } else if (scenario.serverAnswers) {
-                        connection.confirm(item);
+                    } else {
+                        if (scenario.serverAnswers) {
+                            connection.confirm(item);
+                        }
+                        Map<String, @Nullable String> snapshot = lastPriceFields.get(item);
+                        if (scenario.snapshots && snapshot != null) {
+                            connection.deliver(item, snapshot);
+                            observed.snapshotsDelivered++;
+                        }
                     }
                 }
                 if (!s.handle().active() && inactiveRecorded.add(s.handle())) {
