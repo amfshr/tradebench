@@ -1,7 +1,8 @@
 -- Export a replay window from Tradebench's own capture (schema V2: ticks, bars_1m) as JSONL
 -- for the scenario harness (E1-T11; the format: replays/README.md). Market data only (G1).
--- The bars are the CHART feed's real bid/ask candles. One honest gap: ticks carry no DLG_FLAG
--- (dealFlag is omitted — the harness assumes DEAL). Since E1-T12 the belt records every raw
+-- The bars are the CHART feed's real bid/ask candles. Each tick carries the DLG_FLAG in force at its instant,
+-- read from the market_state_change events the pump records when the flag changes (E1-T15); a tick before
+-- any recorded flag omits it, and the harness assumes DEAL. Since E1-T12 the belt records every raw
 -- Lightstreamer status transition as a connection_status event, so a window that holds any is
 -- replayed with its real sequence (status lines; serverAnswers false); a window with none — captured
 -- before E1-T12 — asks the harness to answer as a healthy server, and the header says which.
@@ -22,7 +23,11 @@ dims as (
    where u.name = :'user_name' and s.name = :'source_name'
 ),
 ticks as (
-  select i.epic, t.ts_utc as utm, t.bid, t.ask
+  select i.epic, t.ts_utc as utm, t.bid, t.ask,
+         (select f.detail->>'dealFlag' from service_events f
+           where f.event_type = 'market_state_change' and f.event_time_utc <= t.ts_utc
+             and (f.instrument_id = t.instrument_id or f.detail->>'epic' = i.epic)
+           order by f.event_time_utc desc, f.id desc limit 1) as deal_flag
     from ticks t join instruments i on i.id = t.instrument_id, params p, dims d
    where t.user_id = d.user_id and t.source_id = d.source_id and t.ts_utc >= p.origin and t.ts_utc < p.finish
 ),
@@ -47,7 +52,7 @@ lines as (
            'name', :'name',
            'recorded', :'recorded',
            'modelled', :'modelled',
-           'source', 'tradebench market_data: ticks + bars_1m (the CHART feed''s bid/ask candles); ticks carry no DLG_FLAG, so dealFlag is omitted; '
+           'source', 'tradebench market_data: ticks + bars_1m (the CHART feed''s bid/ask candles); each tick''s dealFlag is the one in force at its instant (market_state_change events), omitted before the first; '
              || case when exists (select 1 from statuses)
                      then 'the connection_status events are the real Lightstreamer status sequence (E1-T12)'
                      else 'no connection_status events in the window (captured before E1-T12), so the server answers as a healthy one would' end,
@@ -66,7 +71,8 @@ lines as (
   union all
   select round(extract(epoch from (t.utm - p.origin)) * 1000)::bigint, 2,
          json_build_object('at', round(extract(epoch from (t.utm - p.origin)) * 1000)::bigint, 'kind', 'tick',
-           'payload', json_build_object('epic', t.epic, 'bid', t.bid::text, 'ask', t.ask::text))::text
+           'payload', json_strip_nulls(json_build_object('epic', t.epic, 'bid', t.bid::text, 'ask', t.ask::text,
+             'dealFlag', t.deal_flag)))::text
     from ticks t, params p
   union all
   select round(extract(epoch from (b.minute + interval '1 minute' - p.origin)) * 1000)::bigint, 1,

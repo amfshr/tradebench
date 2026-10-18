@@ -101,6 +101,39 @@ class ExportTradebenchSqlTest extends PostgresTestBase {
                 .contains("no connection_status events in the window"), "the header says which");
     }
 
+    @Test
+    void eachTickCarriesTheDealFlagInForceAtItsInstant() throws Exception {
+        // the shape of the 2026-10-16 close: the flag changes ride on ticks stamped with the same instant
+        Instant close = ANCHOR;
+        PostgresStore sink = new PostgresStore(database.dataSource(), "platform", "ig-stream-demo");
+        sink.write(new Tick(DAX, close.minusSeconds(20), new BigDecimal("24510.5"), new BigDecimal("24511.7"))); // before any flag
+        sink.write(new Tick(DAX, close.minusSeconds(1), new BigDecimal("24510.6"), new BigDecimal("24511.8")));
+        sink.write(new Tick(DAX, close.plusMillis(39), new BigDecimal("24510.7"), new BigDecimal("24511.9")));
+        sink.write(new Tick(DAX, close.plusMillis(82), new BigDecimal("24510.7"), new BigDecimal("24511.9")));
+        sink.write(new Tick(DAX, close.plusSeconds(60), new BigDecimal("24510.7"), new BigDecimal("24511.9")));
+        sink.close();
+        PostgresObservabilityStore events = new PostgresObservabilityStore(database.dataSource(),
+                "platform", "ig-stream-demo", "test-run");
+        events.write(flagAt(close.minusSeconds(10), "DEAL"));
+        events.write(flagAt(close.plusMillis(39), "CALL"));
+        events.write(flagAt(close.plusMillis(82), "EDIT"));
+
+        Scenario replay = Replays.parse(export(Map.of(
+                "anchor", "2026-10-07 15:00:00+00", "before_secs", "30", "until_secs", "120",
+                "name", "a close", "recorded", "five ticks, three flags", "modelled", "the server's answers",
+                "user_name", "platform", "source_name", "ig-stream-demo"))).build();
+
+        assertEquals(List.of("DEAL", "DEAL", "CALL", "EDIT", "EDIT"), replay.steps.stream()
+                .map(Scenario.Step::event).filter(e -> e instanceof Event.Tick).map(e -> ((Event.Tick) e).dealFlag())
+                .toList(), "the first tick predates every flag (the harness's DEAL); a flag stamped at a tick's"
+                        + " instant is that tick's; later ticks keep the last one");
+    }
+
+    private static ServiceEvent flagAt(Instant at, String flag) {
+        return ServiceEvent.of(EventType.MARKET_STATE_CHANGE, at).forEpic(DAX)
+                .withDetail(MAPPER.createObjectNode().put("dealFlag", flag));
+    }
+
     private static ServiceEvent statusAt(Instant at, String status) {
         return ServiceEvent.of(EventType.CONNECTION_STATUS, at)
                 .withDetail(MAPPER.createObjectNode().put("status", status));
