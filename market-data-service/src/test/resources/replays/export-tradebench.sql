@@ -55,7 +55,7 @@ lines as (
            'source', 'tradebench market_data: ticks + bars_1m (the CHART feed''s bid/ask candles); each tick''s dealFlag is the one in force at its instant (market_state_change events), omitted before the first; '
              || case when exists (select 1 from statuses)
                      then 'the connection_status events are the real Lightstreamer status sequence (E1-T12)'
-                     else 'no connection_status events in the window (captured before E1-T12), so the server answers as a healthy one would' end,
+                     else 'no connection_status events in the window (captured before E1-T12, or a stretch with no transition), so the server answers as a healthy one would' end,
            'origin', to_char(p.origin at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"'),
            'anchor', to_char(p.anchor at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"'),
            'anchorMs', :before_secs::int * 1000,

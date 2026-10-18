@@ -212,7 +212,7 @@ public final class StalenessWatchdog {
     }
 
     /** The bounded stand-down: a market closed for the whole period is re-asked for once, and its
-     * silence counts from the fresh subscription — a live item re-teaches its flag within a tick,
+     * silence counts from the fresh subscription — a live item re-teaches its flag with its snapshot,
      * a dead one is then judged like any open, silent market. */
     private List<Remedy> teachingRemedies(long now) {
         List<Remedy> remedies = new ArrayList<>();

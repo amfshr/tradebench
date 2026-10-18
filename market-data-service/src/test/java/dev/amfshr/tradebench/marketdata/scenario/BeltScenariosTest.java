@@ -579,7 +579,7 @@ class BeltScenariosTest {
     void aResubscribesSnapshotIsNotNewsSoADeadFeedStillClimbsToARebuild() throws Exception {
         // E1-T15: Lightstreamer answers every new subscription with the item's current state — the last
         // tick again, its timestamp unchanged. Counted as life, it healed the episode it answered, so the
-        // first live weekend's dead feed was re-asked for every 90.3s for 40 hours and never rebuilt.
+        // first live weekend's closed feed was re-asked for every 90.3s (503 times in 25 hours) and never rebuilt.
         // The repeat says nothing new: the ladder runs as if it never came — +90, +210, the session at +450.
         Scenario dead = Scenario.named("a dead feed answering each resubscribe with its snapshot").markets(DAX)
                 .at(s(0), streaming()).at(s(0), subscribed(DAX))

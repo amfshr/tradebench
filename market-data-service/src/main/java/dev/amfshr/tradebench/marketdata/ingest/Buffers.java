@@ -71,7 +71,6 @@ public final class Buffers implements StreamEvents, MarketTelemetry {
     public void onTick(TickUpdate update) {
         long now = monotonicNanos.getAsLong();
         Market market = market(update.epic());
-        market.updates.increment();
         if (isNews(market.lastTick, update)) {
             tickCount.incrementAndGet();
             market.ticks.increment();
@@ -84,6 +83,7 @@ public final class Buffers implements StreamEvents, MarketTelemetry {
             stateChanges.add(new StateChange(update.epic(), update.timestampUtc(),
                     update.dealFlag()));
         }
+        market.updates.increment(); // after the flag: a sweep that sees the count sees its flag
         Tick tick = StreamAdapter.toDomain(update);
         while (!ticks.offer(tick)) {
             Tick shed = ticks.poll();

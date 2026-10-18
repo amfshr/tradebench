@@ -307,10 +307,11 @@ the connection and lands the held batch; one `sink_failure` row with the outage'
 minute the heartbeat finds the lock's session dead and takes the lock again on a fresh session.
 Nothing was lost.
 
-**The weekend.** Friday night the flag reads `CLOSED`; the watchdog stands down on both markets
-through the night and the weekend. Twelve hours after the flag landed, and every twelve hours
-after that, one teaching resubscribe per market re-learns the flag (still `CLOSED`); Monday's first
-`DEAL` snapshot ends the stand-down, and the CHART clock starts at the opening.
+**The weekend.** Friday night the flag leaves dealing — on the first live weekend DAX read `CALL`
+then `EDIT` at 21:00Z (E1-T15) — and the watchdog stands down on both markets through the night
+and the weekend. Twelve hours after the flag landed, and every twelve hours after that, one teaching
+resubscribe per market re-learns the flag from its snapshot (still not dealing); Monday's first
+dealing tick ends the stand-down, and the CHART clock starts at the opening.
 
 **A suspended host.** The machine sleeps; on waking the wall clock has jumped hours against the
 monotonic clock. The round is skipped and every stopwatch re-baselined; the SDK reconnects on its

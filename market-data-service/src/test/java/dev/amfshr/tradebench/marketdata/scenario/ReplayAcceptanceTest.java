@@ -176,6 +176,33 @@ class ReplayAcceptanceTest extends PostgresTestBase {
     }
 
     @Test
+    void theFirstSilenceWhileStreamingIsJudgedOnAHostThatStaysAwake() throws Exception {
+        // Recorded (2026-10-16): the last tick at 19:40:43.101Z (offset 240s), CONNECTED:WS-STREAMING throughout.
+        // The live collector rendered no verdict: its host was suspended (the power log, E1-T15 finding 2),
+        // and no verdict across a suspension is the design. The box does not sleep, so the record alone
+        // must earn the ladder from the last tick: +90, +210, the session at +450.
+        assertTheLadderFromTheLastTick("/replays/2026-10-16-silent-while-streaming-1.jsonl");
+    }
+
+    @Test
+    void theSecondSilenceWhileStreamingIsJudgedOnAHostThatStaysAwake() throws Exception {
+        // Recorded: the last tick at 20:30:38.208Z (offset 240s); the host again suspended at 20:30:37Z.
+        assertTheLadderFromTheLastTick("/replays/2026-10-16-silent-while-streaming-2.jsonl");
+    }
+
+    private static void assertTheLadderFromTheLastTick(String fixture) throws Exception {
+        Observed o = ScenarioRunner.accept(Replays.load(fixture).build(), database);
+
+        List<Observed.Seen> verdicts = o.events(EventType.WATCHDOG_STALE);
+        assertEquals(List.of(330L, 450L, 690L), verdicts.stream().limit(3).map(v -> v.at().toSeconds()).toList(),
+                "the last tick at 240: resubscribes at +90 and +210, then the session at +450");
+        assertEquals("resubscribe", verdicts.get(0).detail().get("action").asText());
+        assertEquals("resubscribe", verdicts.get(1).detail().get("action").asText());
+        assertEquals(null, verdicts.get(2).detail(), "the third is the session rebuild");
+        assertTrue(o.exits.isEmpty());
+    }
+
+    @Test
     void databaseWeatherIsNotAcceptanceModesToScript() {
         // A real Postgres cannot be made to misbehave on cue; a replay that asks is a fixture error,
         // never answered by pretending (the T12 nod: model nothing that can be real).

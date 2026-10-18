@@ -76,8 +76,10 @@ Around the signals, seven pieces of judgment, each visible in the code:
   `CLOSED`, `CALL`, `EDIT`, `SUSPEND` and the two auctions (`ig.stream.DealFlag`, the one
   definition the heal shares; E1-T15) — so weekends need no calendar and no hours config.
   `DEAL`, `DEALNOEDIT` and `CLOSINGSONLY` are dealing: prices stream under all three. A flag IG
-  has never been seen to send deliberately does **not** suppress: a spurious resubscribe on a
-  closed market is harmless, and its snapshot teaches us the real flag.
+  has never been seen to send deliberately does **not** suppress (P9): the market is judged like an
+  open one, and since its snapshot only repeats the same word, the ladder climbs loudly — two
+  resubscribes, then rebuilds — until the word is added to `DealFlag`. Loud and wrong beats quiet
+  and wrong.
 - *A snapshot is not news* (E1-T15): Lightstreamer answers every new subscription with the item's
   state — the last tick again. `Buffers` counts it as an update, never as a fresh tick, so it heals
   no episode; but it does re-teach the flag after a re-ask, which the Supervisor orders by the
@@ -392,7 +394,8 @@ floor. "0.4s offline" → dual-duration reporting. The 17:00 Sunday outage → G
 literal test fixture. The first live weekend (2026-10-16, E1-T15) → the stand-down on every flag
 that is not dealing (the Friday close read `CALL` then `EDIT`, which the old `CLOSED`/`SUSPEND` set
 missed) and the snapshot that is not news (each resubscribe's repeated tick healed the episode it
-answered, so the watchdog re-asked every 90.3s for 40 hours and never climbed). The same weekend's
+answered, so the watchdog re-asked every 90.3s whenever the host was awake — 503 rows from 21:01Z Friday to 22:04Z
+Saturday — and never climbed). The same weekend's
 two silences while streaming were the host suspended, not the belt: no verdict across a suspension
 is the design. None of these numbers are guesses; that is why they live in
 `Tuning.playbook()` under version control rather than in anyone's memory.

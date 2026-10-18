@@ -95,8 +95,8 @@ class StalenessWatchdogTest {
         dog.onDealFlag(DAX, "SOMETHINGNEW", 0);
         runTo(95);
         assertEquals(90, fired.get(0).second(),
-                "a word IG has never sent keeps the watchdog watching (E1-T15) — a resubscribe is harmless"
-                        + " and its snapshot teaches");
+                "a word IG has never sent keeps the watchdog watching (E1-T15, P9): judged like an open market"
+                        + " until the word is added to DealFlag");
     }
 
     @Test

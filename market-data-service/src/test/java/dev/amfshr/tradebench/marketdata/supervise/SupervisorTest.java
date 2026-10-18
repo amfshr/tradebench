@@ -398,6 +398,30 @@ class SupervisorTest {
     }
 
     @Test
+    void aSnapshotThatLandsDuringTheRebuildStillReTeachesTheFlag() {
+        // E1-T15 review finding 2: the new session subscribes inside rebuild(), so a survivor's snapshot can
+        // arrive before rebuild() returns. The re-ask must be measured from before the rebuild, or that
+        // snapshot is counted as old and the market, closed, is judged silent.
+        supervisor.watch(DAX);
+        freshness.tick.put(DAX, clock.monotonicNanos());
+        freshness.flag.put(DAX, "EDIT");
+        freshness.updates.put(DAX, 5L);
+        supervisor.onStatusChange(stream.generation, STREAMING);
+        supervisor.sweep(); // stood down on EDIT
+        stream.duringRebuild = () -> freshness.updates.put(DAX, 6L); // the new session's snapshot: EDIT again
+        supervisor.onStatusChange(stream.generation, WILL_RETRY);
+        clock.advance(Duration.ofSeconds(120));
+        supervisor.sweep(); // the stuck substate rebuilds
+        assertEquals(1, stream.rebuilds);
+        supervisor.onStatusChange(stream.generation, STREAMING);
+
+        advanceAndSweep(Duration.ofSeconds(95));
+
+        assertTrue(stream.resubscribed.isEmpty(), "the snapshot re-taught EDIT: still stood down");
+        assertEquals(0, count(EventType.WATCHDOG_STALE));
+    }
+
+    @Test
     void aRealTickHealsThenRenewedSilenceGoesStaleOnce() {
         supervisor.watch(DAX);
         freshness.flag.put(DAX, "DEAL");
