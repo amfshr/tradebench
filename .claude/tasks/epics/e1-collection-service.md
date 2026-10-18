@@ -527,10 +527,10 @@ account, the box's address, the Grafana stack, the instance or any env-file URL 
 - **The nightly dump, proven by hand (step 9):** the 17:56Z run uploaded the daily and the weekly copy, 39,275 bytes each; each
   upload was refused once with R2 `501 NotImplemented` and succeeded on rclone's retry — Ubuntu's rclone was v1.60.1. After the
   current rclone was installed from rclone.org, the 17:59Z run was clean. **PR #31** (`e1-t7-rclone-current`, opened 2026-10-18)
-  makes provisioning install it that way — open; Alex merges.
+  makes provisioning install it that way — ✅ merged by Alex 2026-10-18T18:58:05Z, merge `bfa2da4`.
 - **Open:** step 10, tomorrow (2026-10-19) — the first archive: its `job_runs` `archive` row `succeeded` and its Parquet files in
   R2 (R2's `x-amz-checksum-sha256` check, carried from T6) · then the DoD's three consecutive unattended days, each evening's hand
-  check clean — the soak started 2026-10-18 17:46Z · PR #31's merge. From T6, still open: the gated demo smoke's captures
+  check clean — the soak started 2026-10-18 17:46Z. From T6, still open: the gated demo smoke's captures
   (`application-allowance.json`, the login's `timezoneOffset`), on the Mac. Found at the deploy: the `stream connected` log line
   prints the IG account id — backlog **B21**. No Done history entry until the DoD is met.
 
