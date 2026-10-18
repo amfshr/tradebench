@@ -320,6 +320,10 @@ catches a frozen process.)
 
 ## 8. The evening check (until E9 watches for you)
 
+*On the deployed box (E1-T7), two more looks join these five: the healthchecks.io check, green on the
+heartbeat's ping, and a glance at Grafana Cloud. The runbook (`docs/operations/runbook.md` §2) has the
+commands for the box.*
+
 Until the operator console sends the digest and the alerts (D30), there is no email: the service
 is checked by hand each evening. Five looks, in order — the whole thing takes two minutes.
 

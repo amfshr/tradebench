@@ -9,6 +9,7 @@ import java.util.Properties;
 import javax.sql.DataSource;
 
 import org.flywaydb.core.Flyway;
+import org.jspecify.annotations.Nullable;
 
 import com.zaxxer.hikari.HikariConfig;
 import com.zaxxer.hikari.HikariDataSource;
@@ -39,12 +40,33 @@ public final class Database implements AutoCloseable {
         this.connectionProperties = connectionProperties;
     }
 
+    /** A login for the database's owner, kept apart from the app's (E1-T7): Flyway's DDL needs it, the
+     * running service never should. */
+    public record Credentials(String user, String password) {
+        @Override
+        public String toString() {
+            return "Credentials[user=" + user + ", password=***]"; // never a password in a log line (G1)
+        }
+    }
+
     public static Database connect(String jdbcUrl, String user, String password) {
-        return connect(jdbcUrl, user, password, SOCKET_TIMEOUT);
+        return connect(jdbcUrl, user, password, null, SOCKET_TIMEOUT);
+    }
+
+    /** As above, migrating as {@code migrator} when given — the owner role — while the pool connects as
+     * {@code user}, the DML-only app role (deploy/postgres/roles.sql). Without one, the pool's own login
+     * migrates, as a local database's single superuser does. */
+    public static Database connect(String jdbcUrl, String user, String password, @Nullable Credentials migrator) {
+        return connect(jdbcUrl, user, password, migrator, SOCKET_TIMEOUT);
     }
 
     /** As above with the socket timeout chosen — a test pauses the server and must not wait 30s. */
     static Database connect(String jdbcUrl, String user, String password, Duration socketTimeout) {
+        return connect(jdbcUrl, user, password, null, socketTimeout);
+    }
+
+    private static Database connect(String jdbcUrl, String user, String password, @Nullable Credentials migrator,
+            Duration socketTimeout) {
         Properties properties = new Properties();
         properties.setProperty("user", user);
         properties.setProperty("password", password);
@@ -61,7 +83,11 @@ public final class Database implements AutoCloseable {
         config.addDataSourceProperty("connectTimeout", properties.getProperty("connectTimeout"));
         config.addDataSourceProperty("tcpKeepAlive", "true");
         HikariDataSource dataSource = new HikariDataSource(config);
-        Flyway.configure().dataSource(dataSource).load().migrate();
+        if (migrator == null) {
+            Flyway.configure().dataSource(dataSource).load().migrate();
+        } else {
+            Flyway.configure().dataSource(jdbcUrl, migrator.user(), migrator.password()).load().migrate();
+        }
         return new Database(dataSource, jdbcUrl, properties);
     }
 

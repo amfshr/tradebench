@@ -1,0 +1,9 @@
+[Unit]
+Description=Tradebench nightly dump, 02:30 UTC — after the daily heal and archive (00:10 UTC onward)
+
+[Timer]
+OnCalendar=*-*-* 02:30:00 UTC
+Persistent=true
+
+[Install]
+WantedBy=timers.target
