@@ -31,9 +31,14 @@ public final class Scenario {
     /** Epics the server refuses outright: every subscription asked for one is rejected with the
      * code — the bad-epic case, whose attempts only the belt decides the timing of. */
     public final Map<String, Integer> serverRejects;
+    /** Each new PRICE subscription is sent the item's current state again, as Lightstreamer's MERGE
+     * snapshot does: the last tick delivered for it, its timestamp and prices unchanged (E1-T15). A
+     * recorded source cannot show it — the stored rows collapse the repeat — so a scenario models it. */
+    public final boolean snapshots;
 
     private Scenario(String name, List<String> epics, List<Step> steps, Duration until,
-            boolean serverAnswers, @Nullable Instant origin, Map<String, Integer> serverRejects) {
+            boolean serverAnswers, @Nullable Instant origin, Map<String, Integer> serverRejects,
+            boolean snapshots) {
         this.name = name;
         this.epics = List.copyOf(epics);
         this.steps = List.copyOf(steps);
@@ -41,6 +46,7 @@ public final class Scenario {
         this.serverAnswers = serverAnswers;
         this.origin = origin;
         this.serverRejects = Map.copyOf(serverRejects);
+        this.snapshots = snapshots;
     }
 
     public static Builder named(String name) {
@@ -55,6 +61,7 @@ public final class Scenario {
         private boolean serverAnswers;
         private @Nullable Instant origin;
         private final Map<String, Integer> serverRejects = new HashMap<>();
+        private boolean snapshots;
 
         private Builder(String name) {
             this.name = name;
@@ -99,6 +106,11 @@ public final class Scenario {
             return this;
         }
 
+        public Builder snapshots() {
+            this.snapshots = true;
+            return this;
+        }
+
         public Builder serverRejects(String epic, int code) {
             serverRejects.put(epic, code);
             return this;
@@ -107,7 +119,7 @@ public final class Scenario {
         public Scenario build() {
             List<Step> ordered = new ArrayList<>(steps);
             ordered.sort(Comparator.comparing(Step::at)); // stable: same-offset events keep their order
-            return new Scenario(name, epics, ordered, until, serverAnswers, origin, serverRejects);
+            return new Scenario(name, epics, ordered, until, serverAnswers, origin, serverRejects, snapshots);
         }
     }
 }

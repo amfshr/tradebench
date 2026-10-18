@@ -46,6 +46,11 @@ class HealthProbeTest {
         }
 
         @Override
+        public long updates(String epic) {
+            return 0;
+        }
+
+        @Override
         public long lastBarMono(String epic) {
             return Long.MIN_VALUE;
         }

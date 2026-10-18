@@ -117,7 +117,7 @@ Every number, where it lives, and what it means:
 | **10 min** | `giveUpAfter` | the recovery budget — the number an operator can actually reason about |
 | 10 | `maxConsecutiveFailures` | belt-and-braces cap behind the budget — rebuilds that connected, never failed attempts |
 | 3 / 30s | `subscriptionStrikes` / `subscribeConfirmWindow` | the witness rule's strikes and confirm window (§3.5) |
-| 12h | `standDownTeach` | the CLOSED/SUSPEND stand-down's bound: one teaching resubscribe per period (D29 (1)) |
+| 12h | `standDownTeach` | the stand-down's bound: one teaching resubscribe per period (D29 (1)) |
 | 5s / 10s | `hostSleepSkew` / `processFreezeJump` | the clock-divergence discriminators (chapter 7) |
 | 1s | `CaptureAssembly.SWEEP_INTERVAL` | the supervisor's cadence — the detectors assume it |
 | 30s / 10 min | `CaptureAssembly.BOOT_RETRY` / the same `giveUpAfter` | boot retry spacing and budget |

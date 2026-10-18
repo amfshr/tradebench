@@ -73,7 +73,7 @@ public final class Supervisor implements StreamObserver, BeltView, Runnable {
     private final Map<String, Long> lastFedBar = new HashMap<>();
     // When each market's pair was last re-asked for: a remembered flag older than that is the old
     // subscription's and is not fed back (D29 (1)).
-    private final Map<String, Long> flagClearedMono = new HashMap<>();
+    private final Map<String, Long> flagClearedAtUpdate = new HashMap<>();
     // Rejections whose verdict waits for a witness (§3.5), kept for the verdict's record.
     private final Map<String, Observation.SubscriptionError> heldVerdicts = new HashMap<>();
     private int consecutiveFailures;
@@ -162,7 +162,7 @@ public final class Supervisor implements StreamObserver, BeltView, Runnable {
         watchdog.forget(epic);
         lastFedTick.remove(epic);
         lastFedBar.remove(epic);
-        flagClearedMono.remove(epic);
+        flagClearedAtUpdate.remove(epic);
     }
 
     // --- capture-supervisor thread ----------------------------------------------------------
@@ -274,9 +274,11 @@ public final class Supervisor implements StreamObserver, BeltView, Runnable {
                 lastFedBar.put(epic, bar);
             }
             String flag = freshness.dealFlag(epic);
-            Long cleared = flagClearedMono.get(epic);
-            if (flag != null && (cleared == null || tick > cleared)) {
-                watchdog.onDealFlag(epic, flag, now); // the flag rides the tick: only a tick after the re-ask is fresh
+            Long cleared = flagClearedAtUpdate.get(epic);
+            if (flag != null && (cleared == null || freshness.updates(epic) > cleared)) {
+                // the flag rides the update: only one after the re-ask teaches — its snapshot does (E1-T15);
+                // counted, not timed, so two things at one instant cannot be misordered; a dead item sends nothing
+                watchdog.onDealFlag(epic, flag, now);
             }
         }
         for (StalenessWatchdog.Remedy remedy : watchdog.evaluate(now, wallMillis)) {
@@ -301,7 +303,7 @@ public final class Supervisor implements StreamObserver, BeltView, Runnable {
     /** A market's pair is being re-asked for: its remembered flag belongs to the old subscription. */
     private void reasking(String epic) {
         watchdog.clearDealFlag(epic);
-        flagClearedMono.put(epic, clock.monotonicNanos());
+        flagClearedAtUpdate.put(epic, freshness.updates(epic));
     }
 
     /** Execute a subscription-failure {@link WitnessQuarantine.Judgment} — the §3.5 blast-radius

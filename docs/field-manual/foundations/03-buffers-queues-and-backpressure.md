@@ -105,5 +105,9 @@ were persistence would be the plumbing grading its own homework.
   metered weekly allowance (playbook §4.3). The unbounded queue is cheaper than the heal.
 - **The first-flag rule** exists for the restart case: without it, a capture started into a
   `CLOSED` market would record no state at all until the market next changed — and the T5
-  watchdog (chapter 8), which stands down on `CLOSED`/`SUSPEND`, would have nothing to stand
-  down *on*.
+  watchdog (chapter 8), which stands down on any flag that is not dealing, would have nothing to
+  stand down *on*.
+- **Not every tick is news** (E1-T15). Every arrival counts as an update, but only a tick whose IG
+  timestamp moved on — or whose prices changed at the same instant — stamps the market fresh and
+  bumps its count. A subscription's snapshot repeats the last tick, and is still queued (the store's
+  dedupe keeps it once), but it is not evidence the feed is alive.

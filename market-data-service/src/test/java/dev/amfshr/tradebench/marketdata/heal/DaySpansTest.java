@@ -59,4 +59,15 @@ class DaySpansTest {
     private static Instant at(String time) {
         return Instant.parse(D + "T" + time + "Z");
     }
+
+    @Test
+    void aMinuteUnderDealNoEditIsOpenAndUnderCallIsClosed() {
+        // E1-T15: one word for dealing with the belt — DEALNOEDIT streams prices, CALL does not
+        Map<Instant, MinuteState> m = DaySpans.classify(D, "DEALNOEDIT",
+                List.of(new FlagChange(at("21:00:00"), "CALL")), ALL_DAY);
+
+        assertEquals(MinuteState.OPEN, m.get(at("20:59:00")), "DEALNOEDIT is dealing");
+        assertEquals(MinuteState.CLOSED, m.get(at("21:00:00")), "CALL is not");
+    }
+
 }

@@ -131,7 +131,7 @@ advances), and at the market's **deal flag** (`DLG_FLAG`: `DEAL` means open; `CL
 |---|---|---|
 | **tick silence** | no tick for `tickSilent` while the market's flag says open | 90s — in-window DAX runs ~90 ticks a minute, so 90 seconds of nothing is never the market |
 | **bar silence** | ticks flowing but no sealed 1m candle for `barSilentWhileTicksFlow` | 210s — a dead CHART leg while the PRICE leg lives (three candles missed) |
-| **stand-down** | the market's last flag is CLOSED/SUSPEND: no verdict, however quiet | bounded by one *teaching* resubscribe per 12h (`standDownTeach`), whose snapshot re-teaches the flag, so a dead item cannot hide behind a weekend (D29 (1)) |
+| **stand-down** | the market's last flag is not dealing (`DealFlag`: CLOSED, CALL, EDIT, SUSPEND, the auctions — E1-T15): no verdict, however quiet | bounded by one *teaching* resubscribe per 12h (`standDownTeach`), whose snapshot re-teaches the flag, so a dead item cannot hide behind a weekend (D29 (1)) |
 | **not streaming** | the connection is not streaming (§1): no verdict at all | the silence is the connection's — the escalator's and the death latch's domain |
 
 A market that goes silent opens an **episode**, and the episode climbs a ladder:
@@ -414,7 +414,7 @@ will be.
 | `watchdogGraceBase` / `watchdogGraceCap` | 60s / 30 min | a market's ladder: doubled before each wait (90, 210, 450, 930 …), capped |
 | `watchdogMaxResubscribes` | 2 | surgical tries before the market's ladder asks for the session |
 | `sessionGraceCap` | 10 min | the session ladder's cap (120, 240, 480, 600 …) and the quiet after which it is forgotten (grace + cap) |
-| `standDownTeach` | 12h | one teaching resubscribe per period on a CLOSED/SUSPEND market |
+| `standDownTeach` | 12h | one teaching resubscribe per period on a market whose flag is not dealing |
 | `willRetryRebuild` / `tryingRecoveryRebuild` | 120s / 300s | time not streaming before the escalator rebuilds |
 | `subscriptionStrikes` / `subscribeConfirmWindow` | 3 / 30s | strikes per attempt before a verdict; how long a would-be witness may stay unconfirmed |
 | `backoffBase` / `rebuildFloor` / `backoffCap` | 1s / 5s / 60s | rebuild pacing — doubled, jittered ±50%, floored, capped |

@@ -952,10 +952,18 @@ class SupervisorTest {
         final Map<String, Long> tick = new HashMap<>();
         final Map<String, Long> bar = new HashMap<>();
         final Map<String, String> flag = new HashMap<>();
+        final Map<String, Long> updates = new HashMap<>();
 
         @Override
         public long lastTickMono(String epic) {
             return tick.getOrDefault(epic, Long.MIN_VALUE);
+        }
+
+        @Override
+        public long updates(String epic) {
+            // a tick is an update, and these tests send no snapshot: the last tick's stamp is a count that
+            // grows with each new tick, which is all the supervisor compares
+            return updates.getOrDefault(epic, lastTickMono(epic));
         }
 
         @Override

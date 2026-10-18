@@ -605,3 +605,21 @@ the same tested bytes. **Accepted risk:** Hetzner raised prices twice in 2026 �
 move a weekend's work. Makes D24 R3's direction formal. Session record:
 `docs/design/sessions/2026-10-17-the-deploy-provider-analysis.md`.
 
+
+## D35 — One word for dealing; a snapshot is not news — **Accepted** (2026-10-18, Alex)
+
+**Dealing** means IG's `DLG_FLAG` reads `DEAL`, `DEALNOEDIT` or `CLOSINGSONLY`: prices stream under all
+three. Every other known flag (`CLOSED`, `CALL`, `EDIT`, `SUSPEND`, `AUCTION`, `AUCTIONNOEDIT`) is not
+dealing. The watchdog stands down on it, and the heal counts the minute closed. One definition serves both
+(`ig.stream.DealFlag`). A flag IG has never been seen to send counts as dealing, so the watchdog keeps
+watching (P9). **A tick is news** only if its IG timestamp moved on, or its prices changed at the same
+instant. A subscription's snapshot repeats the last tick: it is stored (the dedupe keeps it once) and
+counted as an update, never as life. So it heals no watchdog episode, and the live tick counter matches the
+stored rows. An update after a re-ask still re-teaches the flag, ordered by an update count, not the clock.
+**Why:** the first live weekend (2026-10-16). The Friday close read `CALL` then `EDIT`, which the
+`CLOSED`/`SUSPEND` set missed. Each resubscribe's snapshot then healed the episode it answered, so the
+watchdog re-asked every 90.3s for 40 hours and never escalated (518 rows, no rebuild). The heal's
+`DEAL`-only open would also have under-healed a `DEALNOEDIT` day. Amends D29 (1)'s stand-down set and D25's
+open minute. **Not a finding:** the same weekend's two silences while streaming were the host suspended (the
+Mac's power log matches them to the second); no verdict across a suspension is the design, and the box does
+not sleep. E1-T15.

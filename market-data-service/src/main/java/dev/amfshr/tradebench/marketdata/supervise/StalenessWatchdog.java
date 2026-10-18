@@ -5,9 +5,10 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 
 import org.jspecify.annotations.Nullable;
+
+import dev.amfshr.tradebench.ig.stream.DealFlag;
 
 /**
  * "A connected socket is not a live feed" (§3.4, ported whole). Pure logic: observations
@@ -17,7 +18,8 @@ import org.jspecify.annotations.Nullable;
  * so the watchdog never fires INTO a recovery; for the same reason it renders no verdict while
  * the connection itself is down (a retry substate, the handshake, a rebuild in flight — the
  * escalator's domain, E1-T10 #5) and starts every stopwatch afresh when streaming resumes.
- * The CLOSED/SUSPEND stand-down is bounded (D29 (1)): a market that has read a closing flag for
+ * The stand-down — on any flag that is not dealing ({@link DealFlag}: CLOSED, CALL, EDIT, SUSPEND, the
+ * auctions — E1-T15) — is bounded (D29 (1)): a market that has read such a flag for
  * {@code standDownTeach} gets one teaching resubscribe per period, whose snapshot re-learns the
  * flag — so a server-side zombie cannot hide behind a weekend.
  */
@@ -30,7 +32,6 @@ public final class StalenessWatchdog {
     public record Remedy(String epic, Action action, Signal signal) {
     }
 
-    private static final Set<String> SUPPRESSING_FLAGS = Set.of("CLOSED", "SUSPEND");
     private static final long NEVER = Long.MIN_VALUE;
 
     private final Tuning tuning;
@@ -117,14 +118,14 @@ public final class StalenessWatchdog {
         if (m == null) {
             return;
         }
-        if (isStoodDown(m) && !SUPPRESSING_FLAGS.contains(flag)) {
+        if (isStoodDown(m) && DealFlag.isDealing(flag)) {
             // The market opened: no candle was owed while it was closed, so its CHART clock starts
             // now — else the first tick back is judged bar-silent and the pair re-asked for as the
             // data returns (the T12 review's finding 1, ruled 2026-10-10).
             m.lastBar = monotonicNanos;
         }
         m.dealFlag = flag;
-        if (!SUPPRESSING_FLAGS.contains(flag)) {
+        if (DealFlag.isDealing(flag)) {
             m.stoodDownSince = NEVER;
         } else if (m.stoodDownSince == NEVER) {
             m.stoodDownSince = monotonicNanos;
@@ -265,7 +266,7 @@ public final class StalenessWatchdog {
     }
 
     private static boolean isStoodDown(Market m) {
-        return m.dealFlag != null && SUPPRESSING_FLAGS.contains(m.dealFlag);
+        return m.dealFlag != null && !DealFlag.isDealing(m.dealFlag);
     }
 
     private @Nullable Signal staleSignal(Market m, long now) {

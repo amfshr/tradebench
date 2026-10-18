@@ -158,6 +158,24 @@ class ReplayAcceptanceTest extends PostgresTestBase {
     }
 
     @Test
+    void theFridayCloseStandsTheWatchdogDownFromCallThroughEdit() throws Exception {
+        // Recorded (2026-10-16): DAX's flag DEAL → CALL (21:00:00.039Z) → EDIT (.082), each on a tick; the
+        // last tick 21:18:24.212Z. The live collector resubscribed every 90.3s from 21:01:31Z all weekend.
+        // Modelled: the server's answers and Lightstreamer's snapshot to each new subscription.
+        Scenario close = Replays.load("/replays/2026-10-16-friday-close-call-edit.jsonl").snapshots().build();
+
+        Observed o = ScenarioRunner.accept(close, database);
+
+        assertTrue(o.events(EventType.WATCHDOG_STALE).isEmpty(), "CALL and EDIT are not dealing: no verdict, "
+                + o.events(EventType.WATCHDOG_STALE));
+        assertEquals(List.of(0L), o.secondsOf("connect"));
+        assertEquals(List.of("DEAL", "CALL", "EDIT"), o.events(EventType.MARKET_STATE_CHANGE).stream()
+                .map(e -> e.detail().get("dealFlag").asText()).toList());
+        assertEquals(distinctTicks(close), o.landed.stream().filter(l -> l.startsWith("tick@")).count());
+        assertTrue(o.exits.isEmpty());
+    }
+
+    @Test
     void databaseWeatherIsNotAcceptanceModesToScript() {
         // A real Postgres cannot be made to misbehave on cue; a replay that asks is a fixture error,
         // never answered by pretending (the T12 nod: model nothing that can be real).

@@ -10,16 +10,17 @@ import java.util.Map;
 
 import org.jspecify.annotations.Nullable;
 
+import dev.amfshr.tradebench.ig.stream.DealFlag;
+
 /**
  * Every minute of a market's UTC day, classified from the record alone (D25 amended 2026-10-16).
  * A minute is {@link MinuteState#UNKNOWN} unless one observation window covers all of it; an
- * observed minute is {@link MinuteState#OPEN} if IG's flag said {@code DEAL} at any point in it,
- * {@link MinuteState#CLOSED} if it said something else throughout, and unknown if IG had not yet
- * said anything.
+ * observed minute is {@link MinuteState#OPEN} if IG's flag said dealing ({@link DealFlag} — the word the
+ * belt stands down by, E1-T15) at any point in it, {@link MinuteState#CLOSED} if it said something else
+ * throughout, and unknown if IG had not yet said anything.
  */
 public final class DaySpans {
 
-    static final String DEAL = "DEAL";
     private static final Duration MINUTE = Duration.ofMinutes(1);
 
     private DaySpans() {
@@ -39,11 +40,11 @@ public final class DaySpans {
             while (next < changes.size() && !changes.get(next).at().isAfter(m)) {
                 inForce = changes.get(next++).flag();
             }
-            boolean deal = DEAL.equals(inForce);
+            boolean deal = dealing(inForce);
             @Nullable String during = inForce;
             for (int j = next; j < changes.size() && changes.get(j).at().isBefore(end); j++) {
                 during = changes.get(j).flag();
-                deal |= DEAL.equals(during);
+                deal |= dealing(during);
             }
             boolean watched = observed.stream().anyMatch(w -> w.covers(m, end));
             MinuteState state;
@@ -55,5 +56,9 @@ public final class DaySpans {
             minutes.put(m, state);
         }
         return minutes;
+    }
+
+    private static boolean dealing(@Nullable String flag) {
+        return flag != null && DealFlag.isDealing(flag);
     }
 }

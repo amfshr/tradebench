@@ -23,9 +23,12 @@ import dev.amfshr.tradebench.marketdata.supervise.MarketTelemetry;
  * The queue pair behind the callback (§2.4): bars unbounded (the must-persist backbone),
  * ticks bounded shed-oldest (freshest wins; backpressure must never reach the socket).
  * Adapts to domain on the LS thread — record allocation is within the cheap-work budget.
- * Also the per-market telemetry the belt and the heartbeat read: every arrival stamps its
- * market's last-seen monotonic time (the watchdog's pull, O(1)) and data time and bumps its
- * counts — read by other threads, never pushed onto a control queue.
+ * Also the per-market telemetry the belt and the heartbeat read: every arrival counts as one of its
+ * market's updates; a tick that is news — IG's timestamp moved on, or its prices
+ * changed at the same instant — also stamps its last-tick time (the watchdog's pull, O(1)) and data
+ * time and bumps its counts. A subscription's snapshot repeats the last tick and is not news (E1-T15).
+ * Read by other threads, never pushed onto a control queue. Every tick is still queued for storage:
+ * the store's dedupe makes a repeat idempotent.
  */
 public final class Buffers implements StreamEvents, MarketTelemetry {
 
@@ -41,6 +44,8 @@ public final class Buffers implements StreamEvents, MarketTelemetry {
         final LongAdder dropped = new LongAdder();
         final LongAdder malformed = new LongAdder();
         volatile long lastTickMono = Long.MIN_VALUE;
+        final LongAdder updates = new LongAdder();
+        @Nullable TickUpdate lastTick; // the LS thread's alone
         volatile long lastBarMono = Long.MIN_VALUE;
         volatile @Nullable Instant lastTickAt;
         volatile @Nullable Instant lastBarAt;
@@ -64,11 +69,16 @@ public final class Buffers implements StreamEvents, MarketTelemetry {
 
     @Override
     public void onTick(TickUpdate update) {
-        tickCount.incrementAndGet();
+        long now = monotonicNanos.getAsLong();
         Market market = market(update.epic());
-        market.ticks.increment();
-        market.lastTickMono = monotonicNanos.getAsLong();
-        market.lastTickAt = update.timestampUtc();
+        market.updates.increment();
+        if (isNews(market.lastTick, update)) {
+            tickCount.incrementAndGet();
+            market.ticks.increment();
+            market.lastTickMono = now;
+            market.lastTickAt = update.timestampUtc();
+            market.lastTick = update;
+        }
         String previous = lastDealFlag.put(update.epic(), update.dealFlag());
         if (!update.dealFlag().equals(previous)) {
             stateChanges.add(new StateChange(update.epic(), update.timestampUtc(),
@@ -82,6 +92,14 @@ public final class Buffers implements StreamEvents, MarketTelemetry {
                 market(shed.epic()).dropped.increment(); // the shed tick's market pays, not the arriving one
             }
         }
+    }
+
+    private static boolean isNews(@Nullable TickUpdate last, TickUpdate update) {
+        if (last == null || update.timestampUtc().isAfter(last.timestampUtc())) {
+            return true;
+        }
+        return update.timestampUtc().equals(last.timestampUtc())
+                && (update.bid().compareTo(last.bid()) != 0 || update.ask().compareTo(last.ask()) != 0);
     }
 
     @Override
@@ -144,6 +162,12 @@ public final class Buffers implements StreamEvents, MarketTelemetry {
     public long lastTickMono(String epic) {
         Market market = markets.get(epic);
         return market == null ? Long.MIN_VALUE : market.lastTickMono;
+    }
+
+    @Override
+    public long updates(String epic) {
+        Market market = markets.get(epic);
+        return market == null ? 0 : market.updates.sum();
     }
 
     @Override

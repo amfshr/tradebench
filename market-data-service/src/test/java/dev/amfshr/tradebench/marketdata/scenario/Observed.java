@@ -43,6 +43,8 @@ public final class Observed {
     public final List<String> log = new ArrayList<>();
     public int ticksDelivered;
     public int barsDelivered;
+    /** Ticks the server re-sent as a subscription snapshot (Scenario.snapshots) — not in ticksDelivered. */
+    public int snapshotsDelivered;
     public long statusFailures;
     /** The scripted store's own counters; in acceptance mode (a real Postgres) they stay 0 — what
      * landed is read back as rows, and that is the claim. */

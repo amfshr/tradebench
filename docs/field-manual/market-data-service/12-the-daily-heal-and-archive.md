@@ -44,10 +44,11 @@ captured 2026-10-16), so there is no hand-kept calendar. The heal reads "open" f
 as the stream recorded it (D25 amended 2026-10-16). Every minute of the day gets one of three
 states (`heal.DaySpans`):
 
-- **Open** — the collector was observing, and IG's deal flag said `DEAL` at some point in the
-  minute. A missing bar here is a real gap.
-- **Closed** — the collector was observing, and IG's flag said anything else (`CLOSED`, `SUSPEND`,
-  `EDITS_ONLY` …) for the whole minute. Never a gap; never asked for.
+- **Open** — the collector was observing, and IG's deal flag said dealing (`DEAL`, `DEALNOEDIT` or
+  `CLOSINGSONLY` — `ig.stream.DealFlag`, the word the belt stands down by, E1-T15) at some point in
+  the minute. A missing bar here is a real gap.
+- **Closed** — the collector was observing, and IG's flag said something not dealing (`CLOSED`,
+  `CALL`, `EDIT`, `SUSPEND`, the auctions) for the whole minute. Never a gap; never asked for.
 - **Unknown** — the collector was not observing the whole minute, or IG had not yet said anything.
   The heal asks IG, whose candles answer whether the market was open.
 

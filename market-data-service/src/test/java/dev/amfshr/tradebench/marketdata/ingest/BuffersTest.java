@@ -57,6 +57,44 @@ class BuffersTest {
     }
 
     @Test
+    void aSnapshotRepeatingTheLastTickIsAnUpdateButNotNews() {
+        // E1-T15: Lightstreamer answers a new subscription with the item's state — the last tick again
+        Buffers queues = buffers(10);
+        now = 100;
+        queues.onTick(tick(1, "DEAL"));
+        now = 200;
+        queues.onTick(tick(1, "DEAL")); // the snapshot: same instant, same prices
+
+        assertEquals(100, queues.lastTickMono(DAX), "not news: the watchdog's clock stays at the real tick");
+        assertEquals(2, queues.updates(DAX), "but an update arrived — what re-teaches a flag");
+        assertEquals(1, queues.tickCount(), "counted once, as the store keeps it once");
+        assertEquals(1, queues.countsFor(DAX).ticks());
+        assertEquals(Instant.ofEpochSecond(1), queues.pollTickNow().timestamp());
+        assertEquals(Instant.ofEpochSecond(1), queues.pollTickNow().timestamp(),
+                "still queued: the store's dedupe makes the repeat idempotent");
+    }
+
+    @Test
+    void aTickIsNewsIfItsInstantMovedOnOrItsPricesChangedAtTheSameInstant() {
+        Buffers queues = buffers(10);
+        now = 100;
+        queues.onTick(tick(5, "DEAL"));
+        now = 200;
+        queues.onTick(tick(4, "DEAL")); // older than the last: a stale re-send
+        assertEquals(100, queues.lastTickMono(DAX), "an older instant is not news");
+        now = 300;
+        queues.onTick(new TickUpdate(DAX, Instant.ofEpochSecond(5), new BigDecimal("1.5"), new BigDecimal("2.0"), "DEAL"));
+        assertEquals(300, queues.lastTickMono(DAX), "the same instant with a new bid is news");
+        now = 400;
+        queues.onTick(new TickUpdate(DAX, Instant.ofEpochSecond(5), new BigDecimal("1.5"), new BigDecimal("2.5"), "DEAL"));
+        assertEquals(400, queues.lastTickMono(DAX), "and with a new ask");
+        now = 500;
+        queues.onTick(tick(6, "DEAL"));
+        assertEquals(500, queues.lastTickMono(DAX), "a later instant is news");
+        assertEquals(4, queues.tickCount());
+    }
+
+    @Test
     void dealFlagChangesAreRecordedOnceIncludingTheFirst() {
         Buffers queues = buffers(10);
 
