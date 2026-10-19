@@ -435,3 +435,15 @@ Market data is the heavy database and grows every trading second; profiles, conf
 Postgres on the box costs nothing beyond the server. Managed free tiers stop around half a gigabyte, and paid
 plans start above the box's whole price. A managed service earns its keep when someone else should own uptime
 and point-in-time recovery.
+
+## B24 — An adaptive tick-silence threshold, so a thin market is not judged dead
+
+**Captured** 2026-10-19 (Alex: the overnight resubscribes "feel like noise") · **Likely home** a belt ticket (E1) with its own design nod (D13) · **Trigger** two weeks of E1-T16's tick-gap histogram in production · **Relates to** D27/D29 (the watchdog's per-market resubscribe at 90 s) · D35 · E1-T16 (the tick-gap metric) · the replay fixture `2026-08-05-dax-thin-at-dawn.jsonl` · P9
+
+Observed on the first production night: 15 `resubscribe · TICK_SILENT` verdicts on DAX between Mon 2026-10-19 00:52Z
+and 04:37Z, while it ran at 430–750 ticks an hour (thousands after the 07:00Z open). No rebuild and no data loss: each
+resubscribe takes milliseconds and its snapshot restores the latest price. With one market subscribed there is no
+witness to tell "quiet" from "dead". The standard remedy is a threshold learnt per market from its own recent gaps —
+silent only when the gap exceeds both 90 s and a multiple of the market's typical gap at that hour — with no trading
+calendar, keeping the "no hours config" principle. Decide with the histogram's evidence, not before. The cost of a
+false alarm stays low; a missed dead feed stays the expensive error (P9).

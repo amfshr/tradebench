@@ -1909,6 +1909,8 @@ OTLP export, Grafana Cloud).
      detected; **gauges** — tick age, bar age, queue pending, pacer budget remaining; **timers** — write latency, heal duration.
    - Plus the heal's own outcomes, which the spec names only as "later": minutes healed, gaps closed per outcome, heal and
      archive runs by outcome, IG allowance remaining.
+   - **The gap between consecutive ticks** (added 2026-10-19, Alex), a histogram per market, readable by hour of day. It
+     is the evidence for B24: how long a market's normal quiet stretches really are, overnight and in session.
    - Dimensions: market (the epic), user and source (CLAUDE.md — every schema and API). The instance comes from the resource
      attribute.
    - **In-ticket decision for the nod:** the metric names and the OTel instrument kinds.
@@ -1916,10 +1918,12 @@ OTLP export, Grafana Cloud).
    (a `claude-code` Editor service account, configured in Alex's user-scope Claude config, not in the repo). One folder,
    "Tradebench". Two dashboards:
    - **Collector — operations:** the evening check on one screen — heartbeat present, ticks and bars per minute,
-     dropped/failures, belt verdicts and reconnects by kind, connection status, outbound IG/healthchecks.io calls, the JVM,
+     dropped/failures, belt verdicts and reconnects by kind — **resubscribes shown as routine market surgery, apart from
+     rebuilds, escalations and failures, which are what stand out** (Alex, 2026-10-19: the overnight resubscribes read as
+     noise) — connection status, outbound IG/healthchecks.io calls, the JVM,
      the DB pool, warning and error logs. It can be built from logs alone before the metrics land.
    - **Collector — domain:** bars and ticks per market and per user over time, gaps detected and healed, heal and archive
-     runs by outcome, IG allowance.
+     runs by outcome, IG allowance, and the tick-gap distribution by hour of day.
 3. **No Grafana alert rules.** Alerting belongs to E9 (D30); healthchecks.io covers the box dying.
 
 **Decision: (TBD) — the R3 boundary.** Under D25 R3, Grafana owns trends and the platform app owns record views (the coverage
