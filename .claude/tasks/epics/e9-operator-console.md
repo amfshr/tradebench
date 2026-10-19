@@ -245,7 +245,7 @@ and a tampered link refused (failure-mode tests); the link's TTL pinned.
 **DoD:** an archived day downloads through a pre-signed link from the admin area; an expired or
 tampered link is refused; the catalogue's counts match the fixture exactly.
 
-## T7 — Telemetry on `control-service` + the Grafana link-out ⬜ (cut 2026-10-15 from D33)
+## T7 — Telemetry on `control-service` + the Grafana link-out ⬜ (cut 2026-10-15 from D33; re-scoped 2026-10-19 — the collector's dashboards moved to E1-T16)
 
 **Type** ops · **Branch** `—` · **Started** — · **Blocked by** T2, E1-T7
 
@@ -255,9 +255,11 @@ agent attached in the collector's container, structured JSON logs — so the fir
 observable. **This ticket wires `control-service`:** JSON logs (the request's user as a field,
 never a token), the agent in its container exporting metrics + logs over OTLP to the same stack,
 service name and instance as resource attributes; the **admin area links out** to Grafana rather
-than re-rendering it; the first dashboards over both JVMs (heap/GC/threads/uptime, request rates
-and latencies, the collector's tick/bar rates and `db_pending` — D25's metric names where they
-still apply). Domain truth stays in the rows (D25). Traces later.
+than re-rendering it. **The collector's dashboards are E1-T16's** (re-scoped 2026-10-19): E1-T16
+builds the collector's metrics and its two dashboards ("Collector — operations", "Collector —
+domain", JSON under `deploy/grafana/`, the "Tradebench" folder); **this ticket adds
+`control-service`'s panels beside them** (heap/GC/threads/uptime, request rates and latencies —
+D25's metric names where they still apply). Domain truth stays in the rows (D25). Traces later.
 
 **Tests:** the leak check (G1) over the exported shapes — no `.env` value, no market data, no
 token in a log line or a metric label (a seeded fake value must trip it — mutation-verified).

@@ -1885,3 +1885,57 @@ waits for this ticket:** "will happily spend today fixing these issues before pu
   doctrine review before the PR; `./gradlew build` and `replayAcceptance` green. Its last item — the first release tag and T7's deploy — is T7's.
 - **Deferred:** backlog B19 (a CHART snapshot) and B20 (the reconnect row's host-sleep label).
 - **Next:** T7's first deploy, by the runbook §1 (the T7 § "Unblocked (2026-10-18)"). Its close-out is the Done history entry tagged E1-T15.
+
+## T16 — The collector's metrics and its Grafana dashboards ⬜ (born 2026-10-19; state 2026-10-19 — not started; the design nod first, D13)
+
+**Type** build · **Branch** `—` · **Started** — · **Blocked by** —
+
+**Source.** Alex's ask, 2026-10-19: "make a ticket for all of the dashboard work, and when we do that we can do any code
+changes to emit appropriate metrics, the idea being that I can simply view a dashboard to see the performance and the domain
+stuff like bar counts per market/user and healed etc." Nothing blocks it: T7 deployed the telemetry pipeline (the agent, the
+OTLP export, Grafana Cloud).
+
+**What exists today** (observed through the Grafana MCP access, 2026-10-19):
+- The agent's JVM metrics, `db_client_connections_*` and `http_client_*` by server address — IG REST, IG stream, hc-ping.
+- The Loki stream `service_name=market-data-service`, with `deployment_environment` and `service_instance_id`.
+- A heartbeat line every minute, parseable with LogQL; the `belt <KIND>` lines (D35's log kinds).
+- No domain metrics. Only Grafana Cloud's built-in dashboards.
+
+**Scope.**
+1. **Domain metrics from the collector** — through the OpenTelemetry API, which the agent already attached in the container
+   bridges (D33). No Micrometer and no Spring (D6 as amended).
+   - The set already ruled in `docs/design/observability-and-data-model.md` § "Metrics (Micrometer) + the Grafana/DIY split
+     (R3)": **counters** — ticks, bars, ticks dropped, malformed updates, events written, publish failures, reconnects, gaps
+     detected; **gauges** — tick age, bar age, queue pending, pacer budget remaining; **timers** — write latency, heal duration.
+   - Plus the heal's own outcomes, which the spec names only as "later": minutes healed, gaps closed per outcome, heal and
+     archive runs by outcome, IG allowance remaining.
+   - Dimensions: market (the epic), user and source (CLAUDE.md — every schema and API). The instance comes from the resource
+     attribute.
+   - **In-ticket decision for the nod:** the metric names and the OTel instrument kinds.
+2. **Dashboards as code** — JSON in the repository under `deploy/grafana/`, pushed to the stack through the Grafana MCP access
+   (a `claude-code` Editor service account, configured in Alex's user-scope Claude config, not in the repo). One folder,
+   "Tradebench". Two dashboards:
+   - **Collector — operations:** the evening check on one screen — heartbeat present, ticks and bars per minute,
+     dropped/failures, belt verdicts and reconnects by kind, connection status, outbound IG/healthchecks.io calls, the JVM,
+     the DB pool, warning and error logs. It can be built from logs alone before the metrics land.
+   - **Collector — domain:** bars and ticks per market and per user over time, gaps detected and healed, heal and archive
+     runs by outcome, IG allowance.
+3. **No Grafana alert rules.** Alerting belongs to E9 (D30); healthchecks.io covers the box dying.
+
+**Decision: (TBD) — the R3 boundary.** Under D25 R3, Grafana owns trends and the platform app owns record views (the coverage
+map, gap lists, the catalogue). This ticket is trends only. Whether any record view should also appear in Grafana is Alex's
+call at the nod — not to be built past.
+
+**DoD:**
+- The metrics are emitted from production and visible in Grafana per market, user and source.
+- Both dashboards are in the repo and live in the stack, every panel's query checked against live data.
+- G1: no `.env` value in any metric label or dashboard JSON, beyond the instance as the already-exported resource attribute;
+  the leak check runs over the dashboard JSON.
+- The metric code is mutation-verified (G5).
+- Doctrine review before the PR.
+- Released as the next collector tag, `v0.2.0`, and deployed.
+- The design nod (D13) before the code.
+
+**Relates to:** D25 R3 · D33 · D35's log kinds · T7 (the telemetry pipeline) · E9-T1 (the ruled metric set) · E9-T7 (re-scoped
+2026-10-19: `control-service`'s panels beside these dashboards) · backlog B19 · backlog B21 (the account id in a log line — a
+candidate to fold in, since it is the same release; Alex's call).
