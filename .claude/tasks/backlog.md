@@ -447,3 +447,13 @@ witness to tell "quiet" from "dead". The standard remedy is a threshold learnt p
 silent only when the gap exceeds both 90 s and a multiple of the market's typical gap at that hour — with no trading
 calendar, keeping the "no hours config" principle. Decide with the histogram's evidence, not before. The cost of a
 false alarm stays low; a missed dead feed stays the expensive error (P9).
+
+## B25 — A weekly mirror of the R2 bucket on the Mac
+
+**Captured** 2026-10-25 (Alex: "a weekly backup job that I can set to run on the Mac to file and backup all the stored objects in R2") · **Likely home** an ops follow-up (E1, after T16) — small · **Trigger** Alex's call — he asked for it after the E1 close-out · **Relates to** D34 R4 (the dumps and Hetzner's backups) · E1-T6 (the Parquet archive) · B22 · G1 (the R2 credentials stay out of the repo)
+
+A third copy, at home: `rclone sync r2:tradebench-archive <a local folder>` once a week from a launchd job on the Mac,
+with a read-only R2 token of its own (not the box's read-write one), its env file outside the repository, a log, and a
+check it ran. `sync` mirrors deletions, so the dumps the box retires leave the mirror too; `copy` keeps everything.
+Which one — and whether the mirror keeps its own history — is the decision. The Parquet archive is the part worth
+keeping forever; the dumps are rolling by design.

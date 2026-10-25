@@ -544,6 +544,7 @@ the Air) capture the same DAX sessions for a full week.
 ruling on making Tradebench the primary capture — recorded in `docs/decisions.md`.
 **Note:** deltas are expected (clock edges, reconnect windows); the bar is *explained*, not
 *zero*.
+**Plan (2026-10-25):** Tradebench's side read from the week's R2 Parquet (no access to the box's database needed), the prototype's from its local Postgres on the Mac. Expected deltas: the Mac's sleep (the prototype is down while the host is suspended — E1-T15 finding 2), the nightly thin minutes both should agree on, reconnect windows. Also note the shared IG key: the prototype draws the historical allowance the collector's heal relies on (D16).
 
 ## T9 — Sink blip resilience: hold-and-retry for the capture sink ✅ (PR #13, 2026-10-05 — complete)
 
@@ -1929,6 +1930,11 @@ OTLP export, Grafana Cloud).
 **Decision: (TBD) — the R3 boundary.** Under D25 R3, Grafana owns trends and the platform app owns record views (the coverage
 map, gap lists, the catalogue). This ticket is trends only. Whether any record view should also appear in Grafana is Alex's
 call at the nod — not to be built past.
+
+**Notes from the first production week (2026-10-25):**
+- **Gap totals double-count overlapping rows.** The stream's gap detector recorded the weekend span as one row (Fri 2026-10-16 21:00Z → Sun 22:01Z, 2,942 minutes) while the heal recorded the same span per day (180 + 720 + 720 + 720 + 347). The data is right; a sum of `missing_minutes` overstates distinct minutes by ~2,700. A gaps metric must count distinct minutes, or the overlap must be prevented at the source — an in-ticket decision.
+- **Unobserved closed minutes read `tickless_at_source`**, not closed: with no flag on record for minutes the box never watched, "IG has nothing" is the honest label. The domain dashboard should show the outcome split so a weekend before first boot does not read as a data problem.
+- **The IG historical allowance is drawn by something else on the key.** The heal spent 0 points all week, yet `allowanceRemaining` fell 9,957 → 8,484 before the weekly reset (9,964) — almost certainly the Python prototype on the same key (D16). The allowance gauge should be read as the account's, not the collector's spend; a "points spent by the heal" counter beside it tells them apart.
 
 **DoD:**
 - The metrics are emitted from production and visible in Grafana per market, user and source.
