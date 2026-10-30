@@ -493,7 +493,7 @@ test's passwords made at run time · `250d163`, `4769ef7` board.
 - **Next:** Alex resolves the GitGuardian incident, merges #28 and creates the accounts; then the first deploy, by the runbook §1.
 
 **Merged (2026-10-18) — not done.** PR #28 merged by Alex — GitHub stamps 2026-10-18T13:24:23Z — merge `9da0961`; `CI` green on
-the merged head. The branch `e1-t7-deploy` is deleted 2026-10-30, locally or on origin. The PR's GitGuardian check reads skipped on
+the merged head. The branch `e1-t7-deploy` was deleted 2026-10-30, locally and on origin. The PR's GitGuardian check reads skipped on
 the head `f7d7c90` at the merge; whether the dashboard incident is resolved is not verified here.
 - **Stays 🔶:** the DoD — production produces the archive end-to-end, then three consecutive unattended days — is met only on the box.
 - **Ruled (Alex, 2026-10-18): the first production deploy waits for T15**, the first live weekend's three findings — "will happily spend today fixing these issues before pushing to prod — that is my decision".
@@ -555,7 +555,7 @@ env value (G1).
   demo smoke's captures (`application-allowance.json`, the login's `timezoneOffset`), on the Mac — carried onto the E1
   close-out list as a known residual, not a T7 blocker.
 - **The PRs:** #28 (the build, merge `9da0961`) · #30 (the x86 release, merge `c8cad7a`, tagged `v0.1.0`) · #31 (provisioning's
-  current rclone, merge `bfa2da4`). The branches are deleted 2026-10-30, locally or on origin. The Done history entry tagged E1-T7.
+  current rclone, merge `bfa2da4`). The branches were deleted 2026-10-30, locally and on origin. The Done history entry tagged E1-T7.
 
 ## T8 — Acceptance: shadow-diff week
 
@@ -1904,7 +1904,7 @@ waits for this ticket:** "will happily spend today fixing these issues before pu
 - **Next:** PR #29 opened 2026-10-18; Alex merges; then `v0.1.0` and T7's deploy.
 
 **Merged (2026-10-18) — done.** PR #29 merged by Alex — GitHub stamps 2026-10-18T14:45:53Z — merge `d69cdf1`. CI green on the PR head:
-`build`, `web` and GitGuardian passed. The branch `e1-t15-first-weekend-findings` is deleted 2026-10-30, locally or on origin.
+`build`, `web` and GitGuardian passed. The branch `e1-t15-first-weekend-findings` was deleted 2026-10-30, locally and on origin.
 - **DoD:** met — the findings reproduced or explained from fixtures; the fixes ruled (D35), each with an exposing test and a killed mutation;
   doctrine review before the PR; `./gradlew build` and `replayAcceptance` green. Its last item — the first release tag and T7's deploy — is T7's.
 - **Deferred:** backlog B19 (a CHART snapshot) and B20 (the reconnect row's host-sleep label).
