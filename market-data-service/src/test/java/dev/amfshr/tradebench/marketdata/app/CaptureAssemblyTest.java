@@ -39,7 +39,7 @@ class CaptureAssemblyTest {
                 new FakeSleeper(clock), () -> 1.0, Tuning.playbook(), new FakeSessions(),
                 new FakeStreamTransport(), new ScriptedCaptureStore(), log, new RecordingGapStore(),
                 new RecordingStatusStore(), message -> { }, () -> exhausted.set(true), cause -> { },
-                Buffers.DEFAULT_TICK_CAPACITY));
+                Buffers.DEFAULT_TICK_CAPACITY, CaptureAssembly.Telemetry.none()));
     }
 
     @Test

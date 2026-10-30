@@ -8,6 +8,9 @@ import java.util.function.DoubleSupplier;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 
+import io.opentelemetry.api.OpenTelemetry;
+import io.opentelemetry.api.metrics.Meter;
+
 import dev.amfshr.tradebench.core.time.Clock;
 import dev.amfshr.tradebench.ig.session.IgSessions;
 import dev.amfshr.tradebench.ig.stream.IgStreamClient;
@@ -18,6 +21,7 @@ import dev.amfshr.tradebench.marketdata.events.EventType;
 import dev.amfshr.tradebench.marketdata.events.ServiceEvent;
 import dev.amfshr.tradebench.marketdata.ingest.Buffers;
 import dev.amfshr.tradebench.marketdata.ingest.Pump;
+import dev.amfshr.tradebench.marketdata.metrics.CollectorMetrics;
 import dev.amfshr.tradebench.marketdata.store.BestEffortEventLog;
 import dev.amfshr.tradebench.marketdata.store.CaptureStore;
 import dev.amfshr.tradebench.marketdata.store.EventLog;
@@ -58,10 +62,20 @@ public final class CaptureAssembly {
             DoubleSupplier jitter, Tuning tuning, IgSessions sessions, StreamTransport transport,
             CaptureStore sink, EventLog events, GapStore gaps, StatusStore status,
             Consumer<String> log, Runnable onExhausted, Consumer<RuntimeException> onPumpDeath,
-            int tickCapacity) {
+            int tickCapacity, Telemetry telemetry) {
+    }
+
+    /** Where the collector's metrics go (E1-T16): the OpenTelemetry meter and the dimensions every series
+     * carries. {@code Main} passes the agent's global meter; a test passes {@link #none()} or an in-memory SDK. */
+    public record Telemetry(Meter meter, String user, String source) {
+
+        public static Telemetry none() {
+            return new Telemetry(OpenTelemetry.noop().getMeter("tradebench.market-data"), "none", "none");
+        }
     }
 
     public final Buffers queues;
+    public final CollectorMetrics metrics;
     public final Pump pump;
     public final IgStreamControl control;
     public final Supervisor supervisor;
@@ -89,7 +103,9 @@ public final class CaptureAssembly {
         this.clock = p.clock();
         this.sink = p.sink();
         this.log = p.log();
-        queues = new Buffers(p.tickCapacity(), p.clock()::monotonicNanos);
+        metrics = new CollectorMetrics(p.telemetry().meter(), p.telemetry().user(), p.telemetry().source(), epics);
+        queues = new Buffers(p.tickCapacity(), p.clock()::monotonicNanos, metrics.tickGaps());
+        metrics.observe(queues, p.clock()::monotonicNanos);
         pumpEvents = new BestEffortEventLog(p.events(), p.log());
         lifecycleEvents = new BestEffortEventLog(p.events(), p.log());
         pump = new Pump(queues, p.sink(), new GapDetector(), p.gaps(), pumpEvents, p.sleeper(),

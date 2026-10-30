@@ -15,6 +15,8 @@ import java.util.Map;
 import java.util.logging.Logger;
 import java.util.concurrent.ThreadLocalRandom;
 
+import io.opentelemetry.api.GlobalOpenTelemetry;
+
 import dev.amfshr.tradebench.core.time.SystemClock;
 import dev.amfshr.tradebench.ig.IgCredentials;
 import dev.amfshr.tradebench.ig.IgEnvironment;
@@ -164,7 +166,9 @@ public final class Main {
                 () -> exitLoud(instance, "FATAL: recovery exhausted — the feed is dead"),
                 cause -> exitLoud(instance, "FATAL: capture pump died — capture is void from here;"
                         + " cause: " + cause),
-                Buffers.DEFAULT_TICK_CAPACITY));
+                Buffers.DEFAULT_TICK_CAPACITY,
+                // the agent's meter when it is attached (OTEL_EXPORTER_OTLP_ENDPOINT set); a no-op otherwise
+                new CaptureAssembly.Telemetry(GlobalOpenTelemetry.get().getMeter("tradebench.market-data"), user, source)));
         Thread pumpThread = new Thread(capture.pump, "capture-pump");
         Thread supervisorThread = new Thread(capture.supervisor, "capture-supervisor");
         Thread eventsThread = new Thread(capture.events, "capture-events");
