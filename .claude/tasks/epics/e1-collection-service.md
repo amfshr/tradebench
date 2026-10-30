@@ -1993,7 +1993,8 @@ call at the nod — not to be built past.
 
 **Relates to:** D25 R3 · D33 · D35's log kinds · T7 (the telemetry pipeline) · E9-T1 (the ruled metric set) · E9-T7 (re-scoped
 2026-10-19: `control-service`'s panels beside these dashboards) · backlog B19 · backlog B21 (the account id in a log line — folded in
-2026-10-30, the nod's ruling (b)).
+2026-10-30, the nod's ruling (b)) · D37 (one logging convention for every service — Alex's ruling 2026-10-30, from the
+doctrine review).
 
 **Nod (Alex, 2026-10-30 — "yes on all the three rulings, I go with your recommendations"; then "go with OpenTelemetry")** —
 the design nod (D13), held the day the ticket started. It settles the scope's in-ticket decision (the metric names and
@@ -2031,4 +2032,27 @@ instrument kinds), the gap double-count, and the § "Decision" above:
 - (c) **Released as `v0.2.0`** after the merge, deployed with `deploy.sh`, every panel then verified live.
 
 **Increments:** ① metrics plumbing + capture metrics · ② event, job and heal metrics · ③ B21 · ④ dashboards + their tests ·
-⑤ after the merge, the release, deploy and live check.
+⑤ the doctrine review's fixes (added 2026-10-30) · ⑥ after the merge, the release, deploy and live check.
+
+**Progress (2026-10-30) — built, reviewed, not done.** On the branch, in commit order:
+① `1317151` the capture metrics · ② `89b2dad` events, gaps, jobs and the heal as metrics, real log levels, a line per job
+run, the libraries' SLF4J bridged · ③ `599f035` B21 — the stream-connected line names the endpoint, never the IG account ·
+④ `fa57e78` the two dashboards as code, pushed to the stack's "Tradebench" folder · ⑤ `05f184b` the doctrine review's
+findings fixed. Build at 508 tests; mutants killed per commit: 11 · 22 · 1 · 6 · 15.
+
+**Doctrine review (2026-10-30) — pass-with-findings; eleven findings, Alex approved fixing all of them (2026-10-30), all fixed
+in `05f184b`:** store-write buckets; the pacer's and the belt's events counted (the belt's at the queue's door); an assembly
+wiring test with a real SDK meter, and `Main`'s job-run counting pinned in its helper (`countedRuns`) — the call sites in `Main.main`, it and the pacer's counted event log, are a known residual, untestable short of a Main integration test; the metric contract pinned by name, unit and kind;
+the dashboards' instance guard; log tags on every failure-shaped line, kept by a lint test; a heal that fails part-way records
+and counts its spend (`PhaseFailure`); docs as built; no database URL or bucket in a log line (G1). The review's logging
+finding became **D37** (`docs/decisions.md`): one logging convention for every service — WARN/ERROR tags via `LogLine`, a
+line per meaningful outcome, the libraries' SLF4J routed to JUL, no `.env` value in a line beyond the `[instance]` prefix.
+**Re-review of `05f184b` (2026-10-30) — pass-with-findings, fixed on the branch:** the heal's partial-failure wrap now covers
+closing the gaps too; D37 names the `[instance]` prefix and the dev jsonl line no longer prints its path; the design doc's
+"structured JSON logs" corrected; a failed job's line names the real cause. Open for Alex: whether a `rejected` or `skipped`
+line (the belt's retry rejected, a resubscribe skipped with no live stream) is a `WARN `, and so whether the lint learns those words.
+
+**Remaining before the ticket closes:** the PR (next) → Alex's merge → increment ⑥ at a weekend: tag `v0.2.0`,
+deploy, and validate live — the agent bridges the API; the histogram buckets' `le` values; the stored names match the
+contract; the `job_name` and `instance` labels; Loki's `detected_level` from JUL WARNING/SEVERE; what the Hikari and AWS SDK
+lines carry; every domain panel against real data → the close-out. E1 closes after T16.

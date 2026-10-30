@@ -124,7 +124,7 @@ D37's convention.
 
 - **DB (SPA, v1):** current status (`capture_status`), coverage map, gaps, catalogue, event
   log, downloads.
-- **Operational telemetry (D33, 2026-10-15):** structured JSON logs and these metrics leave every
+- **Operational telemetry (D33, 2026-10-15):** plain-text logs (D37 amends D33's "structured JSON") and these metrics leave every
   JVM through the OpenTelemetry Java agent over OTLP to Grafana Cloud's free tier, wired at E1-T7;
   the admin area links out to Grafana. (Supersedes "Prometheus/Grafana additive, later".)
 - **healthchecks.io (v1, D33):** the dead-man ping — one outbound GET per heartbeat from the

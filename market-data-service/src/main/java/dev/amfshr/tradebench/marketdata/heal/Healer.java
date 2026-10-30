@@ -119,10 +119,30 @@ public final class Healer implements DayPhase {
                 knownRemaining = history.allowance().remainingAllowance();
                 knownUntil = clock.wallInstant().plusSeconds(history.allowance().allowanceExpirySeconds());
             }
+            Set<Instant> healed = new TreeSet<>(filled);
+            healed.addAll(store.healedMinutes(epic, from, to)); // an earlier attempt's bars count too
+            Instant healedAt = clock.wallInstant();
+            List<OpenGap> gaps = store.openGapsEnding(epic, from, to); // read once: closing them hides them
+            for (OpenGap gap : gaps) {
+                store.closeGap(gap.id(), healedAt, outcome(new Run(gap.from(), gap.to()), states, healed));
+            }
+            ObjectNode detail = MAPPER.createObjectNode();
+            detail.put("expected", states.values().stream().filter(s -> s != MinuteState.CLOSED).count());
+            detail.put("missing", missing.size());
+            detail.put("runs", runs.size());
+            detail.put("healedMinutes", filled.size());
+            detail.put("pointsSpent", spent);
+            if (clock.wallInstant().isBefore(knownUntil)) {
+                detail.put("allowanceRemaining", knownRemaining);
+            }
+            detail.put("gapRowsClosed", gaps.size());
+            detail.put("gapRowsAdded", rowsAdded);
+            detail.put("gapMinutesAdded", minutesAdded);
+            return detail;
         } catch (InterruptedException e) {
             throw e; // a shutdown, not a failure
         } catch (Exception e) {
-            // failed part-way: the row still carries what was spent and healed before it (E1-T16)
+            // failed part-way, fetching or closing the gaps: the row still carries what was spent (E1-T16)
             ObjectNode partial = MAPPER.createObjectNode();
             partial.put("healedMinutes", filled.size());
             partial.put("pointsSpent", spent);
@@ -131,26 +151,6 @@ public final class Healer implements DayPhase {
             }
             throw new PhaseFailure(partial, e);
         }
-        Set<Instant> healed = new TreeSet<>(filled);
-        healed.addAll(store.healedMinutes(epic, from, to)); // an earlier attempt's bars count too
-        Instant healedAt = clock.wallInstant();
-        List<OpenGap> gaps = store.openGapsEnding(epic, from, to); // read once: closing them hides them
-        for (OpenGap gap : gaps) {
-            store.closeGap(gap.id(), healedAt, outcome(new Run(gap.from(), gap.to()), states, healed));
-        }
-        ObjectNode detail = MAPPER.createObjectNode();
-        detail.put("expected", states.values().stream().filter(s -> s != MinuteState.CLOSED).count());
-        detail.put("missing", missing.size());
-        detail.put("runs", runs.size());
-        detail.put("healedMinutes", filled.size());
-        detail.put("pointsSpent", spent);
-        if (clock.wallInstant().isBefore(knownUntil)) {
-            detail.put("allowanceRemaining", knownRemaining);
-        }
-        detail.put("gapRowsClosed", gaps.size());
-        detail.put("gapRowsAdded", rowsAdded);
-        detail.put("gapMinutesAdded", minutesAdded);
-        return detail;
     }
 
     /** The pump writes a gap row when the first bar after it seals, from a watermark set before it —

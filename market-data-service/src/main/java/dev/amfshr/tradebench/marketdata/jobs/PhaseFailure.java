@@ -9,7 +9,9 @@ import com.fasterxml.jackson.databind.node.ObjectNode;
  */
 public final class PhaseFailure extends Exception {
 
-    private final transient ObjectNode partial;
+    private static final long serialVersionUID = 1L;
+
+    private final ObjectNode partial;
 
     public PhaseFailure(ObjectNode partial, Exception cause) {
         super(cause.getMessage(), cause);

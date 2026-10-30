@@ -661,9 +661,11 @@ meaningful outcome:** each job run says `jobs: <job> <market> <day> succeeded �
 `ERROR `; the heartbeat stays the one summary a minute; no line per tick or per write. **The libraries' logs
 are kept:** SLF4J's JUL binding routes HikariCP's and the AWS SDK's logs into the same exporter, not the void
 (what they carry is checked live at `v0.2.0`).
-**The same labels:** what a log line is about is in its words, and the service's name and instance are resource
-labels the agent adds — never a line of its own. **Never a `.env` value** (G1): no database URL, bucket, account
-or instance name in a line; "the configured database" and "the configured bucket" say it. Enforced in the
+**The same labels:** what a log line is about is in its words; the service's name and instance are also resource
+labels the agent adds. **No `.env` value in a line but one** (G1): every line starts with `[instance]`, because
+everything names its instance before acting (CLAUDE.md) — the same value the agent already exports as a label.
+Nothing else: no database URL, bucket, account or path; "the configured database" and "the configured bucket"
+say it. Enforced in the
 collector by `LogLevelsLintTest`: a log call whose text reports a failure without a tag fails the build. **Why:**
 Alex ruled 2026-10-30 — "that's the point, to have the consistency and be able to filter and query on this known
 structure; if we really need to improve or add to it later we can". Plain text over structured JSON for now: the

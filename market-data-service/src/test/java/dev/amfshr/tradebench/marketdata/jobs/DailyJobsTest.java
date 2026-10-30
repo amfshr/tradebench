@@ -177,6 +177,8 @@ class DailyJobsTest {
         assertFalse(row.succeeded());
         assertEquals("{\"healedMinutes\":2,\"pointsSpent\":2,\"error\":\"java.lang.IllegalStateException: IG refused the third window\"}",
                 row.detailJson());
+        assertTrue(log.stream().anyMatch(l -> l.endsWith("failed — java.lang.IllegalStateException: IG refused the third window")),
+                "the line names the real cause, not the wrapper: " + log);
     }
 
     @Test

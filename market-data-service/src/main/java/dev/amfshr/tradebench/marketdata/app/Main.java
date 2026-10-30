@@ -115,7 +115,7 @@ public final class Main {
                 eventLog = event -> { };
                 gaps = gap -> { };
                 statusStore = status -> { };
-                log(instance, "capturing to " + file.toAbsolutePath()
+                log(instance, "capturing to a jsonl file in the configured capture directory"
                         + " (jsonl: gaps + service events are not persisted)");
             }
             case "db" -> {
@@ -307,13 +307,13 @@ public final class Main {
     record ArchiveConfig(URI endpoint, String region, String bucket, String accessKeyId, String secretAccessKey) {
     }
 
-    /** The heal's sessions: the current one, or — on a retry — the failure path, which validates the token
-     * and logs in fresh only if it is dead (a retry must never reuse a dead session). */
     /** The job-run record, counted on its way in (E1-T16): the jobs panels read what this wrapper sees. */
     static JobRunStore countedRuns(CaptureAssembly.Telemetry telemetry, JobRunStore store) {
         return new JobMetrics(telemetry.meter(), telemetry.user(), telemetry.source()).counting(store);
     }
 
+    /** The heal's sessions: the current one, or — on a retry — the failure path, which validates the token
+     * and logs in fresh only if it is dead (a retry must never reuse a dead session). */
     static IgHistory.Sessions healSessions(IgSessions sessions) {
         return afterFailure -> afterFailure ? sessions.afterFailure() : sessions.current();
     }

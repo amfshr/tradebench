@@ -131,8 +131,8 @@ the code.
 ## 7. Logs and metrics (E1-T16)
 
 - **Logs follow D37:** a `WARN ` or `ERROR ` tag leads any line that reports something degraded or lost
-  (`LogLine`), one line per meaningful outcome, the libraries' SLF4J routed to JUL, never a `.env` value
-  in a line. A service's `LogLevelsLintTest` keeps the tags from drifting.
+  (`LogLine`), one line per meaningful outcome, the libraries' SLF4J routed to JUL, no `.env` value
+  in a line beyond the `[instance]` prefix every line carries. A service's `LogLevelsLintTest` keeps the tags from drifting.
 - **Metrics through the OpenTelemetry API only** — no Micrometer, no Spring; the Java agent (D33) supplies
   the SDK and the export. Names are `tradebench.<area>.<thing>`; `user` and `source` on every series
   (CLAUDE.md's first-class dimensions), `market` where there is one; the service name and `instance` are

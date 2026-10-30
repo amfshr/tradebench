@@ -126,6 +126,22 @@ class HealerTest {
     }
 
     @Test
+    void aHealThatFailsClosingItsGapsStillSaysWhatItSpent() {
+        // the re-review's finding 1: the points are spent before the gaps close, and a retry finds the bars present
+        store.openAllDay();
+        store.missing("10:00", "10:01", "10:02");
+        store.gap(7, "10:00", "10:02");
+        ig.has("10:00", "10:02");
+        store.closeFails = true;
+
+        PhaseFailure failed = assertThrows(PhaseFailure.class, () -> healer.run(DAX_D));
+
+        assertEquals("database unreachable", failed.getCause().getMessage());
+        assertEquals(2, failed.partial().get("healedMinutes").asInt());
+        assertEquals(2, failed.partial().get("pointsSpent").asLong());
+    }
+
+    @Test
     void aRetryAfterAPartialHealStillCallsTheEarlierHealedGapHealed() throws Exception {
         // the doctrine review's finding 2: gap 10 heals, the allowance stops gap 11; on the retry gap
         // 10's minutes are present bars — healed by the first attempt — and must not read as tickless
@@ -295,6 +311,7 @@ class HealerTest {
         final List<Bar1m> healed = new ArrayList<>();
         final Map<Long, String> closed = new LinkedHashMap<>();
         final List<String> added = new ArrayList<>();
+        boolean closeFails;
 
         void observeAllDay() {
             observed.add(new Window(at("00:00"), at("23:59").plusSeconds(59)));
@@ -375,6 +392,9 @@ class HealerTest {
 
         @Override
         public void closeGap(long id, Instant healedAt, String outcome) {
+            if (closeFails) {
+                throw new IllegalStateException("database unreachable");
+            }
             closed.put(id, outcome);
         }
 
