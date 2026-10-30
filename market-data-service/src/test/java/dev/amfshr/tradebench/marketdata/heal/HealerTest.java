@@ -19,6 +19,7 @@ import org.junit.jupiter.api.Test;
 
 import com.fasterxml.jackson.databind.node.ObjectNode;
 
+import dev.amfshr.tradebench.marketdata.jobs.PhaseFailure;
 import dev.amfshr.tradebench.core.domain.Bar1m;
 import dev.amfshr.tradebench.ig.rest.Allowance;
 import dev.amfshr.tradebench.ig.rest.PriceCandle;
@@ -111,9 +112,14 @@ class HealerTest {
         ig.has("01:00");
         ig.remainingAfterEachCall = 1; // after the first run, one point left; the next run needs two
 
-        IllegalStateException stopped = assertThrows(IllegalStateException.class, () -> healer.run(DAX_D));
+        PhaseFailure stopped = assertThrows(PhaseFailure.class, () -> healer.run(DAX_D));
 
+        assertTrue(stopped.getCause() instanceof IllegalStateException, String.valueOf(stopped.getCause()));
         assertTrue(stopped.getMessage().contains("allowance too low"), stopped.getMessage());
+        // E1-T16: the failed row still says what was spent and the allowance last read
+        assertEquals(1, stopped.partial().get("healedMinutes").asInt());
+        assertEquals(1, stopped.partial().get("pointsSpent").asLong());
+        assertEquals(1, stopped.partial().get("allowanceRemaining").asLong());
         assertEquals(1, ig.asked.size(), "the second run was never asked");
         assertEquals(List.of(at("01:00")), store.healed.stream().map(Bar1m::startUtc).toList(), "what was healed stays");
         assertTrue(store.closed.isEmpty(), "rows stay open for the retry");
@@ -129,7 +135,7 @@ class HealerTest {
         store.gap(11, "05:00", "05:01");
         ig.has("01:00", "05:00", "05:01");
         ig.remainingAfterEachCall = 1;
-        assertThrows(IllegalStateException.class, () -> healer.run(DAX_D));
+        assertThrows(PhaseFailure.class, () -> healer.run(DAX_D));
 
         ig.remainingAfterEachCall = 9_000;
         clock.advance(java.time.Duration.ofDays(8)); // IG's allowance has reset since
@@ -147,11 +153,11 @@ class HealerTest {
         store.gap(11, "05:00", "05:01");
         ig.has("01:00");
         ig.remainingAfterEachCall = 1;
-        assertThrows(IllegalStateException.class, () -> healer.run(DAX_D));
+        assertThrows(PhaseFailure.class, () -> healer.run(DAX_D));
         int asked = ig.asked.size();
 
         clock.advance(java.time.Duration.ofHours(1)); // the runner's retry, the same week
-        assertThrows(IllegalStateException.class, () -> healer.run(DAX_D));
+        assertThrows(PhaseFailure.class, () -> healer.run(DAX_D));
 
         assertEquals(asked, ig.asked.size(), "the second attempt refuses before asking IG anything");
     }
@@ -214,7 +220,7 @@ class HealerTest {
         ig.has("01:00", "05:00");
         ig.remainingAfterEachCall = 1;
 
-        assertThrows(IllegalStateException.class, () -> healer.run(DAX_D));
+        assertThrows(PhaseFailure.class, () -> healer.run(DAX_D));
 
         assertEquals(List.of(at("01:00") + "→" + at("01:00") + " " + Healer.HEALED), store.added,
                 "recorded straight after its run, before the stop");

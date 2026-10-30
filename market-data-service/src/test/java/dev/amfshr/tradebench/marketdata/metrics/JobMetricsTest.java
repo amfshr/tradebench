@@ -115,12 +115,30 @@ class JobMetricsTest {
     }
 
     @Test
-    void anArchiveOrAFailedHealAddsNoHealNumbers() {
+    void anArchiveAddsNoHealNumbers() {
         store.record(new JobRun("archive", DAY, T0, T0, true, "{\"missing\":9,\"healedMinutes\":2}"));
-        store.record(new JobRun("heal", DAY, T0, T0, false, "{\"missing\":9,\"healedMinutes\":2}"));
 
         assertTrue(reader.collectAllMetrics().stream().noneMatch(m -> m.getName().equals(CollectorMetrics.HEAL_MINUTES)
                 && !m.getLongSumData().getPoints().isEmpty()));
+    }
+
+    @Test
+    void aHealThatFailedPartWayStillCountsItsSpendButClaimsNothingItCannotKnow() {
+        // the review's finding 6: a heal stopped by the allowance reserve had spent 3 points; the panel must say so
+        store.record(new JobRun("heal", DAY, T0, T0, false,
+                "{\"healedMinutes\":3,\"pointsSpent\":3,\"allowanceRemaining\":1999,\"error\":\"allowance too low\"}"));
+
+        Collection<MetricData> all = reader.collectAllMetrics();
+        var minutes = metric(all, CollectorMetrics.HEAL_MINUTES).getLongSumData().getPoints();
+
+        assertEquals(3, value(minutes, DAX_DIMS.toBuilder().put("outcome", "healed").build()));
+        assertTrue(minutes.stream().noneMatch(p -> "absent_at_source".equals(p.getAttributes().get(CollectorMetrics.OUTCOME))),
+                "what IG lacked is unknown when the heal stopped");
+        assertEquals(3, value(metric(all, CollectorMetrics.HEAL_POINTS_SPENT).getLongSumData().getPoints(), DAX_DIMS));
+        assertEquals(1999, metric(all, CollectorMetrics.IG_ALLOWANCE_REMAINING).getLongGaugeData().getPoints().iterator()
+                .next().getValue());
+        assertTrue(all.stream().noneMatch(m -> m.getName().equals(CollectorMetrics.GAP_MINUTES)
+                && !m.getLongSumData().getPoints().isEmpty()), "gap rows the failed heal recorded are not known either");
     }
 
     @Test

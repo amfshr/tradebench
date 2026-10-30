@@ -205,7 +205,8 @@ class IgStreamControlTest {
         assertEquals(3, sessions.currentCalls, "two failures, then the login that worked");
         assertEquals(List.of(BOOT_RETRY, BOOT_RETRY), sleeps, "paced between attempts");
         assertEquals(1, fake.connections.size());
-        assertEquals(2, log.stream().filter(line -> line.startsWith("boot attempt")).count(),
+        assertEquals(2, log.stream().filter(line -> LogLine.severityOf(line) == Severity.WARN
+                && LogLine.text(line).startsWith("boot attempt")).count(),
                 "each wait is announced — loud, not silent");
     }
 

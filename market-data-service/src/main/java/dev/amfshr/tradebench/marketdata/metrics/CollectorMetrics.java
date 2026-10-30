@@ -57,6 +57,10 @@ public final class CollectorMetrics {
     public static final List<Double> TICK_GAP_BUCKETS =
             List.of(0.1, 0.25, 0.5, 1.0, 2.0, 5.0, 10.0, 30.0, 60.0, 90.0, 120.0, 300.0);
 
+    /** Seconds; a healthy write is milliseconds — the SDK's default buckets start at 5 s and would hide it. */
+    public static final List<Double> STORE_WRITE_BUCKETS =
+            List.of(0.001, 0.0025, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1.0, 2.5, 5.0, 10.0);
+
     public static final AttributeKey<String> MARKET = stringKey("market");
     public static final AttributeKey<String> USER = stringKey("user");
     public static final AttributeKey<String> SOURCE = stringKey("source");
@@ -92,7 +96,9 @@ public final class CollectorMetrics {
                 .setDescription("Service events recorded, by type and severity").build();
         this.gapMinutes = gapMinutes(meter);
         this.storeWrite = meter.histogramBuilder(STORE_WRITE_DURATION).setUnit("s")
-                .setDescription("Seconds a database write took: a bar, or a batch of ticks").build();
+                .setDescription("Seconds a database write took: a bar, or the pump's flush of a tick batch. During a"
+                        + " backlog the store also flushes every 500 ticks inside its writes; those are not timed")
+                .setExplicitBucketBoundariesAdvice(STORE_WRITE_BUCKETS).build();
     }
 
     /** One instrument whichever side counts: the stream's detector here, the heal in {@link JobMetrics}. */

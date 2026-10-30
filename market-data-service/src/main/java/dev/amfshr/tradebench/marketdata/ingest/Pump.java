@@ -198,7 +198,7 @@ public final class Pump implements Runnable {
             }
             if (!current.lossy && queues.droppedTicks() > current.droppedBefore) {
                 current.lossy = true;
-                log.accept("the hold is now lossy — the tick queue has begun shedding");
+                log.accept(LogLine.error("the hold is now lossy — the tick queue has begun shedding"));
             }
             boolean landedHeld;
             try {

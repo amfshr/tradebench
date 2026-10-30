@@ -20,6 +20,7 @@ import dev.amfshr.tradebench.core.time.Clock;
 import dev.amfshr.tradebench.ig.rest.PriceCandle;
 import dev.amfshr.tradebench.ig.rest.PriceHistory;
 import dev.amfshr.tradebench.marketdata.jobs.DayPhase;
+import dev.amfshr.tradebench.marketdata.jobs.PhaseFailure;
 import dev.amfshr.tradebench.marketdata.jobs.MarketDay;
 
 /**
@@ -93,29 +94,42 @@ public final class Healer implements DayPhase {
         long minutesAdded = 0;
         Set<Instant> filled = new TreeSet<>();
         long spent = 0;
-        for (Run run : runs) {
-            long remaining = clock.wallInstant().isBefore(knownUntil) ? knownRemaining : Long.MAX_VALUE;
-            if (remaining != Long.MAX_VALUE && remaining - run.minutes() < reserve) {
-                throw new IllegalStateException("allowance too low for the next run (" + remaining + " points left, "
-                        + run.minutes() + " minutes to ask, " + reserve + " kept in reserve) — healed " + filled.size()
-                        + " minutes, the rest stay open");
+        try {
+            for (Run run : runs) {
+                long remaining = clock.wallInstant().isBefore(knownUntil) ? knownRemaining : Long.MAX_VALUE;
+                if (remaining != Long.MAX_VALUE && remaining - run.minutes() < reserve) {
+                    throw new IllegalStateException("allowance too low for the next run (" + remaining + " points left, "
+                            + run.minutes() + " minutes to ask, " + reserve + " kept in reserve) — healed " + filled.size()
+                            + " minutes, the rest stay open");
+                }
+                PriceHistory history = candles.minuteCandles(epic, run.from(), run.to());
+                List<Bar1m> bars = new ArrayList<>();
+                for (PriceCandle candle : history.candles()) {
+                    bars.add(bar(epic, candle));
+                    filled.add(candle.snapshotTimeUtc());
+                }
+                store.writeHealed(bars);
+                if (!pumpCanSee(run, processRuns)) {
+                    store.recordHealedGap(epic, run, clock.wallInstant(), outcome(run, states, filled, store.healedMinutes(epic,
+                            run.from(), run.to().plusSeconds(60))));
+                    rowsAdded++;
+                    minutesAdded += run.minutes();
+                }
+                spent += bars.size();
+                knownRemaining = history.allowance().remainingAllowance();
+                knownUntil = clock.wallInstant().plusSeconds(history.allowance().allowanceExpirySeconds());
             }
-            PriceHistory history = candles.minuteCandles(epic, run.from(), run.to());
-            List<Bar1m> bars = new ArrayList<>();
-            for (PriceCandle candle : history.candles()) {
-                bars.add(bar(epic, candle));
-                filled.add(candle.snapshotTimeUtc());
+        } catch (InterruptedException e) {
+            throw e; // a shutdown, not a failure
+        } catch (Exception e) {
+            // failed part-way: the row still carries what was spent and healed before it (E1-T16)
+            ObjectNode partial = MAPPER.createObjectNode();
+            partial.put("healedMinutes", filled.size());
+            partial.put("pointsSpent", spent);
+            if (clock.wallInstant().isBefore(knownUntil)) {
+                partial.put("allowanceRemaining", knownRemaining);
             }
-            store.writeHealed(bars);
-            if (!pumpCanSee(run, processRuns)) {
-                store.recordHealedGap(epic, run, clock.wallInstant(), outcome(run, states, filled, store.healedMinutes(epic,
-                        run.from(), run.to().plusSeconds(60))));
-                rowsAdded++;
-                minutesAdded += run.minutes();
-            }
-            spent += bars.size();
-            knownRemaining = history.allowance().remainingAllowance();
-            knownUntil = clock.wallInstant().plusSeconds(history.allowance().allowanceExpirySeconds());
+            throw new PhaseFailure(partial, e);
         }
         Set<Instant> healed = new TreeSet<>(filled);
         healed.addAll(store.healedMinutes(epic, from, to)); // an earlier attempt's bars count too

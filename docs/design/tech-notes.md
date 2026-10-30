@@ -127,3 +127,15 @@ need. The pleasing symmetry is deliberate: `/docs` is the words, `web/docs` the 
 renders them.
 Docs split by altitude: frontend design truth in `docs/design/`, component-level docs with
 the code.
+
+## 7. Logs and metrics (E1-T16)
+
+- **Logs follow D37:** a `WARN ` or `ERROR ` tag leads any line that reports something degraded or lost
+  (`LogLine`), one line per meaningful outcome, the libraries' SLF4J routed to JUL, never a `.env` value
+  in a line. A service's `LogLevelsLintTest` keeps the tags from drifting.
+- **Metrics through the OpenTelemetry API only** — no Micrometer, no Spring; the Java agent (D33) supplies
+  the SDK and the export. Names are `tradebench.<area>.<thing>`; `user` and `source` on every series
+  (CLAUDE.md's first-class dimensions), `market` where there is one; the service name and `instance` are
+  the agent's resource labels. A label named `job` collides with Prometheus's own, hence `job_name`.
+- **A metric's name, unit and kind are a contract** with `deploy/grafana/` (Prometheus derives the stored
+  name from all three); a test pins them, and the dashboards are checked-in JSON a test reads against that contract.

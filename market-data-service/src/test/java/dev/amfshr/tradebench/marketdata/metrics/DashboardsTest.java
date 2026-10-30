@@ -136,8 +136,20 @@ class DashboardsTest {
                 }
             }
             for (String expr : expressions(d)) {
-                assertFalse(expr.contains("instance=\"") || expr.contains("instance=~\"prod"), f + ": no instance named (G1): " + expr);
+                Matcher m = INSTANCE_MATCHER.matcher(expr);
+                while (m.find()) {
+                    assertEquals("instance=~\"$instance\"", m.group(), f + ": an instance only by the variable (G1): " + expr);
+                }
+            }
+            for (JsonNode v : d.path("templating").path("list")) {
+                if (v.path("name").asText().equals("instance")) {
+                    assertTrue(v.path("current").isEmpty() && v.path("options").isEmpty(),
+                            f + ": the instance variable saves no value of its own (G1): " + v);
+                }
             }
         }
     }
+
+    /** Any matcher on an instance label, whatever its operator — the guard does not trust a value it has not seen. */
+    private static final Pattern INSTANCE_MATCHER = Pattern.compile("\\b(service_)?instance(_id)?\\s*(=~|!~|!=|=)\\s*\"[^\"]*\"");
 }

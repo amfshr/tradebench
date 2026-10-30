@@ -100,7 +100,9 @@ public final class DailyJobs {
             // a LinkageError too — a native library that will not load (the archive's DuckDB on the wrong
             // platform) must be a failed row and the next day still due, never a dead runner
             log.accept(LogLine.error("jobs: " + phase.name() + " " + day.epic() + " " + day.day() + " failed — " + e));
-            ObjectNode detail = MAPPER.createObjectNode().put("error", String.valueOf(e));
+            ObjectNode detail = e instanceof PhaseFailure partial
+                    ? partial.partial().put("error", String.valueOf(e.getCause()))
+                    : MAPPER.createObjectNode().put("error", String.valueOf(e));
             return new JobRun(phase.name(), day, started, clock.wallInstant(), false, detail.toString());
         }
     }

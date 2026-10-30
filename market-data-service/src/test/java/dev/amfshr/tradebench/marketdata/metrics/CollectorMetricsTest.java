@@ -260,6 +260,9 @@ class CollectorMetricsTest {
         assertEquals(0.004, bar.getSum(), 1e-9);
         assertEquals(1, ticks.getCount(), "one landed flush — not the idle one, not the failed one");
         assertEquals(0.012, ticks.getSum(), 1e-9);
+        // millisecond buckets: the SDK's defaults (0, 5, 10, 25 …) would put every write in one bucket
+        assertEquals(List.of(0.001, 0.0025, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1.0, 2.5, 5.0, 10.0),
+                ticks.getBoundaries());
     }
 
     @Test
@@ -274,16 +277,28 @@ class CollectorMetricsTest {
         timed.write(new Bar1m(DAX, T0, ohlc(), ohlc(), null));
         jobs.counting(new NoRuns()).record(new JobRun("heal", new MarketDay(DAX, java.time.LocalDate.of(2026, 10, 29)), T0,
                 T0.plusSeconds(1), true, "{\"missing\":2,\"healedMinutes\":1,\"pointsSpent\":1,\"gapMinutesAdded\":1,\"allowanceRemaining\":9000}"));
-        Set<String> names = new TreeSet<>();
-        reader.collectAllMetrics().forEach(m -> names.add(m.getName()));
+        Set<String> contract = new TreeSet<>();
+        reader.collectAllMetrics().forEach(m -> contract.add(m.getName() + " " + m.getUnit() + " " + m.getType()));
 
-        // anchored on the nod of 2026-10-30, not on the constants: renaming one breaks deploy/grafana/
-        assertEquals(new TreeSet<>(List.of("tradebench.capture.ticks", "tradebench.capture.bars",
-                "tradebench.capture.ticks.dropped", "tradebench.capture.updates.malformed",
-                "tradebench.capture.tick.age", "tradebench.capture.bar.age", "tradebench.capture.queue.pending",
-                "tradebench.capture.tick.gap", "tradebench.events", "tradebench.gap.minutes",
-                "tradebench.store.write.duration", "tradebench.jobs.runs", "tradebench.jobs.duration",
-                "tradebench.heal.minutes", "tradebench.heal.points_spent", "tradebench.ig.allowance.remaining")), names);
+        // anchored on the nod of 2026-10-30, not on the constants: a renamed metric, a changed unit (Prometheus
+        // suffixes it) or a changed kind (_total, _bucket) each break deploy/grafana/
+        assertEquals(new TreeSet<>(List.of(
+                "tradebench.capture.ticks {tick} LONG_SUM",
+                "tradebench.capture.bars {bar} LONG_SUM",
+                "tradebench.capture.ticks.dropped {tick} LONG_SUM",
+                "tradebench.capture.updates.malformed {update} LONG_SUM",
+                "tradebench.capture.tick.age s DOUBLE_GAUGE",
+                "tradebench.capture.bar.age s DOUBLE_GAUGE",
+                "tradebench.capture.queue.pending {update} LONG_GAUGE",
+                "tradebench.capture.tick.gap s HISTOGRAM",
+                "tradebench.events {event} LONG_SUM",
+                "tradebench.gap.minutes min LONG_SUM",
+                "tradebench.store.write.duration s HISTOGRAM",
+                "tradebench.jobs.runs {run} LONG_SUM",
+                "tradebench.jobs.duration s HISTOGRAM",
+                "tradebench.heal.minutes min LONG_SUM",
+                "tradebench.heal.points_spent {point} LONG_SUM",
+                "tradebench.ig.allowance.remaining {point} LONG_GAUGE")), contract);
     }
 
     private static final com.fasterxml.jackson.databind.ObjectMapper MAPPER = new com.fasterxml.jackson.databind.ObjectMapper();

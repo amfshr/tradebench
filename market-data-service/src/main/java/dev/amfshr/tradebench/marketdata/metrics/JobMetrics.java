@@ -84,7 +84,7 @@ public final class JobMetrics {
         Attributes outcome = market.toBuilder().put(JOB, run.job()).put(OUTCOME, run.succeeded() ? "succeeded" : "failed").build();
         runs.add(1, outcome);
         duration.record(Duration.between(run.startedUtc(), run.finishedUtc()).toNanos() / 1e9, outcome);
-        if (!"heal".equals(run.job()) || !run.succeeded()) {
+        if (!"heal".equals(run.job())) {
             return;
         }
         JsonNode detail;
@@ -94,11 +94,13 @@ public final class JobMetrics {
             return; // the row is the truth; a detail this cannot read costs only the heal's numbers
         }
         long healed = detail.path("healedMinutes").asLong(0);
-        long missing = detail.path("missing").asLong(0);
         healMinutes.add(healed, market.toBuilder().put(OUTCOME, "healed").build());
-        healMinutes.add(Math.max(0, missing - healed), market.toBuilder().put(OUTCOME, "absent_at_source").build());
         pointsSpent.add(detail.path("pointsSpent").asLong(0), market);
-        gapMinutes.add(detail.path("gapMinutesAdded").asLong(0), market.toBuilder().put(ORIGIN, "heal").build());
+        if (run.succeeded()) { // a heal that failed part-way knows its spend, not what IG lacked or what it recorded
+            long missing = detail.path("missing").asLong(0);
+            healMinutes.add(Math.max(0, missing - healed), market.toBuilder().put(OUTCOME, "absent_at_source").build());
+            gapMinutes.add(detail.path("gapMinutesAdded").asLong(0), market.toBuilder().put(ORIGIN, "heal").build());
+        }
         if (detail.hasNonNull("allowanceRemaining")) {
             allowance.set(detail.get("allowanceRemaining").asLong());
         }

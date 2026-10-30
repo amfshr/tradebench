@@ -152,6 +152,34 @@ class DailyJobsTest {
     }
 
     @Test
+    void aPhaseThatFailsPartWayKeepsWhatItDidInItsFailedRow() throws Exception {
+        // the review's F6: a heal that spent IG allowance before failing says so in its row, or the spend is lost
+        DayPhase partWay = new DayPhase() {
+            @Override
+            public String name() {
+                return "heal";
+            }
+
+            @Override
+            public ObjectNode run(MarketDay day) throws PhaseFailure {
+                ObjectNode done = new ObjectMapper().createObjectNode().put("healedMinutes", 2).put("pointsSpent", 2);
+                throw new PhaseFailure(done, new IllegalStateException("IG refused the third window"));
+            }
+        };
+        DailyJobs withPartWay = new DailyJobs(clock, List.of(DAX), List.of(partWay), store,
+                new JobTuning(Duration.ofMinutes(5), Duration.ofMinutes(10), 7, Duration.ofHours(1), Duration.ofHours(4)),
+                log::add);
+        settle();
+
+        withPartWay.tick();
+
+        JobRun row = store.last("heal", D);
+        assertFalse(row.succeeded());
+        assertEquals("{\"healedMinutes\":2,\"pointsSpent\":2,\"error\":\"java.lang.IllegalStateException: IG refused the third window\"}",
+                row.detailJson());
+    }
+
+    @Test
     void aPhaseInterruptedByAShutdownIsNotRecordedAsAFailure() {
         DayPhase stopped = new DayPhase() {
             @Override

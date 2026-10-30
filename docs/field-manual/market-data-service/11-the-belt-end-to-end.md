@@ -299,7 +299,7 @@ as soon as the login gate allows. The new connection streams: `reconnect`, ladde
 exits again — a slow, visible loop, one login a minute at most, until IG returns.
 
 **A database restart.** The sink's write fails with a connection-class error: the pump **holds** —
-`sink unavailable — holding N queued writes` on the console, then `sink retry 1 in 5s`,
+`WARN sink unavailable — holding N queued writes` on the console (the level tag is D37's), then `sink retry 1 in 5s`,
 `sinkFailures=1` on the heartbeat,
 `db_pending` climbing in `capture_status` (which itself goes stale, since it cannot be written
 either). The stream keeps flowing into memory. Postgres comes back; the next backoff tick recovers

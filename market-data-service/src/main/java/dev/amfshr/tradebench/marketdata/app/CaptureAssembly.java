@@ -107,6 +107,7 @@ public final class CaptureAssembly {
         queues = new Buffers(p.tickCapacity(), p.clock()::monotonicNanos, metrics.tickGaps());
         metrics.observe(queues, p.clock()::monotonicNanos);
         EventLog counted = metrics.counting(p.events());
+        events = new QueuedEventLog(p.events(), EVENT_QUEUE_CAPACITY);
         this.sink = metrics.timed(p.sink(), p.clock()::monotonicNanos);
         pumpEvents = new BestEffortEventLog(counted, p.log());
         lifecycleEvents = new BestEffortEventLog(counted, p.log());
@@ -114,8 +115,8 @@ public final class CaptureAssembly {
                 p.clock(), new BackoffPolicy(p.tuning(), p.jitter()), p.log(), p.onPumpDeath());
         control = new IgStreamControl(p.sessions(), new IgStreamClient(p.transport()), queues, epics,
                 p.log(), p.sleeper(), BOOT_RETRY, p.clock()::monotonicNanos, p.tuning().giveUpAfter());
-        events = new QueuedEventLog(counted, EVENT_QUEUE_CAPACITY);
-        beltEvents = new BestEffortEventLog(events, p.log());
+        // counted at the queue's door, so an event the full queue refuses is still counted: it happened
+        beltEvents = new BestEffortEventLog(metrics.counting(events), p.log());
         supervisor = new Supervisor(p.clock(), p.tuning(), p.jitter(), beltEvents, p.log(), control,
                 queues, p.onExhausted(), p.sleeper(), SWEEP_INTERVAL);
         control.bind(supervisor); // the one back-edge of the control loop, tied off here

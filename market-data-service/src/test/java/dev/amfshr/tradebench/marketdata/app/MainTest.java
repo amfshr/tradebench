@@ -4,11 +4,22 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.time.Instant;
+import java.time.LocalDate;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Map;
 
 import org.junit.jupiter.api.Test;
 
+import io.opentelemetry.api.common.AttributeKey;
+import io.opentelemetry.sdk.metrics.SdkMeterProvider;
+import io.opentelemetry.sdk.testing.exporter.InMemoryMetricReader;
+
 import dev.amfshr.tradebench.ig.error.IgFatalConfigException;
+import dev.amfshr.tradebench.marketdata.jobs.JobRun;
+import dev.amfshr.tradebench.marketdata.jobs.JobRunStore;
+import dev.amfshr.tradebench.marketdata.jobs.MarketDay;
 
 /** The shutdown hook is registered before boot (E1-T10 #24): its joins must survive the window. */
 class MainTest {
@@ -73,6 +84,38 @@ class MainTest {
     }
 
     @Test
+    void theJobRunRecordIsCountedAndStillWritten() {
+        // the review's F3: Main's job-run store goes through the metrics, or the jobs panels stay empty
+        var reader = InMemoryMetricReader.create();
+        var provider = SdkMeterProvider.builder().registerMetricReader(reader).build();
+        List<JobRun> written = new ArrayList<>();
+        JobRunStore store = new JobRunStore() {
+            @Override
+            public List<JobRun> runs(String job,
+                    MarketDay day) {
+                return List.of();
+            }
+
+            @Override
+            public void record(JobRun run) {
+                written.add(run);
+            }
+        };
+        var run = new JobRun("archive",
+                new MarketDay("IX.D.DAX.DAILY.IP", LocalDate.of(2026, 10, 29)),
+                Instant.EPOCH, Instant.EPOCH.plusSeconds(3), true, "{}");
+
+        Main.countedRuns(new CaptureAssembly.Telemetry(provider.get("test"), "platform", "ig-stream-demo"), store).record(run);
+
+        assertEquals(List.of(run), written);
+        var runs = reader.collectAllMetrics().stream().filter(m -> m.getName().equals("tradebench.jobs.runs")).findFirst()
+                .orElseThrow().getLongSumData().getPoints().iterator().next();
+        assertEquals(1, runs.getValue());
+        assertEquals("platform", runs.getAttributes().get(AttributeKey.stringKey("user")));
+        assertEquals("archive", runs.getAttributes().get(AttributeKey.stringKey("job_name")));
+    }
+
+    @Test
     void theHealsRetryTakesTheSessionsFailurePathAndItsFirstAskTheCurrentSession() throws Exception {
         // the re-review's N7: swapping these would reuse a dead token on every retry
         dev.amfshr.tradebench.marketdata.testutil.FakeSessions sessions = new dev.amfshr.tradebench.marketdata.testutil.FakeSessions();
@@ -102,7 +145,7 @@ class MainTest {
     @Test
     void aLineIsExportedAtItsOwnLevelWithoutItsTag() {
         // E1-T16: Grafana filters by level, so a warning or an error must not arrive as INFO
-        java.util.List<java.util.logging.LogRecord> seen = new java.util.ArrayList<>();
+        List<java.util.logging.LogRecord> seen = new ArrayList<>();
         java.util.logging.Handler capture = new java.util.logging.Handler() {
             @Override
             public void publish(java.util.logging.LogRecord record) {
@@ -126,9 +169,9 @@ class MainTest {
         } finally {
             Main.LOG.removeHandler(capture);
         }
-        assertEquals(java.util.List.of(java.util.logging.Level.INFO, java.util.logging.Level.WARNING,
+        assertEquals(List.of(java.util.logging.Level.INFO, java.util.logging.Level.WARNING,
                 java.util.logging.Level.SEVERE, java.util.logging.Level.SEVERE), seen.stream().map(java.util.logging.LogRecord::getLevel).toList());
-        assertEquals(java.util.List.of("[capture-demo-01] boot", "[capture-demo-01] sink unavailable",
+        assertEquals(List.of("[capture-demo-01] boot", "[capture-demo-01] sink unavailable",
                 "[capture-demo-01] jobs: heal failed", "[capture-demo-01] FATAL: recovery exhausted"),
                 seen.stream().map(java.util.logging.LogRecord::getMessage).toList(), "the level is the record's, not its text's");
     }
@@ -136,7 +179,7 @@ class MainTest {
     @Test
     void theCollectorsLinesGoThroughJavaLoggingSoTheAgentCanExportThem() {
         // E1-T7, in-ticket ruling 2: the OpenTelemetry agent exports java.util.logging records, not println
-        java.util.List<java.util.logging.LogRecord> seen = new java.util.ArrayList<>();
+        List<java.util.logging.LogRecord> seen = new ArrayList<>();
         java.util.logging.Handler capture = new java.util.logging.Handler() {
             @Override
             public void publish(java.util.logging.LogRecord record) {

@@ -111,8 +111,8 @@ public final class IgStreamControl implements StreamControl, AutoCloseable {
                     throw new IllegalStateException("boot budget exhausted — IG unreachable for "
                             + bootBudget, e);
                 }
-                log.accept("boot attempt " + attempt + " — IG unreachable, retrying in "
-                        + bootRetry + ": " + e);
+                log.accept(LogLine.warn("boot attempt " + attempt + " — IG unreachable, retrying in "
+                        + bootRetry + ": " + e));
                 sleeper.sleep(bootRetry);
             } catch (RuntimeException e) {
                 log.accept("FATAL: the stream could not be set up at boot — not retrying: " + e);
@@ -129,7 +129,7 @@ public final class IgStreamControl implements StreamControl, AutoCloseable {
             return Outcome.CONNECTED;
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
-            log.accept("rebuild interrupted — stream left down");
+            log.accept(LogLine.warn("rebuild interrupted — stream left down"));
         } catch (IgFatalConfigException e) {
             log.accept("FATAL: IG rejected the configuration — recovery is pointless: "
                     + e.getMessage());
@@ -226,7 +226,7 @@ public final class IgStreamControl implements StreamControl, AutoCloseable {
             try {
                 live.unsubscribe(price);
             } catch (RuntimeException rollback) {
-                log.accept("rollback of " + epic + " PRICE refused — a leg streams unowned: " + rollback);
+                log.accept(LogLine.error("rollback of " + epic + " PRICE refused — a leg streams unowned: " + rollback));
             }
             throw e;
         }
@@ -326,7 +326,7 @@ public final class IgStreamControl implements StreamControl, AutoCloseable {
             try {
                 live.close();
             } catch (RuntimeException e) {
-                log.accept("stream close failed: " + e);
+                log.accept(LogLine.warn("stream close failed: " + e));
             }
         }
     }

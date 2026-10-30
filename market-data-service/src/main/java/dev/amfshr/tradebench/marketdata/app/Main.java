@@ -39,6 +39,7 @@ import dev.amfshr.tradebench.marketdata.heal.Healer;
 import dev.amfshr.tradebench.marketdata.heal.IgHistory;
 import dev.amfshr.tradebench.marketdata.heal.RetryingCandleSource;
 import dev.amfshr.tradebench.marketdata.jobs.DailyJobs;
+import dev.amfshr.tradebench.marketdata.jobs.JobRunStore;
 import dev.amfshr.tradebench.marketdata.jobs.JobTuning;
 import dev.amfshr.tradebench.marketdata.jobs.JobsRunner;
 import dev.amfshr.tradebench.marketdata.store.PostgresHealStore;
@@ -128,7 +129,7 @@ public final class Main {
                 eventLog = observability;
                 gaps = observability;
                 statusStore = observability;
-                log(instance, "capturing to " + dbUrl + " (migrated; advisory lock held)");
+                log(instance, "capturing to the configured database (migrated; advisory lock held)"); // never the URL: an .env value (G1)
             }
             default -> throw new IgFatalConfigException(
                     "TRADEBENCH_SINK must be 'jsonl' or 'db', got '" + sinkKind + "'");
@@ -155,13 +156,13 @@ public final class Main {
                 phases.add(new Archiver(new PostgresArchiveStore(db.dataSource(), user, source),
                         new S3ObjectStore(archive.endpoint(), archive.region(), archive.bucket(), archive.accessKeyId(),
                                 archive.secretAccessKey()), user + "/" + source));
-                log(instance, "daily job: heal, then archive to bucket " + archive.bucket());
+                log(instance, "daily job: heal, then archive to the configured bucket"); // never its name: an .env value (G1)
             } else {
                 log(instance, "daily job: heal only — no TRADEBENCH_ARCHIVE_* set, so nothing is archived off the box");
             }
             jobs = new JobsRunner(new DailyJobs(clock, epics, phases,
-                    new JobMetrics(telemetry.meter(), user, source)
-                            .counting(new PostgresJobRunStore(db.dataSource(), user, source, instance)), JobTuning.playbook(),
+                    countedRuns(telemetry, new PostgresJobRunStore(db.dataSource(), user, source, instance)),
+                    JobTuning.playbook(),
                     message -> log(instance, message)), JobTuning.playbook().wake(), message -> log(instance, message));
         }
         JobsRunner dailyJobs = jobs;
@@ -215,7 +216,7 @@ public final class Main {
         // Log-only: discovery runs once, here at boot, so a refused breadcrumb is a console line,
         // never a heartbeat term (doctrine review 2026-10-10, finding 3).
         new PacerDiscovery(rest::applicationAllowance, pacer::setPerMinute,
-                new BestEffortEventLog(eventLog, message -> log(instance, message)),
+                new BestEffortEventLog(capture.metrics.counting(eventLog), message -> log(instance, message)),
                 message -> log(instance, message), clock).discover(sessions.current());
 
         URI pingTo = pingUrl(env);
@@ -247,10 +248,10 @@ public final class Main {
         try {
             switch (lock.verify()) {
                 case HELD -> { }
-                case REACQUIRED -> log(instance, "advisory lock re-acquired on a fresh session — the"
-                        + " database restarted under us and took the old session with it");
-                case UNVERIFIABLE -> log(instance, "advisory lock unverifiable — the database is"
-                        + " unreachable, so nobody can take it either; asking again next heartbeat");
+                case REACQUIRED -> log(instance, LogLine.warn("advisory lock re-acquired on a fresh session — the"
+                        + " database restarted under us and took the old session with it"));
+                case UNVERIFIABLE -> log(instance, LogLine.warn("advisory lock unverifiable — the database is"
+                        + " unreachable, so nobody can take it either; asking again next heartbeat"));
             }
         } catch (IllegalStateException refused) {
             log(instance, "FATAL: " + refused.getMessage()
@@ -308,6 +309,11 @@ public final class Main {
 
     /** The heal's sessions: the current one, or — on a retry — the failure path, which validates the token
      * and logs in fresh only if it is dead (a retry must never reuse a dead session). */
+    /** The job-run record, counted on its way in (E1-T16): the jobs panels read what this wrapper sees. */
+    static JobRunStore countedRuns(CaptureAssembly.Telemetry telemetry, JobRunStore store) {
+        return new JobMetrics(telemetry.meter(), telemetry.user(), telemetry.source()).counting(store);
+    }
+
     static IgHistory.Sessions healSessions(IgSessions sessions) {
         return afterFailure -> afterFailure ? sessions.afterFailure() : sessions.current();
     }
