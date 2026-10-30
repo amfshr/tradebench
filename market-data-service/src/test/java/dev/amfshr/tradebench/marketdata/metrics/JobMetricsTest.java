@@ -84,8 +84,8 @@ class JobMetricsTest {
         Collection<MetricData> all = reader.collectAllMetrics();
         var runs = metric(all, CollectorMetrics.JOB_RUNS).getLongSumData().getPoints();
 
-        assertEquals(1, value(runs, with("job", "heal", "outcome", "succeeded")));
-        assertEquals(1, value(runs, with("job", "archive", "outcome", "failed")));
+        assertEquals(1, value(runs, with("job_name", "heal", "outcome", "succeeded")));
+        assertEquals(1, value(runs, with("job_name", "archive", "outcome", "failed")));
         var durations = metric(all, CollectorMetrics.JOB_DURATION).getHistogramData().getPoints();
         assertEquals(6.5, durations.stream().mapToDouble(p -> p.getSum()).sum(), 1e-9, "2.5 s + 4 s");
     }

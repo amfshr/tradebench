@@ -65,7 +65,8 @@ public final class CollectorMetrics {
     public static final AttributeKey<String> ACTION = stringKey("action");
     public static final AttributeKey<String> ORIGIN = stringKey("origin");
     public static final AttributeKey<String> OP = stringKey("op");
-    public static final AttributeKey<String> JOB = stringKey("job");
+    /** Not {@code job}: Prometheus already uses {@code job} for the service, {@code job="market-data-service"}. */
+    public static final AttributeKey<String> JOB = stringKey("job_name");
     public static final AttributeKey<String> OUTCOME = stringKey("outcome");
 
     private final Meter meter;

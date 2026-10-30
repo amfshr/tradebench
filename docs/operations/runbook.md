@@ -69,6 +69,10 @@ also works), public IPv4 and IPv6 both on, your SSH key,
 
 ## 2. Every evening (until E9's digest — D30)
 
+**The quick way (E1-T16):** Grafana's **Tradebench → Collector — operations** dashboard shows the heartbeat,
+ticks per minute, drops and errors, the belt, and warnings and errors on one screen; **Collector — domain**
+shows the day's job runs and the heal. The five looks below are the long way, and the record of truth.
+
 Five looks, two minutes. Field Manual chapter 11 §8 has the queries; on the box, open SQL with:
 ```
 docker compose -f /opt/tradebench/deploy/compose.prod.yaml exec postgres psql -U market_data_reader -d market_data
