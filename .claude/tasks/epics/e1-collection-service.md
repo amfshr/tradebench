@@ -374,7 +374,7 @@ Done history entry tagged E1-T6.
 
 ## T7 — Deploy ✅ (done 2026-10-30 — PRs #28, #30, #31; `v0.1.0` deployed 2026-10-18 17:46Z, twelve days unattended, the archive end to end; started 2026-10-17 on `e1-t7-deploy`; its nod held 2026-10-17, Alex; the provider analysis + design session held 2026-10-17 → D34; re-scoped 2026-10-17 to one environment, production on IG demo, no Mac soak — Alex; the first production deploy waited for T15 — unblocked 2026-10-18 by its merge, PR #29; T6's gated demo smoke captures carried to the E1 close-out)
 
-**Type** ops · **Branch** `e1-t7-deploy` (merged PR #28; with `e1-t7-x86-box` PR #30 and `e1-t7-rclone-current` PR #31 — none yet deleted) · **Started** 2026-10-17 · **Blocked by** —
+**Type** ops · **Branch** `e1-t7-deploy` (merged PR #28; with `e1-t7-x86-box` PR #30 and `e1-t7-rclone-current` PR #31 — all deleted 2026-10-30) · **Started** 2026-10-17 · **Blocked by** —
 
 **Carried from E1-T6 (2026-10-17, at its merge — PR #27):** the DoD item **"staging produces the archive end-to-end"** (T6
 proved the path in tests against real Postgres and an S3-protocol server; staging is this ticket's) — **now "production produces
@@ -493,7 +493,7 @@ test's passwords made at run time · `250d163`, `4769ef7` board.
 - **Next:** Alex resolves the GitGuardian incident, merges #28 and creates the accounts; then the first deploy, by the runbook §1.
 
 **Merged (2026-10-18) — not done.** PR #28 merged by Alex — GitHub stamps 2026-10-18T13:24:23Z — merge `9da0961`; `CI` green on
-the merged head. The branch `e1-t7-deploy` is not yet deleted, locally or on origin. The PR's GitGuardian check reads skipped on
+the merged head. The branch `e1-t7-deploy` is deleted 2026-10-30, locally or on origin. The PR's GitGuardian check reads skipped on
 the head `f7d7c90` at the merge; whether the dashboard incident is resolved is not verified here.
 - **Stays 🔶:** the DoD — production produces the archive end-to-end, then three consecutive unattended days — is met only on the box.
 - **Ruled (Alex, 2026-10-18): the first production deploy waits for T15**, the first live weekend's three findings — "will happily spend today fixing these issues before pushing to prod — that is my decision".
@@ -555,7 +555,7 @@ env value (G1).
   demo smoke's captures (`application-allowance.json`, the login's `timezoneOffset`), on the Mac — carried onto the E1
   close-out list as a known residual, not a T7 blocker.
 - **The PRs:** #28 (the build, merge `9da0961`) · #30 (the x86 release, merge `c8cad7a`, tagged `v0.1.0`) · #31 (provisioning's
-  current rclone, merge `bfa2da4`). The branches are not yet deleted, locally or on origin. The Done history entry tagged E1-T7.
+  current rclone, merge `bfa2da4`). The branches are deleted 2026-10-30, locally or on origin. The Done history entry tagged E1-T7.
 
 ## T8 — Acceptance: shadow-diff week
 
@@ -1829,7 +1829,7 @@ folded in** — it stays in `backlog.md`. Its close-out the Done history entry t
 
 ## T15 — The first live weekend's three findings ✅ (born and started 2026-10-18; done 2026-10-18 — PR #29, merged by Alex, merge `d69cdf1` — complete; it unblocked T7's deploy)
 
-**Type** build · **Branch** `e1-t15-first-weekend-findings` (merged from it, PR #29 → `main`, 2026-10-18 — branch not yet deleted) · **Started** 2026-10-18 · **Blocked by** —
+**Type** build · **Branch** `e1-t15-first-weekend-findings` (merged from it, PR #29 → `main`, 2026-10-18 — branch deleted 2026-10-30) · **Started** 2026-10-18 · **Blocked by** —
 
 **Source.** The local collector's own database, which ran the pre-T6 main build (schema V3) from Fri 2026-10-16 19:23 UTC; Alex
 asked to look at it. Every figure below was observed by query and is quoted. Each finding is an **observation with an open
@@ -1904,7 +1904,7 @@ waits for this ticket:** "will happily spend today fixing these issues before pu
 - **Next:** PR #29 opened 2026-10-18; Alex merges; then `v0.1.0` and T7's deploy.
 
 **Merged (2026-10-18) — done.** PR #29 merged by Alex — GitHub stamps 2026-10-18T14:45:53Z — merge `d69cdf1`. CI green on the PR head:
-`build`, `web` and GitGuardian passed. The branch `e1-t15-first-weekend-findings` is not yet deleted, locally or on origin.
+`build`, `web` and GitGuardian passed. The branch `e1-t15-first-weekend-findings` is deleted 2026-10-30, locally or on origin.
 - **DoD:** met — the findings reproduced or explained from fixtures; the fixes ruled (D35), each with an exposing test and a killed mutation;
   doctrine review before the PR; `./gradlew build` and `replayAcceptance` green. Its last item — the first release tag and T7's deploy — is T7's.
 - **Deferred:** backlog B19 (a CHART snapshot) and B20 (the reconnect row's host-sleep label).
