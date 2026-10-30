@@ -12,6 +12,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
+import java.util.logging.Level;
 import java.util.logging.Logger;
 import java.util.concurrent.ThreadLocalRandom;
 
@@ -29,6 +30,8 @@ import dev.amfshr.tradebench.ig.session.IgSessions;
 import dev.amfshr.tradebench.ig.session.LoginRateGate;
 import dev.amfshr.tradebench.ig.stream.LightstreamerTransport;
 import dev.amfshr.tradebench.ig.time.Sleeper;
+import dev.amfshr.tradebench.marketdata.metrics.JobMetrics;
+import dev.amfshr.tradebench.marketdata.events.LogLine;
 import dev.amfshr.tradebench.marketdata.store.BestEffortEventLog;
 import dev.amfshr.tradebench.marketdata.store.Database;
 import dev.amfshr.tradebench.marketdata.store.PostgresStore;
@@ -80,6 +83,9 @@ public final class Main {
         IgEnvironment igEnv = igEnvironment(required(env, "TRADEBENCH_IG_ENV"));
         String source = "ig-stream-" + igEnv.name().toLowerCase(java.util.Locale.ROOT);
         String restSource = "ig-rest-" + igEnv.name().toLowerCase(java.util.Locale.ROOT); // the heal's bars (P8)
+        // the agent's meter when it is attached (OTEL_EXPORTER_OTLP_ENDPOINT set); a no-op otherwise (E1-T16)
+        CaptureAssembly.Telemetry telemetry =
+                new CaptureAssembly.Telemetry(GlobalOpenTelemetry.get().getMeter("tradebench.market-data"), user, source);
         String sinkKind = required(env, "TRADEBENCH_SINK").strip().toLowerCase(java.util.Locale.ROOT);
         IgCredentials credentials = IgCredentials.fromEnv(env, igEnv);
 
@@ -154,7 +160,8 @@ public final class Main {
                 log(instance, "daily job: heal only — no TRADEBENCH_ARCHIVE_* set, so nothing is archived off the box");
             }
             jobs = new JobsRunner(new DailyJobs(clock, epics, phases,
-                    new PostgresJobRunStore(db.dataSource(), user, source, instance), JobTuning.playbook(),
+                    new JobMetrics(telemetry.meter(), user, source)
+                            .counting(new PostgresJobRunStore(db.dataSource(), user, source, instance)), JobTuning.playbook(),
                     message -> log(instance, message)), JobTuning.playbook().wake(), message -> log(instance, message));
         }
         JobsRunner dailyJobs = jobs;
@@ -167,8 +174,7 @@ public final class Main {
                 cause -> exitLoud(instance, "FATAL: capture pump died — capture is void from here;"
                         + " cause: " + cause),
                 Buffers.DEFAULT_TICK_CAPACITY,
-                // the agent's meter when it is attached (OTEL_EXPORTER_OTLP_ENDPOINT set); a no-op otherwise
-                new CaptureAssembly.Telemetry(GlobalOpenTelemetry.get().getMeter("tradebench.market-data"), user, source)));
+                telemetry));
         Thread pumpThread = new Thread(capture.pump, "capture-pump");
         Thread supervisorThread = new Thread(capture.supervisor, "capture-supervisor");
         Thread eventsThread = new Thread(capture.events, "capture-events");
@@ -179,7 +185,7 @@ public final class Main {
             if (dailyJobs != null) {
                 try {
                     if (!dailyJobs.stop(Duration.ofSeconds(5))) {
-                        log(instance, "jobs did not stop within 5s — a heal may be mid-write; its row is not recorded");
+                        log(instance, LogLine.warn("jobs did not stop within 5s — a heal may be mid-write; its row is not recorded"));
                     }
                 } catch (InterruptedException e) {
                     Thread.currentThread().interrupt();
@@ -282,7 +288,7 @@ public final class Main {
         try {
             closeable.close();
         } catch (Exception e) {
-            log(instance, "close failed: " + e);
+            log(instance, LogLine.warn("close failed: " + e));
         }
     }
 
@@ -369,10 +375,15 @@ public final class Main {
         return logger;
     }
 
+    /** The console line as given; the exported record at the line's own level (E1-T16 — {@link LogLine}). */
     static void log(String instance, String message) {
-        String line = "[" + instance + "] " + message;
-        System.out.println(Instant.now() + " " + line);
-        LOG.info(line);
+        System.out.println(Instant.now() + " [" + instance + "] " + message);
+        Level level = switch (LogLine.severityOf(message)) {
+            case ERROR -> Level.SEVERE;
+            case WARN -> Level.WARNING;
+            case INFO -> Level.INFO;
+        };
+        LOG.log(level, "[" + instance + "] " + LogLine.text(message));
     }
 
     /** The dead-man ping's URL, if this instance has one (D33): absent leaves the ping off, said at boot. */

@@ -18,6 +18,7 @@ import com.fasterxml.jackson.databind.node.ObjectNode;
 
 import org.jspecify.annotations.Nullable;
 
+import dev.amfshr.tradebench.marketdata.events.LogLine;
 import dev.amfshr.tradebench.core.time.Clock;
 import dev.amfshr.tradebench.ig.time.Sleeper;
 import dev.amfshr.tradebench.marketdata.events.EventType;
@@ -534,9 +535,9 @@ public final class Supervisor implements StreamObserver, BeltView, Runnable {
     // write never kills the sweep thread — and giveUp() always reaches onExhausted. The console
     // line comes first: it is what the operator reads when the database refused the row (#9).
     private void record(ServiceEvent event) {
-        log.accept("belt " + event.type()
+        log.accept(LogLine.at(event.severity(), "belt " + event.type()
                 + (event.epic() == null ? "" : " " + event.epic())
-                + (event.detail() == null ? "" : " " + event.detail()));
+                + (event.detail() == null ? "" : " " + event.detail())));
         events.write(event);
     }
 

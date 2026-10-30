@@ -5,6 +5,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.math.BigDecimal;
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
 import java.util.Set;
@@ -16,13 +17,24 @@ import org.junit.jupiter.api.Test;
 import io.opentelemetry.api.common.Attributes;
 import io.opentelemetry.sdk.metrics.SdkMeterProvider;
 import io.opentelemetry.sdk.metrics.data.HistogramPointData;
+import io.opentelemetry.sdk.metrics.data.LongPointData;
 import io.opentelemetry.sdk.metrics.data.MetricData;
 import io.opentelemetry.sdk.testing.exporter.InMemoryMetricReader;
 
+import dev.amfshr.tradebench.core.domain.Bar1m;
+import dev.amfshr.tradebench.core.domain.OhlcPrices;
+import dev.amfshr.tradebench.core.domain.Tick;
 import dev.amfshr.tradebench.ig.stream.Ohlc;
 import dev.amfshr.tradebench.ig.stream.SealedBarUpdate;
 import dev.amfshr.tradebench.ig.stream.TickUpdate;
+import dev.amfshr.tradebench.marketdata.events.EventType;
+import dev.amfshr.tradebench.marketdata.events.ServiceEvent;
 import dev.amfshr.tradebench.marketdata.ingest.Buffers;
+import dev.amfshr.tradebench.marketdata.jobs.JobRun;
+import dev.amfshr.tradebench.marketdata.jobs.JobRunStore;
+import dev.amfshr.tradebench.marketdata.jobs.MarketDay;
+import dev.amfshr.tradebench.marketdata.store.CaptureStore;
+import dev.amfshr.tradebench.marketdata.store.EventLog;
 
 /** What the collector records, read back from an in-memory OpenTelemetry SDK (E1-T16). */
 class CollectorMetricsTest {
@@ -34,14 +46,16 @@ class CollectorMetricsTest {
             .put("source", "ig-stream-demo").build();
 
     private InMemoryMetricReader reader;
+    private CollectorMetrics metrics;
+    private SdkMeterProvider provider;
     private long now; // the monotonic clock the buffer and the gauges read
     private Buffers buffers;
 
     @BeforeEach
     void setUp() {
         reader = InMemoryMetricReader.create();
-        SdkMeterProvider provider = SdkMeterProvider.builder().registerMetricReader(reader).build();
-        CollectorMetrics metrics = new CollectorMetrics(provider.get("test"), "platform", "ig-stream-demo", List.of(DAX));
+        provider = SdkMeterProvider.builder().registerMetricReader(reader).build();
+        metrics = new CollectorMetrics(provider.get("test"), "platform", "ig-stream-demo", List.of(DAX));
         buffers = new Buffers(10, () -> now, metrics.tickGaps());
         metrics.observe(buffers, () -> now);
     }
@@ -146,10 +160,120 @@ class CollectorMetricsTest {
     }
 
     @Test
+    void anEventIsCountedByTypeAndSeverityAndAVerdictByItsAction() {
+        List<ServiceEvent> written = new ArrayList<>();
+        EventLog log = metrics.counting(written::add);
+        log.write(ServiceEvent.of(EventType.WATCHDOG_STALE, T0).forEpic(DAX)
+                .withDetail(MAPPER.createObjectNode().put("action", "resubscribe").put("signal", "TICK_SILENT")));
+        log.write(ServiceEvent.of(EventType.WATCHDOG_STALE, T0).forEpic(DAX)
+                .withDetail(MAPPER.createObjectNode().put("action", "resubscribe")));
+        log.write(ServiceEvent.of(EventType.WATCHDOG_STALE, T0)); // a session verdict: no detail, a rebuild
+        log.write(ServiceEvent.of(EventType.RECONNECT, T0));
+
+        var points = metric(reader.collectAllMetrics(), CollectorMetrics.EVENTS).getLongSumData().getPoints();
+
+        assertEquals(4, written.size(), "every event still reaches the log");
+        assertEquals(3, points.size(), "resubscribes on DAX, the rebuild, the reconnect");
+        assertEquals(2, value(points, Attributes.builder().putAll(DAX_DIMS).put("type", "WATCHDOG_STALE")
+                .put("severity", "WARN").put("action", "resubscribe").build()));
+        assertEquals(1, value(points, Attributes.builder().put("user", "platform").put("source", "ig-stream-demo")
+                .put("type", "WATCHDOG_STALE").put("severity", "WARN").put("action", "rebuild").build()));
+        assertEquals(1, value(points, Attributes.builder().put("user", "platform").put("source", "ig-stream-demo")
+                .put("type", "RECONNECT").put("severity", "WARN").build()));
+    }
+
+    @Test
+    void aStreamGapAddsItsMinutesFromTheStream() {
+        EventLog log = metrics.counting(e -> { });
+        log.write(ServiceEvent.of(EventType.BAR_GAP, T0).forEpic(DAX).withDetail(MAPPER.createObjectNode().put("missingMinutes", 26)));
+        log.write(ServiceEvent.of(EventType.BAR_GAP, T0).forEpic(DAX).withDetail(MAPPER.createObjectNode().put("missingMinutes", 17)));
+
+        var points = metric(reader.collectAllMetrics(), CollectorMetrics.GAP_MINUTES).getLongSumData().getPoints();
+
+        assertEquals(1, points.size());
+        assertEquals(43, value(points, Attributes.builder().putAll(DAX_DIMS).put("origin", "stream").build()));
+    }
+
+    @Test
+    void anEventIsCountedEvenWhenTheDatabaseRefusesIt() {
+        EventLog refusing = metrics.counting(e -> {
+            throw new IllegalStateException("database down");
+        });
+        try {
+            refusing.write(ServiceEvent.of(EventType.SINK_FAILURE, T0));
+        } catch (IllegalStateException expected) {
+            // the best-effort wrapper above it says so; the event happened all the same
+        }
+
+        assertEquals(1, metric(reader.collectAllMetrics(), CollectorMetrics.EVENTS).getLongSumData().getPoints()
+                .iterator().next().getValue());
+    }
+
+    @Test
+    void theStoreTimesABarAndAFlushOnlyWhenTicksWereWritten() {
+        boolean[] failNext = {false};
+        CaptureStore slow = new CaptureStore() {
+            @Override
+            public void write(Bar1m bar) {
+                now += 4_000_000; // 4 ms
+            }
+
+            @Override
+            public void write(Tick tick) {
+            }
+
+            @Override
+            public void flush() {
+                now += 12_000_000; // 12 ms
+                if (failNext[0]) {
+                    failNext[0] = false;
+                    throw new IllegalStateException("blip");
+                }
+            }
+
+            @Override
+            public boolean recover() {
+                return false;
+            }
+
+            @Override
+            public void close() {
+            }
+        };
+        CaptureStore timed = metrics.timed(slow, () -> now);
+        timed.write(new Bar1m(DAX, T0, ohlc(), ohlc(), null));
+        timed.flush();            // nothing written since the last flush: a no-op, not timed
+        timed.write(new Tick(DAX, T0, BigDecimal.ONE, BigDecimal.TWO));
+        failNext[0] = true;
+        try {
+            timed.flush();        // fails: not timed, and the ticks are still pending
+        } catch (IllegalStateException expected) {
+        }
+        timed.flush();            // lands: timed once
+        timed.flush();            // nothing new: not timed
+
+        var points = metric(reader.collectAllMetrics(), CollectorMetrics.STORE_WRITE_DURATION).getHistogramData().getPoints();
+
+        HistogramPointData bar = point(points, "bar");
+        HistogramPointData ticks = point(points, "ticks");
+        assertEquals(1, bar.getCount());
+        assertEquals(0.004, bar.getSum(), 1e-9);
+        assertEquals(1, ticks.getCount(), "one landed flush — not the idle one, not the failed one");
+        assertEquals(0.012, ticks.getSum(), 1e-9);
+    }
+
+    @Test
     void theMetricNamesAreTheDashboardsContract() {
+        JobMetrics jobs = new JobMetrics(provider.get("test"), "platform", "ig-stream-demo");
         buffers.onTick(tick(DAX, 0, "1.0"));
         buffers.onTick(tick(DAX, 1, "2.0"));
         buffers.onSealedBar(bar(1));
+        EventLog log = metrics.counting(e -> { });
+        log.write(ServiceEvent.of(EventType.BAR_GAP, T0).forEpic(DAX).withDetail(MAPPER.createObjectNode().put("missingMinutes", 1)));
+        CaptureStore timed = metrics.timed(new NoStore(), () -> now);
+        timed.write(new Bar1m(DAX, T0, ohlc(), ohlc(), null));
+        jobs.counting(new NoRuns()).record(new JobRun("heal", new MarketDay(DAX, java.time.LocalDate.of(2026, 10, 29)), T0,
+                T0.plusSeconds(1), true, "{\"missing\":2,\"healedMinutes\":1,\"pointsSpent\":1,\"gapMinutesAdded\":1,\"allowanceRemaining\":9000}"));
         Set<String> names = new TreeSet<>();
         reader.collectAllMetrics().forEach(m -> names.add(m.getName()));
 
@@ -157,6 +281,37 @@ class CollectorMetricsTest {
         assertEquals(new TreeSet<>(List.of("tradebench.capture.ticks", "tradebench.capture.bars",
                 "tradebench.capture.ticks.dropped", "tradebench.capture.updates.malformed",
                 "tradebench.capture.tick.age", "tradebench.capture.bar.age", "tradebench.capture.queue.pending",
-                "tradebench.capture.tick.gap")), names);
+                "tradebench.capture.tick.gap", "tradebench.events", "tradebench.gap.minutes",
+                "tradebench.store.write.duration", "tradebench.jobs.runs", "tradebench.jobs.duration",
+                "tradebench.heal.minutes", "tradebench.heal.points_spent", "tradebench.ig.allowance.remaining")), names);
+    }
+
+    private static final com.fasterxml.jackson.databind.ObjectMapper MAPPER = new com.fasterxml.jackson.databind.ObjectMapper();
+
+    private static OhlcPrices ohlc() {
+        return new OhlcPrices(BigDecimal.ONE, BigDecimal.ONE, BigDecimal.ONE, BigDecimal.ONE);
+    }
+
+    private static long value(Collection<LongPointData> points, Attributes attributes) {
+        return points.stream().filter(p -> p.getAttributes().equals(attributes)).findFirst()
+                .orElseThrow(() -> new AssertionError("no series " + attributes + " in " + points)).getValue();
+    }
+
+    private static HistogramPointData point(Collection<HistogramPointData> points, String op) {
+        return points.stream().filter(p -> op.equals(p.getAttributes().get(CollectorMetrics.OP))).findFirst()
+                .orElseThrow(() -> new AssertionError("no op=" + op + " in " + points));
+    }
+
+    private static final class NoStore implements CaptureStore {
+        @Override public void write(Bar1m bar) { }
+        @Override public void write(Tick tick) { }
+        @Override public void flush() { }
+        @Override public boolean recover() { return false; }
+        @Override public void close() { }
+    }
+
+    private static final class NoRuns implements JobRunStore {
+        @Override public List<JobRun> runs(String job, MarketDay day) { return List.of(); }
+        @Override public void record(JobRun run) { }
     }
 }

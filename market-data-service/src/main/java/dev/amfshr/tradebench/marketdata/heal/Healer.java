@@ -90,6 +90,7 @@ public final class Healer implements DayPhase {
         List<Run> runs = Run.of(missing, maxRunMinutes);
         List<Window> processRuns = store.processRuns(epic, from, to.plusSeconds(86_400));
         int rowsAdded = 0;
+        long minutesAdded = 0;
         Set<Instant> filled = new TreeSet<>();
         long spent = 0;
         for (Run run : runs) {
@@ -110,6 +111,7 @@ public final class Healer implements DayPhase {
                 store.recordHealedGap(epic, run, clock.wallInstant(), outcome(run, states, filled, store.healedMinutes(epic,
                         run.from(), run.to().plusSeconds(60))));
                 rowsAdded++;
+                minutesAdded += run.minutes();
             }
             spent += bars.size();
             knownRemaining = history.allowance().remainingAllowance();
@@ -133,6 +135,7 @@ public final class Healer implements DayPhase {
         }
         detail.put("gapRowsClosed", gaps.size());
         detail.put("gapRowsAdded", rowsAdded);
+        detail.put("gapMinutesAdded", minutesAdded);
         return detail;
     }
 

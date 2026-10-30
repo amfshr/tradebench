@@ -17,6 +17,8 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 
+import dev.amfshr.tradebench.marketdata.events.LogLine;
+import dev.amfshr.tradebench.marketdata.events.Severity;
 import dev.amfshr.tradebench.ig.error.IgFatalConfigException;
 import dev.amfshr.tradebench.ig.error.IgRetryableException;
 import dev.amfshr.tradebench.ig.session.IgSession;
@@ -408,7 +410,8 @@ class IgStreamControlTest {
         control.resubscribe(DAX);
         assertEquals(List.of(DAX_CHART, FTSE_PRICE, FTSE_CHART), activeItems(fake.last()),
                 "the PRICE leg went, the CHART leg stayed — and nothing new was subscribed over it");
-        assertTrue(log.stream().anyMatch(line -> line.startsWith("resubscribe " + DAX + " failed")));
+        assertTrue(log.stream().anyMatch(line -> LogLine.severityOf(line) == Severity.WARN
+                && LogLine.text(line).startsWith("resubscribe " + DAX + " failed")), "a warning: " + log);
 
         fake.refuseUnsubscribeOf.clear();
         control.resubscribe(DAX);

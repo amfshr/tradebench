@@ -16,6 +16,8 @@ import org.junit.jupiter.api.Test;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 
+import dev.amfshr.tradebench.marketdata.events.Severity;
+import dev.amfshr.tradebench.marketdata.events.LogLine;
 import dev.amfshr.tradebench.marketdata.testutil.FakeClock;
 
 /** E1-T6 ②: which market-days are due, the phases in order, retries — against the ruled numbers. */
@@ -57,6 +59,9 @@ class DailyJobsTest {
         clock.advance(Duration.ofMinutes(5));
         jobs.tick();
         assertEquals(runs, store.rows.size(), "both succeeded: nothing more to do for any day");
+        // E1-T16: one line per run, so the evening check can be read from the logs alone
+        assertTrue(log.contains("jobs: heal " + DAX + " " + D + " succeeded — {\"ok\":true}"), log.toString());
+        assertTrue(log.contains("jobs: archive " + DAX + " " + D + " succeeded — {\"ok\":true}"), log.toString());
     }
 
     @Test
@@ -141,6 +146,8 @@ class DailyJobsTest {
 
         assertFalse(store.last("archive", D).succeeded(), "the failure is a row");
         assertTrue(store.last("archive", D).detailJson().contains("UnsatisfiedLinkError"));
+        assertTrue(log.stream().anyMatch(l -> LogLine.severityOf(l) == Severity.ERROR
+                && LogLine.text(l).startsWith("jobs: archive " + DAX)), "a failed run is an error line (E1-T16): " + log);
         assertTrue(heal.ran(D.minusDays(6)), "and every other day was still worked");
     }
 

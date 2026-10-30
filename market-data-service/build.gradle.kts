@@ -31,6 +31,9 @@ dependencies {
     implementation(libs.resilience4j.retry)
     // The collector's own metrics (E1-T16): the API only — the agent supplies the SDK in production, a no-op without it.
     implementation(libs.opentelemetry.api)
+    // HikariCP and the AWS SDK log through SLF4J; without a binding their warnings were dropped (E1-T16).
+    // This one routes them into java.util.logging — the console and the agent — at their own levels.
+    runtimeOnly(libs.slf4j.jdk14)
     // The archive's Parquet writer (E1-T6 nod ruling 3's fallback: parquet-java needs Hadoop at runtime).
     // The all-platforms jar (81 MB) runs anywhere; -PduckdbPlatform=<platform> (linux_amd64 for the box since
     // D34's 2026-10-18 amendment) takes the one platform's (about 20 MB) for the deploy image (E1-T7).

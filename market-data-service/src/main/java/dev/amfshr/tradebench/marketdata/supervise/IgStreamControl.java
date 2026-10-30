@@ -13,6 +13,7 @@ import java.util.function.LongSupplier;
 
 import org.jspecify.annotations.Nullable;
 
+import dev.amfshr.tradebench.marketdata.events.LogLine;
 import dev.amfshr.tradebench.ig.error.IgFatalConfigException;
 import dev.amfshr.tradebench.ig.error.IgRetryableException;
 import dev.amfshr.tradebench.ig.session.IgSession;
@@ -134,7 +135,7 @@ public final class IgStreamControl implements StreamControl, AutoCloseable {
                     + e.getMessage());
             return Outcome.FATAL;
         } catch (IOException | RuntimeException e) {
-            log.accept("rebuild failed — stream left down for the backoff ladder: " + e);
+            log.accept(LogLine.warn("rebuild failed — stream left down for the backoff ladder: " + e));
         }
         return Outcome.FAILED;
     }
@@ -152,14 +153,14 @@ public final class IgStreamControl implements StreamControl, AutoCloseable {
             return;
         }
         if (quarantined.contains(epic)) {
-            log.accept("resubscribe " + epic + " refused — quarantined (exit is restart-only)");
+            log.accept(LogLine.warn("resubscribe " + epic + " refused — quarantined (exit is restart-only)"));
             return; // the second lock on the door: whoever asks, a quarantined pair never comes back
         }
         try {
             dropLegs(live, epic);
             legs.put(epic, subscribePair(live, epic, generation.get()));
         } catch (RuntimeException e) {
-            log.accept("resubscribe " + epic + " failed: " + e);
+            log.accept(LogLine.warn("resubscribe " + epic + " failed: " + e));
         }
     }
 
@@ -176,7 +177,7 @@ public final class IgStreamControl implements StreamControl, AutoCloseable {
             dropLegs(live, epic);
             return true;
         } catch (RuntimeException e) {
-            log.accept("quarantine " + epic + " — unsubscribe refused: " + e);
+            log.accept(LogLine.warn("quarantine " + epic + " — unsubscribe refused: " + e));
             return false;
         }
     }
@@ -203,7 +204,7 @@ public final class IgStreamControl implements StreamControl, AutoCloseable {
             try {
                 live.close();
             } catch (RuntimeException closing) {
-                log.accept("half-built stream close failed: " + closing);
+                log.accept(LogLine.warn("half-built stream close failed: " + closing));
             }
             throw e;
         }

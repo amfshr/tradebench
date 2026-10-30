@@ -92,6 +92,48 @@ class MainTest {
     }
 
     @Test
+    void theLibrariesSlf4jLogsReachJavaLoggingNotTheVoid() {
+        // E1-T16: HikariCP and the AWS SDK log through SLF4J; with no binding their warnings were dropped
+        // ("No SLF4J providers were found"). The JUL binding routes them to the console and the agent.
+        assertTrue(org.slf4j.LoggerFactory.getILoggerFactory().getClass().getName().contains("JDK14"),
+                "SLF4J is bound to java.util.logging: " + org.slf4j.LoggerFactory.getILoggerFactory().getClass().getName());
+    }
+
+    @Test
+    void aLineIsExportedAtItsOwnLevelWithoutItsTag() {
+        // E1-T16: Grafana filters by level, so a warning or an error must not arrive as INFO
+        java.util.List<java.util.logging.LogRecord> seen = new java.util.ArrayList<>();
+        java.util.logging.Handler capture = new java.util.logging.Handler() {
+            @Override
+            public void publish(java.util.logging.LogRecord record) {
+                seen.add(record);
+            }
+
+            @Override
+            public void flush() {
+            }
+
+            @Override
+            public void close() {
+            }
+        };
+        Main.LOG.addHandler(capture);
+        try {
+            Main.log("capture-demo-01", "boot");
+            Main.log("capture-demo-01", dev.amfshr.tradebench.marketdata.events.LogLine.warn("sink unavailable"));
+            Main.log("capture-demo-01", dev.amfshr.tradebench.marketdata.events.LogLine.error("jobs: heal failed"));
+            Main.log("capture-demo-01", "FATAL: recovery exhausted");
+        } finally {
+            Main.LOG.removeHandler(capture);
+        }
+        assertEquals(java.util.List.of(java.util.logging.Level.INFO, java.util.logging.Level.WARNING,
+                java.util.logging.Level.SEVERE, java.util.logging.Level.SEVERE), seen.stream().map(java.util.logging.LogRecord::getLevel).toList());
+        assertEquals(java.util.List.of("[capture-demo-01] boot", "[capture-demo-01] sink unavailable",
+                "[capture-demo-01] jobs: heal failed", "[capture-demo-01] FATAL: recovery exhausted"),
+                seen.stream().map(java.util.logging.LogRecord::getMessage).toList(), "the level is the record's, not its text's");
+    }
+
+    @Test
     void theCollectorsLinesGoThroughJavaLoggingSoTheAgentCanExportThem() {
         // E1-T7, in-ticket ruling 2: the OpenTelemetry agent exports java.util.logging records, not println
         java.util.List<java.util.logging.LogRecord> seen = new java.util.ArrayList<>();

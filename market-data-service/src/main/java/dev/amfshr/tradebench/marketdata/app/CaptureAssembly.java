@@ -11,6 +11,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import io.opentelemetry.api.OpenTelemetry;
 import io.opentelemetry.api.metrics.Meter;
 
+import dev.amfshr.tradebench.marketdata.events.LogLine;
 import dev.amfshr.tradebench.core.time.Clock;
 import dev.amfshr.tradebench.ig.session.IgSessions;
 import dev.amfshr.tradebench.ig.stream.IgStreamClient;
@@ -101,18 +102,19 @@ public final class CaptureAssembly {
         this.epics = List.copyOf(p.epics());
         this.instance = p.instance();
         this.clock = p.clock();
-        this.sink = p.sink();
         this.log = p.log();
         metrics = new CollectorMetrics(p.telemetry().meter(), p.telemetry().user(), p.telemetry().source(), epics);
         queues = new Buffers(p.tickCapacity(), p.clock()::monotonicNanos, metrics.tickGaps());
         metrics.observe(queues, p.clock()::monotonicNanos);
-        pumpEvents = new BestEffortEventLog(p.events(), p.log());
-        lifecycleEvents = new BestEffortEventLog(p.events(), p.log());
-        pump = new Pump(queues, p.sink(), new GapDetector(), p.gaps(), pumpEvents, p.sleeper(),
+        EventLog counted = metrics.counting(p.events());
+        this.sink = metrics.timed(p.sink(), p.clock()::monotonicNanos);
+        pumpEvents = new BestEffortEventLog(counted, p.log());
+        lifecycleEvents = new BestEffortEventLog(counted, p.log());
+        pump = new Pump(queues, sink, new GapDetector(), p.gaps(), pumpEvents, p.sleeper(),
                 p.clock(), new BackoffPolicy(p.tuning(), p.jitter()), p.log(), p.onPumpDeath());
         control = new IgStreamControl(p.sessions(), new IgStreamClient(p.transport()), queues, epics,
                 p.log(), p.sleeper(), BOOT_RETRY, p.clock()::monotonicNanos, p.tuning().giveUpAfter());
-        events = new QueuedEventLog(p.events(), EVENT_QUEUE_CAPACITY);
+        events = new QueuedEventLog(counted, EVENT_QUEUE_CAPACITY);
         beltEvents = new BestEffortEventLog(events, p.log());
         supervisor = new Supervisor(p.clock(), p.tuning(), p.jitter(), beltEvents, p.log(), control,
                 queues, p.onExhausted(), p.sleeper(), SWEEP_INTERVAL);
@@ -145,7 +147,7 @@ public final class CaptureAssembly {
         lifecycleEvents.write(lifecycle(EventType.SERVICE_STOP)); // dated when the stop began
         supervisor.stop();
         if (!joinSweep.getAsBoolean()) {
-            log.accept("supervisor did not stop within 5s — closing the stream anyway");
+            log.accept(LogLine.warn("supervisor did not stop within 5s — closing the stream anyway"));
         }
         control.close(); // only once the sweep thread is done — it owns the handles
         pump.stop();
@@ -154,21 +156,21 @@ public final class CaptureAssembly {
             try {
                 sink.close();
             } catch (RuntimeException e) {
-                log.accept("sink close failed: " + e);
+                log.accept(LogLine.warn("sink close failed: " + e));
             }
         } else {
-            log.accept("pump did not stop within 5s — leaving sink open to avoid a close/write"
-                    + " race; file may miss its tail");
+            log.accept(LogLine.warn("pump did not stop within 5s — leaving sink open to avoid a close/write"
+                    + " race; file may miss its tail"));
         }
         events.stop(); // the sweep has stopped: what is queued is the last word — FEED_DEAD among them
         if (!joinWriter.getAsBoolean()) {
-            log.accept("event writer did not stop within 5s — draining its queue anyway");
+            log.accept(LogLine.warn("event writer did not stop within 5s — draining its queue anyway"));
         }
         events.drainRemainder();
         log.accept("queued writes at shutdown: " + queues.pendingWrites());
         if (pump.failure() != null) {
-            log.accept("pump failure at shutdown: " + pump.failure() + " — " + queues.pendingWrites()
-                    + " queued writes and the sink's held batch were not written");
+            log.accept(LogLine.error("pump failure at shutdown: " + pump.failure() + " — " + queues.pendingWrites()
+                    + " queued writes and the sink's held batch were not written"));
         }
         return pumpStopped;
     }

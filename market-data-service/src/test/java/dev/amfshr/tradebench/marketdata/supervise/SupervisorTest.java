@@ -204,12 +204,13 @@ class SupervisorTest {
 
     @Test
     void everyEventTheBeltRecordsIsAlsoAConsoleLine() {
-        // E1-T10 #9: the operator reads the console; the row may never land (the test above).
+        // E1-T10 #9: the operator reads the console; the row may never land (the test above). Since E1-T16
+        // the line leads with the event's own severity, so the exported record is logged at it.
         supervisor.onServerError(stream.generation, 7, "licence lapsed");
         supervisor.sweep();
 
         assertEquals(1, count(EventType.IG_API_ERROR));
-        assertEquals("belt IG_API_ERROR {\"code\":7,\"message\":\"licence lapsed\"}", log.get(0));
+        assertEquals("ERROR belt IG_API_ERROR {\"code\":7,\"message\":\"licence lapsed\"}", log.get(0));
     }
 
     @Test

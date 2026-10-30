@@ -12,6 +12,7 @@ import org.jspecify.annotations.Nullable;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 
+import dev.amfshr.tradebench.marketdata.events.LogLine;
 import dev.amfshr.tradebench.core.time.Clock;
 
 /**
@@ -56,7 +57,7 @@ public final class DailyJobs {
                 }
             }
         } catch (RuntimeException storeDown) {
-            log.accept("jobs: tick abandoned — " + storeDown + "; next wake tries again");
+            log.accept(LogLine.warn("jobs: tick abandoned — " + storeDown + "; next wake tries again"));
         }
     }
 
@@ -87,6 +88,8 @@ public final class DailyJobs {
         Instant started = clock.wallInstant();
         try {
             ObjectNode detail = phase.run(day);
+            // one line per run, so the evening check can be read from the logs alone (E1-T16)
+            log.accept("jobs: " + phase.name() + " " + day.epic() + " " + day.day() + " succeeded — " + detail);
             return new JobRun(phase.name(), day, started, clock.wallInstant(), true, detail.toString());
         } catch (InterruptedException e) {
             throw e;
@@ -96,7 +99,7 @@ public final class DailyJobs {
             }
             // a LinkageError too — a native library that will not load (the archive's DuckDB on the wrong
             // platform) must be a failed row and the next day still due, never a dead runner
-            log.accept("jobs: " + phase.name() + " " + day.epic() + " " + day.day() + " failed — " + e);
+            log.accept(LogLine.error("jobs: " + phase.name() + " " + day.epic() + " " + day.day() + " failed — " + e));
             ObjectNode detail = MAPPER.createObjectNode().put("error", String.valueOf(e));
             return new JobRun(phase.name(), day, started, clock.wallInstant(), false, detail.toString());
         }

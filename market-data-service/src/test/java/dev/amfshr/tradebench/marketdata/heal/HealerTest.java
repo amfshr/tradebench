@@ -93,9 +93,11 @@ class HealerTest {
         store.processRuns.add(new Window(at("13:00"), Instant.parse("9999-01-01T00:00:00Z")));
         ig.has("12:30", "12:45");
 
-        healer.run(DAX_D);
+        var detail = healer.run(DAX_D);
 
         assertEquals(List.of(at("12:30") + "→" + at("12:59")), ig.asked);
+        assertEquals(1, detail.get("gapRowsAdded").asInt());
+        assertEquals(30, detail.get("gapMinutesAdded").asLong(), "12:30–12:59: the row's minutes, for gap minutes by origin (E1-T16)");
         assertEquals(List.of(at("12:30") + "→" + at("12:59") + " " + Healer.HEALED), store.added,
                 "the pump could not see a gap across its own restart: the heal records it");
     }
