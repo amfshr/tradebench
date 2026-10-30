@@ -176,6 +176,18 @@ class IgStreamControlTest {
     }
 
     @Test
+    void theConnectedLineNamesTheEndpointButNeverTheAccount() throws Exception {
+        // B21 (folded into E1-T16): the account id is an .env value (G1), and this line reaches Grafana
+        boot();
+
+        List<String> connected = log.stream().filter(line -> line.startsWith("stream connected")).toList();
+        assertEquals(1, connected.size(), log.toString());
+        assertTrue(connected.getFirst().contains("the configured account"), connected.getFirst());
+        assertTrue(connected.getFirst().contains(FakeSessions.session("boot").lightstreamerEndpoint()), "the endpoint is IG's, public");
+        assertFalse(connected.getFirst().contains(FakeSessions.session("boot").activeAccountId()), "never the account: " + connected.getFirst());
+    }
+
+    @Test
     void startRefusesToRunUnbound() {
         assertThrows(IllegalStateException.class, () -> control.start(),
                 "an unbound control would stream into the void — fail loud at boot");

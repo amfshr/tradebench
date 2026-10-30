@@ -210,8 +210,9 @@ public final class IgStreamControl implements StreamControl, AutoCloseable {
         }
         stream = live;
         legs.putAll(subscribed);
-        log.accept("stream connected: account " + session.activeAccountId() + " via "
-                + session.lightstreamerEndpoint());
+        // never the account id: it is an .env value (G1, B21) — and the session manager has already switched
+        // to the configured account, so naming it says nothing the configuration does not
+        log.accept("stream connected: the configured account, via " + session.lightstreamerEndpoint());
     }
 
     /** Both legs or neither: a CHART subscribe that throws rolls the PRICE leg back, so no handle
