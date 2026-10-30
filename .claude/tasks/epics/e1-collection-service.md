@@ -2049,8 +2049,8 @@ finding became **D37** (`docs/decisions.md`): one logging convention for every s
 line per meaningful outcome, the libraries' SLF4J routed to JUL, no `.env` value in a line beyond the `[instance]` prefix.
 **Re-review of `05f184b` (2026-10-30) — pass-with-findings, fixed on the branch:** the heal's partial-failure wrap now covers
 closing the gaps too; D37 names the `[instance]` prefix and the dev jsonl line no longer prints its path; the design doc's
-"structured JSON logs" corrected; a failed job's line names the real cause. Open for Alex: whether a `rejected` or `skipped`
-line (the belt's retry rejected, a resubscribe skipped with no live stream) is a `WARN `, and so whether the lint learns those words.
+"structured JSON logs" corrected; a failed job's line names the real cause. **Ruled (Alex, 2026-10-30):** a rejected leg's
+`belt RETRY` line is a `WARN `, and the lint learns `rejected`; a resubscribe skipped with no live stream stays INFO (routine).
 
 **Remaining before the ticket closes:** the PR (next) → Alex's merge → increment ⑥ at a weekend: tag `v0.2.0`,
 deploy, and validate live — the agent bridges the API; the histogram buckets' `le` values; the stored names match the

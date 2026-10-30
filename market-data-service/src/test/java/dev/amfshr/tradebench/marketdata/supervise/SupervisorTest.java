@@ -220,8 +220,9 @@ class SupervisorTest {
         supervisor.sweep(); // strike 1 → a surgical retry, which records no event — so it says so itself
 
         assertEquals(List.of(DAX), stream.resubscribed);
-        assertEquals(List.of("belt RETRY " + DAX
-                + " — re-asking for the pair in place after its PRICE leg was rejected (40)"), log);
+        assertEquals(List.of("WARN belt RETRY " + DAX
+                + " — re-asking for the pair in place after its PRICE leg was rejected (40)"), log,
+                "a rejected leg is a warning (Alex, 2026-10-30)");
     }
 
     @Test

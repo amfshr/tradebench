@@ -24,7 +24,7 @@ class LogLevelsLintTest {
     private static final Path SOURCES = Path.of("src/main/java");
     private static final Pattern LOG_CALL = Pattern.compile("\\b(?:log|accept)\\(");
     private static final Pattern WARNING_WORDS = Pattern.compile(
-            "failed|refused|lost|shedding|not written|unverifiable|re-acquired|abandoned|did not stop|interrupted");
+            "failed|refused|rejected|lost|shedding|not written|unverifiable|re-acquired|abandoned|did not stop|interrupted");
 
     @Test
     void everyLogLineThatReportsAFailureCarriesItsLevel() throws IOException {

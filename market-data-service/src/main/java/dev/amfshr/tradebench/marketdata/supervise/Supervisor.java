@@ -321,8 +321,8 @@ public final class Supervisor implements StreamObserver, BeltView, Runnable {
     private void applyJudgment(WitnessQuarantine.Judgment judgment, Observation.SubscriptionError error) {
         switch (judgment) {
             case WitnessQuarantine.Judgment.Retry(String epic) -> {
-                log.accept("belt RETRY " + epic + " — re-asking for the pair in place after its "
-                        + error.kind() + " leg was rejected (" + error.code() + ")");
+                log.accept(LogLine.warn("belt RETRY " + epic + " — re-asking for the pair in place after its "
+                        + error.kind() + " leg was rejected (" + error.code() + ")"));
                 witness.onSubscribeStarted(epic, clock.monotonicNanos());
                 reasking(epic);
                 stream.resubscribe(epic); // surgical re-attempt of the failing pair
