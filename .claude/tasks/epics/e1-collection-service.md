@@ -1932,9 +1932,9 @@ waits for this ticket:** "will happily spend today fixing these issues before pu
 - **Deferred:** backlog B19 (a CHART snapshot) and B20 (the reconnect row's host-sleep label).
 - **Next:** T7's first deploy, by the runbook §1 (the T7 § "Unblocked (2026-10-18)"). Its close-out is the Done history entry tagged E1-T15.
 
-## T16 — The collector's metrics and its Grafana dashboards ⬜ (born 2026-10-19; state 2026-10-19 — not started; the design nod first, D13)
+## T16 — The collector's metrics and its Grafana dashboards 🔶 (started 2026-10-30; the design nod held 2026-10-30, Alex — D13; born 2026-10-19)
 
-**Type** build · **Branch** `—` · **Started** — · **Blocked by** —
+**Type** build · **Branch** `e1-t16-metrics-and-dashboards` (cut from main `d2d39fa`, 2026-10-30) · **Started** 2026-10-30 · **Blocked by** —
 
 **Source.** Alex's ask, 2026-10-19: "make a ticket for all of the dashboard work, and when we do that we can do any code
 changes to emit appropriate metrics, the idea being that I can simply view a dashboard to see the performance and the domain
@@ -1959,7 +1959,7 @@ OTLP export, Grafana Cloud).
      is evidence beside B24 (whose own evidence now comes from the Parquet archive, 2026-10-30): how long a market's normal quiet stretches really are, overnight and in session.
    - Dimensions: market (the epic), user and source (CLAUDE.md — every schema and API). The instance comes from the resource
      attribute.
-   - **In-ticket decision for the nod:** the metric names and the OTel instrument kinds.
+   - **In-ticket decision for the nod:** the metric names and the OTel instrument kinds — ruled 2026-10-30 (the nod below).
 2. **Dashboards as code** — JSON in the repository under `deploy/grafana/`, pushed to the stack through the Grafana MCP access
    (a `claude-code` Editor service account, configured in Alex's user-scope Claude config, not in the repo). One folder,
    "Tradebench". Two dashboards:
@@ -1972,12 +1972,12 @@ OTLP export, Grafana Cloud).
      runs by outcome, IG allowance, and the tick-gap distribution by hour of day.
 3. **No Grafana alert rules.** Alerting belongs to E9 (D30); healthchecks.io covers the box dying.
 
-**Decision: (TBD) — the R3 boundary.** Under D25 R3, Grafana owns trends and the platform app owns record views (the coverage
+**Decision: the R3 boundary — ruled 2026-10-30 (the nod below, ruling (a)).** Under D25 R3, Grafana owns trends and the platform app owns record views (the coverage
 map, gap lists, the catalogue). This ticket is trends only. Whether any record view should also appear in Grafana is Alex's
 call at the nod — not to be built past.
 
 **Notes from the first production week (2026-10-25):**
-- **Gap totals double-count overlapping rows.** The stream's gap detector recorded the weekend span as one row (Fri 2026-10-16 21:00Z → Sun 22:01Z, 2,942 minutes) while the heal recorded the same span per day (180 + 720 + 720 + 720 + 347). The data is right; a sum of `missing_minutes` overstates distinct minutes by ~2,700. A gaps metric must count distinct minutes, or the overlap must be prevented at the source — an in-ticket decision.
+- **Gap totals double-count overlapping rows.** The stream's gap detector recorded the weekend span as one row (Fri 2026-10-16 21:00Z → Sun 22:01Z, 2,942 minutes) while the heal recorded the same span per day (180 + 720 + 720 + 720 + 347). The data is right; a sum of `missing_minutes` overstates distinct minutes by ~2,700. A gaps metric must count distinct minutes, or the overlap must be prevented at the source — an in-ticket decision (ruled 2026-10-30: an `origin` label, not merging — the nod below).
 - **Unobserved closed minutes read `tickless_at_source`**, not closed: with no flag on record for minutes the box never watched, "IG has nothing" is the honest label. The domain dashboard should show the outcome split so a weekend before first boot does not read as a data problem.
 - **The IG historical allowance is drawn by something else on the key.** The heal spent 0 points all week, yet `allowanceRemaining` fell 9,957 → 8,484 before the weekly reset (9,964) — almost certainly the Python prototype on the same key (D16). The allowance gauge should be read as the account's, not the collector's spend; a "points spent by the heal" counter beside it tells them apart.
 
@@ -1992,5 +1992,43 @@ call at the nod — not to be built past.
 - The design nod (D13) before the code.
 
 **Relates to:** D25 R3 · D33 · D35's log kinds · T7 (the telemetry pipeline) · E9-T1 (the ruled metric set) · E9-T7 (re-scoped
-2026-10-19: `control-service`'s panels beside these dashboards) · backlog B19 · backlog B21 (the account id in a log line — a
-candidate to fold in, since it is the same release; Alex's call).
+2026-10-19: `control-service`'s panels beside these dashboards) · backlog B19 · backlog B21 (the account id in a log line — folded in
+2026-10-30, the nod's ruling (b)).
+
+**Nod (Alex, 2026-10-30 — "yes on all the three rulings, I go with your recommendations"; then "go with OpenTelemetry")** —
+the design nod (D13), held the day the ticket started. It settles the scope's in-ticket decision (the metric names and
+instrument kinds), the gap double-count, and the § "Decision" above:
+1. **Instrumentation is the OpenTelemetry API only.**
+   - `io.opentelemetry:opentelemetry-api`; the agent supplies the SDK in production, and the API is a no-op without it.
+   - No Spring, no Micrometer in the collector. Alex weighed Micrometer and chose OpenTelemetry: one model end to end,
+     exact histogram buckets, no bridge.
+   - `Main` hands a `Meter` to the assembly; tests inject an in-memory SDK.
+2. **The metric set:**
+   - observable counters from the ingest buffer's per-market counts: ticks, bars, ticks dropped, malformed updates;
+   - gauges: tick age, bar age, queue pending;
+   - a tick-gap histogram, in seconds, with fixed buckets, recorded on each tick that is news;
+   - `tradebench.events` by type (plus `action` for watchdog verdicts), via one wrapper around the event log;
+   - `tradebench.gap.minutes` by origin (stream or heal);
+   - `tradebench.jobs.runs` by job and outcome, plus `tradebench.jobs.duration`, via one wrapper around the job-run store;
+   - `tradebench.heal.minutes` by outcome, and `tradebench.heal.points_spent`;
+   - `tradebench.ig.allowance.remaining`, labelled as the account's, not the collector's spend;
+   - `tradebench.store.write.duration`.
+
+   Labels are market, user and source; the instance comes from the resource.
+3. **The gap double-count** is solved by the `origin` label, not merging.
+4. **Dashboards as code** in `deploy/grafana/`, pushed via the Grafana MCP into a "Tradebench" folder: "Collector —
+   operations" and "Collector — domain". The data source is a dashboard variable. Resubscribes are shown as routine, apart
+   from rebuilds and escalations.
+5. **Tests:**
+   - the metric names and labels pinned as a contract (golden);
+   - a test that every metric a dashboard queries is in that pinned list;
+   - each instrument tested against the in-memory SDK and mutation-verified.
+
+**Rulings on the ticket's open questions:**
+- (a) **The R3 boundary:** Grafana for trends only; record views (coverage map, gap lists, catalogue) stay with the platform
+  app.
+- (b) **B21 is folded in:** mask the IG account id in the `stream connected` log line.
+- (c) **Released as `v0.2.0`** after the merge, deployed with `deploy.sh`, every panel then verified live.
+
+**Increments:** ① metrics plumbing + capture metrics · ② event, job and heal metrics · ③ B21 · ④ dashboards + their tests ·
+⑤ after the merge, the release, deploy and live check.
