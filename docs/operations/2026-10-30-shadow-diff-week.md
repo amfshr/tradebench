@@ -104,6 +104,8 @@ second cause.
 
 ## Reproducing it
 
-The working files live outside the repository, in `~/development/amfshr/tradebench-data/` (the archive mirror
-and the prototype's exports), and the queries in `compare.sql` beside them. The prototype is retired after this
-report, so the exports are the last copy of its side.
+The working files live outside both repositories. The archive mirror is `~/development/amfshr/tradebench-data/r2/`,
+and the comparison — the queries in `compare.sql`, the prototype's DAX exports, the silences and the power log — is
+in `~/development/amfshr/tradebench-data/archive/2026-10-30-shadow-diff/` (run `compare.sql` from there). The
+prototype itself is retired (D36): its full database dump, verified by restore, and its ops and data folders are
+archived in `ig-algorithmic-trader/_retired-2026-10-30/`, excluded from that repository's git.
