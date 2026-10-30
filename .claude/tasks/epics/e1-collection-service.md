@@ -372,9 +372,9 @@ T7's; the path proven in tests against real Postgres and an S3-protocol server).
 the pre-T6 main), `replayAcceptance` 6/6, docs site 65/65, 66 mutations killed (each listed in its commit). Record: the board's
 Done history entry tagged E1-T6.
 
-## T7 — Deploy 🔶 deployed 2026-10-18, not done — the first production deploy ran 17:46Z (`v0.1.0`), the soak from then; step 10 and the three unattended days open; PR #28, merge `9da0961`; the first production deploy waited for T15 (Alex, 2026-10-18) — unblocked 2026-10-18 by T15's merge, PR #29; the DoD's two items on the box (started 2026-10-17 on `e1-t7-deploy`; its nod held 2026-10-17, Alex; T6 ✅ 2026-10-17; the provider analysis + design session held 2026-10-17 → D34; re-scoped 2026-10-17 to one environment, production on IG demo, no Mac soak — Alex; gains 2026-10-17 from E1-T6: the archive DoD item and three notes; gains 2026-10-15 from the design session: Redis in the stack, the OTel agent + Grafana Cloud export, the dead-man ping)
+## T7 — Deploy ✅ (done 2026-10-30 — PRs #28, #30, #31; `v0.1.0` deployed 2026-10-18 17:46Z, twelve days unattended, the archive end to end; started 2026-10-17 on `e1-t7-deploy`; its nod held 2026-10-17, Alex; the provider analysis + design session held 2026-10-17 → D34; re-scoped 2026-10-17 to one environment, production on IG demo, no Mac soak — Alex; the first production deploy waited for T15 — unblocked 2026-10-18 by its merge, PR #29; T6's gated demo smoke captures carried to the E1 close-out)
 
-**Type** ops · **Branch** `e1-t7-deploy` · **Started** 2026-10-17 · **Blocked by** —
+**Type** ops · **Branch** `e1-t7-deploy` (merged PR #28; with `e1-t7-x86-box` PR #30 and `e1-t7-rclone-current` PR #31 — none yet deleted) · **Started** 2026-10-17 · **Blocked by** —
 
 **Carried from E1-T6 (2026-10-17, at its merge — PR #27):** the DoD item **"staging produces the archive end-to-end"** (T6
 proved the path in tests against real Postgres and an S3-protocol server; staging is this ticket's) — **now "production produces
@@ -533,6 +533,29 @@ account, the box's address, the Grafana stack, the instance or any env-file URL 
   check clean — the soak started 2026-10-18 17:46Z. From T6, still open: the gated demo smoke's captures
   (`application-allowance.json`, the login's `timezoneOffset`), on the Mac. Found at the deploy: the `stream connected` log line
   prints the IG account id — backlog **B21**. No Done history entry until the DoD is met.
+
+**Done (2026-10-30).** The DoD is met: production produced E1-T6's archive end to end, and has run unattended for twelve days —
+well past the three. Evidence as of 2026-10-30 ~20:12Z, observed by Claude through Grafana and the Cloudflare API; the database
+rows by Alex's queries on the box, 2026-10-25. Nothing below names the IG account, the box's address, the Grafana stack or any
+env value (G1).
+- **Unattended since the 2026-10-18 17:46Z deploy of `v0.1.0`.** One process start in the whole span, with no exit and no lock
+  loss. A heartbeat every minute, 1,439–1,440 a day. healthchecks.io pinged 10,075 times in the first week, all HTTP 200. No
+  warning or error log line. ~1.62 million ticks and ~14,200 bars, with `dropped=0 sinkFailures=0`.
+- **The belt.** Server-side reconnects, each recovered in under a second. Twice (2026-10-21 10:20Z and 2026-10-27) IG refused an
+  expired session ("User/password check failed"); the belt treated it as a dead connection and logged in afresh within a
+  second. The overnight resubscribes on a thin market are noise — backlog **B24**.
+- **The archive, end to end.** R2 holds a ticks + bars Parquet pair for every trading day (2026-10-18..23 seen on 2026-10-25),
+  each written ~00:11–00:15Z the next night. `job_runs`: 14 heal + 14 archive rows, all `succeeded` (2026-10-25). The 54
+  `bar_gaps` rows are all `tickless_at_source`, IG confirming no candle (`pointsSpent` 0 on every heal run) — the pre-box
+  weekend, and genuinely untraded minutes overnight and 21:00–22:00Z.
+- **The nightly dump** runs at 02:30Z every night into R2's daily and weekly prefixes.
+- **The runtime.** Heap after GC flat at ~32 MB of a 519 MB limit; CPU 0.13% mean; GC pauses 3.4 ms mean; the DB pool never
+  waited.
+- **From T6.** R2's `x-amz-checksum-sha256` check is met by the archive uploads succeeding. **Still open, unchanged:** the gated
+  demo smoke's captures (`application-allowance.json`, the login's `timezoneOffset`), on the Mac — carried onto the E1
+  close-out list as a known residual, not a T7 blocker.
+- **The PRs:** #28 (the build, merge `9da0961`) · #30 (the x86 release, merge `c8cad7a`, tagged `v0.1.0`) · #31 (provisioning's
+  current rclone, merge `bfa2da4`). The branches are not yet deleted, locally or on origin. The Done history entry tagged E1-T7.
 
 ## T8 — Acceptance: shadow-diff week
 
@@ -1911,7 +1934,7 @@ OTLP export, Grafana Cloud).
    - Plus the heal's own outcomes, which the spec names only as "later": minutes healed, gaps closed per outcome, heal and
      archive runs by outcome, IG allowance remaining.
    - **The gap between consecutive ticks** (added 2026-10-19, Alex), a histogram per market, readable by hour of day. It
-     is the evidence for B24: how long a market's normal quiet stretches really are, overnight and in session.
+     is evidence beside B24 (whose own evidence now comes from the Parquet archive, 2026-10-30): how long a market's normal quiet stretches really are, overnight and in session.
    - Dimensions: market (the epic), user and source (CLAUDE.md — every schema and API). The instance comes from the resource
      attribute.
    - **In-ticket decision for the nod:** the metric names and the OTel instrument kinds.

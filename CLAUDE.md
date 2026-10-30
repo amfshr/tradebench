@@ -12,11 +12,11 @@ the loop between idea and verdict*. Owner/admin: Alex (SWE); future users: his b
 
 **Status: building.** Requirements complete; the DSL's core semantics are ruled (D7–D9,
 design session 2026-09-27); the AI operating framework (E0) is in place. Epic 1 (the 24/7
-collection service) is the active build epic — T1–T6 and T9–T14 merged (foundations, IG client,
+collection service) is the active build epic — T1–T7 and T9–T15 done (foundations, IG client,
 streaming, Postgres persistence, a sink that holds through database blips, the resilience belt
 hardened through every finding of its independent review, proven against real captured outages on
 a replay rig in acceptance mode and re-reviewed as a whole, the `platform` user, and the daily heal
-and Parquet archive; live data flowing locally); next: T7 deploy, opening with a provider analysis
+and Parquet archive, the first live weekend's fixes, and the deploy — production on IG demo since 2026-10-18 on a Hetzner box, archiving to R2); next: T8 shadow-diff, T16 metrics and dashboards, then E1 closes
 (board).
 
 ## Read-first order
