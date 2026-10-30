@@ -643,7 +643,31 @@ Tradebench exactly; the 159 that differ are its REST backfill disagreeing with I
 minutes. **Alex ruled** on the result: "after this I really want to kill all the plist jobs on my Mac and fully
 retire/forget about the Python prototype." So Tradebench's production collector is the system of record for
 captured market data from 2026-10-18; the prototype's launchd jobs are stopped and its capture ends; its
-database is kept, untouched, until Alex chooses to delete it; its exported DAX data for the comparison window
-lives beside the archive mirror (`~/development/amfshr/tradebench-data/prototype/`). Supersedes the prototype's
+database is dumped (verified by a restore) and archived with its ops and data folders in
+`ig-algorithmic-trader/_retired-2026-10-30/`, outside that repository's git; the comparison's exports and queries
+live in `~/development/amfshr/tradebench-data/archive/2026-10-30-shadow-diff/`. Supersedes the prototype's
 role as the capture oracle (the T8 plan's "the oracle already runs"). The shared IG key's historical allowance
 (D16) stops being drawn by the prototype's backfill.
+
+## D37 — One logging convention for every service: a level in the line, a line per outcome — **Accepted** (2026-10-30, Alex)
+
+A service's console line is its log record, and the OpenTelemetry agent (D33) exports it to Loki, where Grafana
+filters by level and searches by text. So every service logs to one shape. **A level in the line:** a line that
+reports something degraded starts `WARN `, one that reports work lost or not recoverable on its own starts
+`ERROR ` (`LogLine.warn` / `LogLine.error`); a `FATAL…` line is an error by its own word; anything else is
+INFO. The tag is read once, where the line leaves the process (`Main.log`), and mapped to the logger's level —
+the console keeps the tag, the exported record carries the level and the text without it. **A line per
+meaningful outcome:** each job run says `jobs: <job> <market> <day> succeeded — <detail>` or fails as an
+`ERROR `; the heartbeat stays the one summary a minute; no line per tick or per write. **The libraries' logs
+are kept:** SLF4J's JUL binding routes HikariCP's and the AWS SDK's logs into the same exporter, not the void
+(what they carry is checked live at `v0.2.0`).
+**The same labels:** what a log line is about is in its words; the service's name and instance are also resource
+labels the agent adds. **No `.env` value in a line but one** (G1): every line starts with `[instance]`, because
+everything names its instance before acting (CLAUDE.md) — the same value the agent already exports as a label.
+Nothing else: no database URL, bucket, account or path; "the configured database" and "the configured bucket"
+say it. Enforced in the
+collector by `LogLevelsLintTest`: a log call whose text reports a failure without a tag fails the build. **Why:**
+Alex ruled 2026-10-30 — "that's the point, to have the consistency and be able to filter and query on this known
+structure; if we really need to improve or add to it later we can". Plain text over structured JSON for now: the
+lines are short and greppable, and Loki's level and pattern detection read them as they are — this amends D33's
+"structured JSON logs". E1-T16, and every service after it.

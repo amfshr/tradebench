@@ -1,5 +1,6 @@
 package dev.amfshr.tradebench.marketdata.ingest;
 
+import java.time.Duration;
 import java.time.Instant;
 import java.util.Queue;
 import java.util.concurrent.ArrayBlockingQueue;
@@ -37,6 +38,15 @@ public final class Buffers implements StreamEvents, MarketTelemetry {
     public record StateChange(String epic, Instant atUtc, String dealFlag) {
     }
 
+    /** Told the gap, in seconds of IG's own time, between a market's consecutive ticks that are news — on
+     * the LS thread, so it must be cheap (E1-T16: the tick-gap histogram, B24's evidence). */
+    @FunctionalInterface
+    public interface TickGaps {
+        TickGaps NONE = (epic, seconds) -> { };
+
+        void onTickGap(String epic, double seconds);
+    }
+
     /** One market's running telemetry — adders and volatile stamps, written on the LS thread. */
     private static final class Market {
         final LongAdder ticks = new LongAdder();
@@ -52,6 +62,7 @@ public final class Buffers implements StreamEvents, MarketTelemetry {
     }
 
     private final LongSupplier monotonicNanos;
+    private final TickGaps tickGaps;
     private final LinkedBlockingQueue<Bar1m> bars = new LinkedBlockingQueue<>();
     private final ArrayBlockingQueue<Tick> ticks;
     private final Queue<StateChange> stateChanges = new ConcurrentLinkedQueue<>();
@@ -63,15 +74,25 @@ public final class Buffers implements StreamEvents, MarketTelemetry {
     private final AtomicLong barCount = new AtomicLong();
 
     public Buffers(int tickCapacity, LongSupplier monotonicNanos) {
+        this(tickCapacity, monotonicNanos, TickGaps.NONE);
+    }
+
+    public Buffers(int tickCapacity, LongSupplier monotonicNanos, TickGaps tickGaps) {
         this.ticks = new ArrayBlockingQueue<>(tickCapacity);
         this.monotonicNanos = monotonicNanos;
+        this.tickGaps = tickGaps;
     }
 
     @Override
     public void onTick(TickUpdate update) {
         long now = monotonicNanos.getAsLong();
         Market market = market(update.epic());
-        if (isNews(market.lastTick, update)) {
+        TickUpdate last = market.lastTick;
+        if (isNews(last, update)) {
+            if (last != null) {
+                tickGaps.onTickGap(update.epic(),
+                        Duration.between(last.timestampUtc(), update.timestampUtc()).toNanos() / 1e9);
+            }
             tickCount.incrementAndGet();
             market.ticks.increment();
             market.lastTickMono = now;

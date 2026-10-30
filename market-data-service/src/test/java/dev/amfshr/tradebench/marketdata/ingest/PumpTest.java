@@ -20,6 +20,7 @@ import java.util.List;
 import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.Test;
 
+import dev.amfshr.tradebench.marketdata.events.LogLine;
 import dev.amfshr.tradebench.marketdata.testutil.FakeClock;
 import dev.amfshr.tradebench.marketdata.testutil.FakeSleeper;
 import dev.amfshr.tradebench.marketdata.testutil.RecordingEventLog;
@@ -383,6 +384,7 @@ class PumpTest {
         assertEquals(1, event.detail().get("queuedAtRecovery").asInt(), "the bar, still queued");
         assertTrue(event.detail().get("cause").asText().contains("bar write failed"));
         assertTrue(r.log().get(0).contains("holding 1 queued write"), r.log().get(0));
+        assertEquals(Severity.WARN, LogLine.severityOf(r.log().get(0)), "a held outage is a warning (E1-T16)");
     }
 
     @Test

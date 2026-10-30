@@ -12,8 +12,11 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
+import java.util.logging.Level;
 import java.util.logging.Logger;
 import java.util.concurrent.ThreadLocalRandom;
+
+import io.opentelemetry.api.GlobalOpenTelemetry;
 
 import dev.amfshr.tradebench.core.time.SystemClock;
 import dev.amfshr.tradebench.ig.IgCredentials;
@@ -27,6 +30,8 @@ import dev.amfshr.tradebench.ig.session.IgSessions;
 import dev.amfshr.tradebench.ig.session.LoginRateGate;
 import dev.amfshr.tradebench.ig.stream.LightstreamerTransport;
 import dev.amfshr.tradebench.ig.time.Sleeper;
+import dev.amfshr.tradebench.marketdata.metrics.JobMetrics;
+import dev.amfshr.tradebench.marketdata.events.LogLine;
 import dev.amfshr.tradebench.marketdata.store.BestEffortEventLog;
 import dev.amfshr.tradebench.marketdata.store.Database;
 import dev.amfshr.tradebench.marketdata.store.PostgresStore;
@@ -34,6 +39,7 @@ import dev.amfshr.tradebench.marketdata.heal.Healer;
 import dev.amfshr.tradebench.marketdata.heal.IgHistory;
 import dev.amfshr.tradebench.marketdata.heal.RetryingCandleSource;
 import dev.amfshr.tradebench.marketdata.jobs.DailyJobs;
+import dev.amfshr.tradebench.marketdata.jobs.JobRunStore;
 import dev.amfshr.tradebench.marketdata.jobs.JobTuning;
 import dev.amfshr.tradebench.marketdata.jobs.JobsRunner;
 import dev.amfshr.tradebench.marketdata.store.PostgresHealStore;
@@ -78,6 +84,9 @@ public final class Main {
         IgEnvironment igEnv = igEnvironment(required(env, "TRADEBENCH_IG_ENV"));
         String source = "ig-stream-" + igEnv.name().toLowerCase(java.util.Locale.ROOT);
         String restSource = "ig-rest-" + igEnv.name().toLowerCase(java.util.Locale.ROOT); // the heal's bars (P8)
+        // the agent's meter when it is attached (OTEL_EXPORTER_OTLP_ENDPOINT set); a no-op otherwise (E1-T16)
+        CaptureAssembly.Telemetry telemetry =
+                new CaptureAssembly.Telemetry(GlobalOpenTelemetry.get().getMeter("tradebench.market-data"), user, source);
         String sinkKind = required(env, "TRADEBENCH_SINK").strip().toLowerCase(java.util.Locale.ROOT);
         IgCredentials credentials = IgCredentials.fromEnv(env, igEnv);
 
@@ -106,7 +115,7 @@ public final class Main {
                 eventLog = event -> { };
                 gaps = gap -> { };
                 statusStore = status -> { };
-                log(instance, "capturing to " + file.toAbsolutePath()
+                log(instance, "capturing to a jsonl file in the configured capture directory"
                         + " (jsonl: gaps + service events are not persisted)");
             }
             case "db" -> {
@@ -120,7 +129,7 @@ public final class Main {
                 eventLog = observability;
                 gaps = observability;
                 statusStore = observability;
-                log(instance, "capturing to " + dbUrl + " (migrated; advisory lock held)");
+                log(instance, "capturing to the configured database (migrated; advisory lock held)"); // never the URL: an .env value (G1)
             }
             default -> throw new IgFatalConfigException(
                     "TRADEBENCH_SINK must be 'jsonl' or 'db', got '" + sinkKind + "'");
@@ -147,12 +156,13 @@ public final class Main {
                 phases.add(new Archiver(new PostgresArchiveStore(db.dataSource(), user, source),
                         new S3ObjectStore(archive.endpoint(), archive.region(), archive.bucket(), archive.accessKeyId(),
                                 archive.secretAccessKey()), user + "/" + source));
-                log(instance, "daily job: heal, then archive to bucket " + archive.bucket());
+                log(instance, "daily job: heal, then archive to the configured bucket"); // never its name: an .env value (G1)
             } else {
                 log(instance, "daily job: heal only — no TRADEBENCH_ARCHIVE_* set, so nothing is archived off the box");
             }
             jobs = new JobsRunner(new DailyJobs(clock, epics, phases,
-                    new PostgresJobRunStore(db.dataSource(), user, source, instance), JobTuning.playbook(),
+                    countedRuns(telemetry, new PostgresJobRunStore(db.dataSource(), user, source, instance)),
+                    JobTuning.playbook(),
                     message -> log(instance, message)), JobTuning.playbook().wake(), message -> log(instance, message));
         }
         JobsRunner dailyJobs = jobs;
@@ -164,7 +174,8 @@ public final class Main {
                 () -> exitLoud(instance, "FATAL: recovery exhausted — the feed is dead"),
                 cause -> exitLoud(instance, "FATAL: capture pump died — capture is void from here;"
                         + " cause: " + cause),
-                Buffers.DEFAULT_TICK_CAPACITY));
+                Buffers.DEFAULT_TICK_CAPACITY,
+                telemetry));
         Thread pumpThread = new Thread(capture.pump, "capture-pump");
         Thread supervisorThread = new Thread(capture.supervisor, "capture-supervisor");
         Thread eventsThread = new Thread(capture.events, "capture-events");
@@ -175,7 +186,7 @@ public final class Main {
             if (dailyJobs != null) {
                 try {
                     if (!dailyJobs.stop(Duration.ofSeconds(5))) {
-                        log(instance, "jobs did not stop within 5s — a heal may be mid-write; its row is not recorded");
+                        log(instance, LogLine.warn("jobs did not stop within 5s — a heal may be mid-write; its row is not recorded"));
                     }
                 } catch (InterruptedException e) {
                     Thread.currentThread().interrupt();
@@ -205,7 +216,7 @@ public final class Main {
         // Log-only: discovery runs once, here at boot, so a refused breadcrumb is a console line,
         // never a heartbeat term (doctrine review 2026-10-10, finding 3).
         new PacerDiscovery(rest::applicationAllowance, pacer::setPerMinute,
-                new BestEffortEventLog(eventLog, message -> log(instance, message)),
+                new BestEffortEventLog(capture.metrics.counting(eventLog), message -> log(instance, message)),
                 message -> log(instance, message), clock).discover(sessions.current());
 
         URI pingTo = pingUrl(env);
@@ -237,10 +248,10 @@ public final class Main {
         try {
             switch (lock.verify()) {
                 case HELD -> { }
-                case REACQUIRED -> log(instance, "advisory lock re-acquired on a fresh session — the"
-                        + " database restarted under us and took the old session with it");
-                case UNVERIFIABLE -> log(instance, "advisory lock unverifiable — the database is"
-                        + " unreachable, so nobody can take it either; asking again next heartbeat");
+                case REACQUIRED -> log(instance, LogLine.warn("advisory lock re-acquired on a fresh session — the"
+                        + " database restarted under us and took the old session with it"));
+                case UNVERIFIABLE -> log(instance, LogLine.warn("advisory lock unverifiable — the database is"
+                        + " unreachable, so nobody can take it either; asking again next heartbeat"));
             }
         } catch (IllegalStateException refused) {
             log(instance, "FATAL: " + refused.getMessage()
@@ -278,7 +289,7 @@ public final class Main {
         try {
             closeable.close();
         } catch (Exception e) {
-            log(instance, "close failed: " + e);
+            log(instance, LogLine.warn("close failed: " + e));
         }
     }
 
@@ -294,6 +305,11 @@ public final class Main {
     /** Where the daily archive goes: a bucket over the S3 protocol (E1-T6). All five settings or none —
      * none leaves the archive off and says so; some is a mistake, refused before anything runs. */
     record ArchiveConfig(URI endpoint, String region, String bucket, String accessKeyId, String secretAccessKey) {
+    }
+
+    /** The job-run record, counted on its way in (E1-T16): the jobs panels read what this wrapper sees. */
+    static JobRunStore countedRuns(CaptureAssembly.Telemetry telemetry, JobRunStore store) {
+        return new JobMetrics(telemetry.meter(), telemetry.user(), telemetry.source()).counting(store);
     }
 
     /** The heal's sessions: the current one, or — on a retry — the failure path, which validates the token
@@ -365,10 +381,15 @@ public final class Main {
         return logger;
     }
 
+    /** The console line as given; the exported record at the line's own level (E1-T16 — {@link LogLine}). */
     static void log(String instance, String message) {
-        String line = "[" + instance + "] " + message;
-        System.out.println(Instant.now() + " " + line);
-        LOG.info(line);
+        System.out.println(Instant.now() + " [" + instance + "] " + message);
+        Level level = switch (LogLine.severityOf(message)) {
+            case ERROR -> Level.SEVERE;
+            case WARN -> Level.WARNING;
+            case INFO -> Level.INFO;
+        };
+        LOG.log(level, "[" + instance + "] " + LogLine.text(message));
     }
 
     /** The dead-man ping's URL, if this instance has one (D33): absent leaves the ping off, said at boot. */

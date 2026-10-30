@@ -47,9 +47,10 @@ also works), public IPv4 and IPv6 both on, your SSH key,
    Lightstreamer connection on the shared key, and the advisory lock cannot see across two databases. The minutes
    between are a gap the box's first heal fills from IG's history.
 8. **Deploy.** On the box: `/opt/tradebench/deploy/deploy.sh v0.1.0`, then watch it:
-   `docker compose -f /opt/tradebench/deploy/compose.prod.yaml logs -f market-data`. You want `capturing to …
-   (migrated; advisory lock held)`, `daily job: heal, then archive to bucket …`, `dead-man ping on`, and the
-   stream's `CONNECTED:WS-STREAMING`. The deploy writes the running tag to `/opt/tradebench/deploy/.env`, so
+   `docker compose -f /opt/tradebench/deploy/compose.prod.yaml logs -f market-data`. You want `capturing to the
+   configured database (migrated; advisory lock held)`, `daily job: heal, then archive to the configured bucket`,
+   `dead-man ping on`, and the stream's `CONNECTED:WS-STREAMING` — and no line starting `WARN ` or `ERROR ` (D37).
+   No line names the database URL, the bucket or the IG account: those are `.env` values (G1). The deploy writes the running tag to `/opt/tradebench/deploy/.env`, so
    every later `docker compose` command on the box — this runbook's and the nightly dump's — finds the same image.
 
    **If Postgres's first start failed** (a typo in `postgres.env`, say), its role script never runs again on that
@@ -68,6 +69,10 @@ also works), public IPv4 and IPv6 both on, your SSH key,
     `job_runs`, and its two Parquet files listed under the archive's key prefix in the bucket, are the proof.
 
 ## 2. Every evening (until E9's digest — D30)
+
+**The quick way (E1-T16):** Grafana's **Tradebench → Collector — operations** dashboard shows the heartbeat,
+ticks per minute, drops and errors, the belt, and warnings and errors on one screen; **Collector — domain**
+shows the day's job runs and the heal. The five looks below are the long way, and the record of truth.
 
 Five looks, two minutes. Field Manual chapter 11 §8 has the queries; on the box, open SQL with:
 ```
@@ -129,6 +134,7 @@ collector came back (§2). The heal fills the bars the outage cost, up to seven 
 |---|---|---|
 | healthchecks.io alarming, the box unreachable | the box or its network is down | Hetzner's console: status, the server's console, a reboot; the restart policy brings the stack back |
 | alarming, the box up, the container restarting | the collector exits (`FEED_DEAD`, a config refusal) | `logs market-data` — the `FATAL:` line says why; a config refusal names the variable |
-| a `job_runs` row `failed` | a heal or an archive failed | its `detail` says why; it retries on its own (1 h, then doubling) — act only if it keeps failing |
+| a `job_runs` row `failed` | a heal or an archive failed | its `detail` says why (`error`) and, for a heal that failed part-way, what it had already healed and spent; it retries on its own (1 h, then doubling) — act only if it keeps failing |
+| a `WARN ` or `ERROR ` line — on the console, or in the operations dashboard's *Warnings and errors* panel | the collector said something needs a look (D37) | read the line — it names what failed; an `ERROR ` is work lost or not recoverable on its own, a `WARN ` something degraded that the collector is riding out |
 | no `job_runs` row for yesterday | the daily job never ran | the collector was down past 00:10 UTC, or the jobs thread died (a `FATAL: jobs runner died` line) — restart the collector; the job catches up |
 | `sinkFailures` above 0 | Postgres blinked and the sink held through it | nothing, if `written` caught up; the episode is a `sink_failure` row |

@@ -6,6 +6,8 @@ import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
 
+import dev.amfshr.tradebench.marketdata.events.LogLine;
+
 /** The daily job's thread, {@code capture-jobs}: a tick every {@code wake}. A scheduled task that
  * throws is never run again, so every tick is caught; an {@link Error} is said loud first. */
 public final class JobsRunner {
@@ -26,13 +28,13 @@ public final class JobsRunner {
         executor.scheduleWithFixedDelay(this::tick, wake.toMillis(), wake.toMillis(), TimeUnit.MILLISECONDS);
     }
 
-    private void tick() {
+    void tick() { // package-private: its failure paths are tested one tick at a time
         try {
             jobs.tick();
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
         } catch (RuntimeException e) {
-            log.accept("jobs: tick failed — " + e + "; next wake tries again");
+            log.accept(LogLine.warn("jobs: tick failed — " + e + "; next wake tries again"));
         } catch (Error e) {
             log.accept("FATAL: jobs runner died — the daily heal and archive are void from here: " + e);
             throw e;

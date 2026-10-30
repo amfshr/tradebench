@@ -19,6 +19,7 @@ import org.junit.jupiter.api.Test;
 
 import com.fasterxml.jackson.databind.node.ObjectNode;
 
+import dev.amfshr.tradebench.marketdata.jobs.PhaseFailure;
 import dev.amfshr.tradebench.core.domain.Bar1m;
 import dev.amfshr.tradebench.ig.rest.Allowance;
 import dev.amfshr.tradebench.ig.rest.PriceCandle;
@@ -93,9 +94,11 @@ class HealerTest {
         store.processRuns.add(new Window(at("13:00"), Instant.parse("9999-01-01T00:00:00Z")));
         ig.has("12:30", "12:45");
 
-        healer.run(DAX_D);
+        var detail = healer.run(DAX_D);
 
         assertEquals(List.of(at("12:30") + "→" + at("12:59")), ig.asked);
+        assertEquals(1, detail.get("gapRowsAdded").asInt());
+        assertEquals(30, detail.get("gapMinutesAdded").asLong(), "12:30–12:59: the row's minutes, for gap minutes by origin (E1-T16)");
         assertEquals(List.of(at("12:30") + "→" + at("12:59") + " " + Healer.HEALED), store.added,
                 "the pump could not see a gap across its own restart: the heal records it");
     }
@@ -109,12 +112,33 @@ class HealerTest {
         ig.has("01:00");
         ig.remainingAfterEachCall = 1; // after the first run, one point left; the next run needs two
 
-        IllegalStateException stopped = assertThrows(IllegalStateException.class, () -> healer.run(DAX_D));
+        PhaseFailure stopped = assertThrows(PhaseFailure.class, () -> healer.run(DAX_D));
 
+        assertTrue(stopped.getCause() instanceof IllegalStateException, String.valueOf(stopped.getCause()));
         assertTrue(stopped.getMessage().contains("allowance too low"), stopped.getMessage());
+        // E1-T16: the failed row still says what was spent and the allowance last read
+        assertEquals(1, stopped.partial().get("healedMinutes").asInt());
+        assertEquals(1, stopped.partial().get("pointsSpent").asLong());
+        assertEquals(1, stopped.partial().get("allowanceRemaining").asLong());
         assertEquals(1, ig.asked.size(), "the second run was never asked");
         assertEquals(List.of(at("01:00")), store.healed.stream().map(Bar1m::startUtc).toList(), "what was healed stays");
         assertTrue(store.closed.isEmpty(), "rows stay open for the retry");
+    }
+
+    @Test
+    void aHealThatFailsClosingItsGapsStillSaysWhatItSpent() {
+        // the re-review's finding 1: the points are spent before the gaps close, and a retry finds the bars present
+        store.openAllDay();
+        store.missing("10:00", "10:01", "10:02");
+        store.gap(7, "10:00", "10:02");
+        ig.has("10:00", "10:02");
+        store.closeFails = true;
+
+        PhaseFailure failed = assertThrows(PhaseFailure.class, () -> healer.run(DAX_D));
+
+        assertEquals("database unreachable", failed.getCause().getMessage());
+        assertEquals(2, failed.partial().get("healedMinutes").asInt());
+        assertEquals(2, failed.partial().get("pointsSpent").asLong());
     }
 
     @Test
@@ -127,7 +151,7 @@ class HealerTest {
         store.gap(11, "05:00", "05:01");
         ig.has("01:00", "05:00", "05:01");
         ig.remainingAfterEachCall = 1;
-        assertThrows(IllegalStateException.class, () -> healer.run(DAX_D));
+        assertThrows(PhaseFailure.class, () -> healer.run(DAX_D));
 
         ig.remainingAfterEachCall = 9_000;
         clock.advance(java.time.Duration.ofDays(8)); // IG's allowance has reset since
@@ -145,11 +169,11 @@ class HealerTest {
         store.gap(11, "05:00", "05:01");
         ig.has("01:00");
         ig.remainingAfterEachCall = 1;
-        assertThrows(IllegalStateException.class, () -> healer.run(DAX_D));
+        assertThrows(PhaseFailure.class, () -> healer.run(DAX_D));
         int asked = ig.asked.size();
 
         clock.advance(java.time.Duration.ofHours(1)); // the runner's retry, the same week
-        assertThrows(IllegalStateException.class, () -> healer.run(DAX_D));
+        assertThrows(PhaseFailure.class, () -> healer.run(DAX_D));
 
         assertEquals(asked, ig.asked.size(), "the second attempt refuses before asking IG anything");
     }
@@ -212,7 +236,7 @@ class HealerTest {
         ig.has("01:00", "05:00");
         ig.remainingAfterEachCall = 1;
 
-        assertThrows(IllegalStateException.class, () -> healer.run(DAX_D));
+        assertThrows(PhaseFailure.class, () -> healer.run(DAX_D));
 
         assertEquals(List.of(at("01:00") + "→" + at("01:00") + " " + Healer.HEALED), store.added,
                 "recorded straight after its run, before the stop");
@@ -287,6 +311,7 @@ class HealerTest {
         final List<Bar1m> healed = new ArrayList<>();
         final Map<Long, String> closed = new LinkedHashMap<>();
         final List<String> added = new ArrayList<>();
+        boolean closeFails;
 
         void observeAllDay() {
             observed.add(new Window(at("00:00"), at("23:59").plusSeconds(59)));
@@ -367,6 +392,9 @@ class HealerTest {
 
         @Override
         public void closeGap(long id, Instant healedAt, String outcome) {
+            if (closeFails) {
+                throw new IllegalStateException("database unreachable");
+            }
             closed.put(id, outcome);
         }
 

@@ -16,6 +16,8 @@ import org.junit.jupiter.api.Test;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 
+import dev.amfshr.tradebench.marketdata.events.Severity;
+import dev.amfshr.tradebench.marketdata.events.LogLine;
 import dev.amfshr.tradebench.marketdata.testutil.FakeClock;
 
 /** E1-T6 ②: which market-days are due, the phases in order, retries — against the ruled numbers. */
@@ -57,6 +59,9 @@ class DailyJobsTest {
         clock.advance(Duration.ofMinutes(5));
         jobs.tick();
         assertEquals(runs, store.rows.size(), "both succeeded: nothing more to do for any day");
+        // E1-T16: one line per run, so the evening check can be read from the logs alone
+        assertTrue(log.contains("jobs: heal " + DAX + " " + D + " succeeded — {\"ok\":true}"), log.toString());
+        assertTrue(log.contains("jobs: archive " + DAX + " " + D + " succeeded — {\"ok\":true}"), log.toString());
     }
 
     @Test
@@ -141,7 +146,39 @@ class DailyJobsTest {
 
         assertFalse(store.last("archive", D).succeeded(), "the failure is a row");
         assertTrue(store.last("archive", D).detailJson().contains("UnsatisfiedLinkError"));
+        assertTrue(log.stream().anyMatch(l -> LogLine.severityOf(l) == Severity.ERROR
+                && LogLine.text(l).startsWith("jobs: archive " + DAX)), "a failed run is an error line (E1-T16): " + log);
         assertTrue(heal.ran(D.minusDays(6)), "and every other day was still worked");
+    }
+
+    @Test
+    void aPhaseThatFailsPartWayKeepsWhatItDidInItsFailedRow() throws Exception {
+        // the review's F6: a heal that spent IG allowance before failing says so in its row, or the spend is lost
+        DayPhase partWay = new DayPhase() {
+            @Override
+            public String name() {
+                return "heal";
+            }
+
+            @Override
+            public ObjectNode run(MarketDay day) throws PhaseFailure {
+                ObjectNode done = new ObjectMapper().createObjectNode().put("healedMinutes", 2).put("pointsSpent", 2);
+                throw new PhaseFailure(done, new IllegalStateException("IG refused the third window"));
+            }
+        };
+        DailyJobs withPartWay = new DailyJobs(clock, List.of(DAX), List.of(partWay), store,
+                new JobTuning(Duration.ofMinutes(5), Duration.ofMinutes(10), 7, Duration.ofHours(1), Duration.ofHours(4)),
+                log::add);
+        settle();
+
+        withPartWay.tick();
+
+        JobRun row = store.last("heal", D);
+        assertFalse(row.succeeded());
+        assertEquals("{\"healedMinutes\":2,\"pointsSpent\":2,\"error\":\"java.lang.IllegalStateException: IG refused the third window\"}",
+                row.detailJson());
+        assertTrue(log.stream().anyMatch(l -> l.endsWith("failed — java.lang.IllegalStateException: IG refused the third window")),
+                "the line names the real cause, not the wrapper: " + log);
     }
 
     @Test

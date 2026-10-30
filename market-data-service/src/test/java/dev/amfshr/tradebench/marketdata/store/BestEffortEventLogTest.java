@@ -9,6 +9,7 @@ import java.util.List;
 
 import org.junit.jupiter.api.Test;
 
+import dev.amfshr.tradebench.marketdata.events.LogLine;
 import dev.amfshr.tradebench.marketdata.events.EventType;
 import dev.amfshr.tradebench.marketdata.events.ServiceEvent;
 import dev.amfshr.tradebench.marketdata.testutil.RecordingEventLog;
@@ -48,7 +49,7 @@ class BestEffortEventLogTest {
         events.write(EVENT);
 
         assertEquals(1, log.size());
-        assertEquals("event not written (IG_API_ERROR): java.lang.IllegalStateException:"
-                + " service_events unavailable", log.get(0));
+        assertEquals(LogLine.warn("event not written (IG_API_ERROR): java.lang.IllegalStateException:"
+                + " service_events unavailable"), log.get(0), "a warning (E1-T16)");
     }
 }

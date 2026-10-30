@@ -20,6 +20,7 @@ import dev.amfshr.tradebench.core.time.Clock;
 import dev.amfshr.tradebench.ig.rest.PriceCandle;
 import dev.amfshr.tradebench.ig.rest.PriceHistory;
 import dev.amfshr.tradebench.marketdata.jobs.DayPhase;
+import dev.amfshr.tradebench.marketdata.jobs.PhaseFailure;
 import dev.amfshr.tradebench.marketdata.jobs.MarketDay;
 
 /**
@@ -90,50 +91,66 @@ public final class Healer implements DayPhase {
         List<Run> runs = Run.of(missing, maxRunMinutes);
         List<Window> processRuns = store.processRuns(epic, from, to.plusSeconds(86_400));
         int rowsAdded = 0;
+        long minutesAdded = 0;
         Set<Instant> filled = new TreeSet<>();
         long spent = 0;
-        for (Run run : runs) {
-            long remaining = clock.wallInstant().isBefore(knownUntil) ? knownRemaining : Long.MAX_VALUE;
-            if (remaining != Long.MAX_VALUE && remaining - run.minutes() < reserve) {
-                throw new IllegalStateException("allowance too low for the next run (" + remaining + " points left, "
-                        + run.minutes() + " minutes to ask, " + reserve + " kept in reserve) — healed " + filled.size()
-                        + " minutes, the rest stay open");
+        try {
+            for (Run run : runs) {
+                long remaining = clock.wallInstant().isBefore(knownUntil) ? knownRemaining : Long.MAX_VALUE;
+                if (remaining != Long.MAX_VALUE && remaining - run.minutes() < reserve) {
+                    throw new IllegalStateException("allowance too low for the next run (" + remaining + " points left, "
+                            + run.minutes() + " minutes to ask, " + reserve + " kept in reserve) — healed " + filled.size()
+                            + " minutes, the rest stay open");
+                }
+                PriceHistory history = candles.minuteCandles(epic, run.from(), run.to());
+                List<Bar1m> bars = new ArrayList<>();
+                for (PriceCandle candle : history.candles()) {
+                    bars.add(bar(epic, candle));
+                    filled.add(candle.snapshotTimeUtc());
+                }
+                store.writeHealed(bars);
+                if (!pumpCanSee(run, processRuns)) {
+                    store.recordHealedGap(epic, run, clock.wallInstant(), outcome(run, states, filled, store.healedMinutes(epic,
+                            run.from(), run.to().plusSeconds(60))));
+                    rowsAdded++;
+                    minutesAdded += run.minutes();
+                }
+                spent += bars.size();
+                knownRemaining = history.allowance().remainingAllowance();
+                knownUntil = clock.wallInstant().plusSeconds(history.allowance().allowanceExpirySeconds());
             }
-            PriceHistory history = candles.minuteCandles(epic, run.from(), run.to());
-            List<Bar1m> bars = new ArrayList<>();
-            for (PriceCandle candle : history.candles()) {
-                bars.add(bar(epic, candle));
-                filled.add(candle.snapshotTimeUtc());
+            Set<Instant> healed = new TreeSet<>(filled);
+            healed.addAll(store.healedMinutes(epic, from, to)); // an earlier attempt's bars count too
+            Instant healedAt = clock.wallInstant();
+            List<OpenGap> gaps = store.openGapsEnding(epic, from, to); // read once: closing them hides them
+            for (OpenGap gap : gaps) {
+                store.closeGap(gap.id(), healedAt, outcome(new Run(gap.from(), gap.to()), states, healed));
             }
-            store.writeHealed(bars);
-            if (!pumpCanSee(run, processRuns)) {
-                store.recordHealedGap(epic, run, clock.wallInstant(), outcome(run, states, filled, store.healedMinutes(epic,
-                        run.from(), run.to().plusSeconds(60))));
-                rowsAdded++;
+            ObjectNode detail = MAPPER.createObjectNode();
+            detail.put("expected", states.values().stream().filter(s -> s != MinuteState.CLOSED).count());
+            detail.put("missing", missing.size());
+            detail.put("runs", runs.size());
+            detail.put("healedMinutes", filled.size());
+            detail.put("pointsSpent", spent);
+            if (clock.wallInstant().isBefore(knownUntil)) {
+                detail.put("allowanceRemaining", knownRemaining);
             }
-            spent += bars.size();
-            knownRemaining = history.allowance().remainingAllowance();
-            knownUntil = clock.wallInstant().plusSeconds(history.allowance().allowanceExpirySeconds());
+            detail.put("gapRowsClosed", gaps.size());
+            detail.put("gapRowsAdded", rowsAdded);
+            detail.put("gapMinutesAdded", minutesAdded);
+            return detail;
+        } catch (InterruptedException e) {
+            throw e; // a shutdown, not a failure
+        } catch (Exception e) {
+            // failed part-way, fetching or closing the gaps: the row still carries what was spent (E1-T16)
+            ObjectNode partial = MAPPER.createObjectNode();
+            partial.put("healedMinutes", filled.size());
+            partial.put("pointsSpent", spent);
+            if (clock.wallInstant().isBefore(knownUntil)) {
+                partial.put("allowanceRemaining", knownRemaining);
+            }
+            throw new PhaseFailure(partial, e);
         }
-        Set<Instant> healed = new TreeSet<>(filled);
-        healed.addAll(store.healedMinutes(epic, from, to)); // an earlier attempt's bars count too
-        Instant healedAt = clock.wallInstant();
-        List<OpenGap> gaps = store.openGapsEnding(epic, from, to); // read once: closing them hides them
-        for (OpenGap gap : gaps) {
-            store.closeGap(gap.id(), healedAt, outcome(new Run(gap.from(), gap.to()), states, healed));
-        }
-        ObjectNode detail = MAPPER.createObjectNode();
-        detail.put("expected", states.values().stream().filter(s -> s != MinuteState.CLOSED).count());
-        detail.put("missing", missing.size());
-        detail.put("runs", runs.size());
-        detail.put("healedMinutes", filled.size());
-        detail.put("pointsSpent", spent);
-        if (clock.wallInstant().isBefore(knownUntil)) {
-            detail.put("allowanceRemaining", knownRemaining);
-        }
-        detail.put("gapRowsClosed", gaps.size());
-        detail.put("gapRowsAdded", rowsAdded);
-        return detail;
     }
 
     /** The pump writes a gap row when the first bar after it seals, from a watermark set before it —

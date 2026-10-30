@@ -13,6 +13,7 @@ import java.util.function.LongSupplier;
 
 import org.jspecify.annotations.Nullable;
 
+import dev.amfshr.tradebench.marketdata.events.LogLine;
 import dev.amfshr.tradebench.ig.error.IgFatalConfigException;
 import dev.amfshr.tradebench.ig.error.IgRetryableException;
 import dev.amfshr.tradebench.ig.session.IgSession;
@@ -110,8 +111,8 @@ public final class IgStreamControl implements StreamControl, AutoCloseable {
                     throw new IllegalStateException("boot budget exhausted — IG unreachable for "
                             + bootBudget, e);
                 }
-                log.accept("boot attempt " + attempt + " — IG unreachable, retrying in "
-                        + bootRetry + ": " + e);
+                log.accept(LogLine.warn("boot attempt " + attempt + " — IG unreachable, retrying in "
+                        + bootRetry + ": " + e));
                 sleeper.sleep(bootRetry);
             } catch (RuntimeException e) {
                 log.accept("FATAL: the stream could not be set up at boot — not retrying: " + e);
@@ -128,13 +129,13 @@ public final class IgStreamControl implements StreamControl, AutoCloseable {
             return Outcome.CONNECTED;
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
-            log.accept("rebuild interrupted — stream left down");
+            log.accept(LogLine.warn("rebuild interrupted — stream left down"));
         } catch (IgFatalConfigException e) {
             log.accept("FATAL: IG rejected the configuration — recovery is pointless: "
                     + e.getMessage());
             return Outcome.FATAL;
         } catch (IOException | RuntimeException e) {
-            log.accept("rebuild failed — stream left down for the backoff ladder: " + e);
+            log.accept(LogLine.warn("rebuild failed — stream left down for the backoff ladder: " + e));
         }
         return Outcome.FAILED;
     }
@@ -152,14 +153,14 @@ public final class IgStreamControl implements StreamControl, AutoCloseable {
             return;
         }
         if (quarantined.contains(epic)) {
-            log.accept("resubscribe " + epic + " refused — quarantined (exit is restart-only)");
+            log.accept(LogLine.warn("resubscribe " + epic + " refused — quarantined (exit is restart-only)"));
             return; // the second lock on the door: whoever asks, a quarantined pair never comes back
         }
         try {
             dropLegs(live, epic);
             legs.put(epic, subscribePair(live, epic, generation.get()));
         } catch (RuntimeException e) {
-            log.accept("resubscribe " + epic + " failed: " + e);
+            log.accept(LogLine.warn("resubscribe " + epic + " failed: " + e));
         }
     }
 
@@ -176,7 +177,7 @@ public final class IgStreamControl implements StreamControl, AutoCloseable {
             dropLegs(live, epic);
             return true;
         } catch (RuntimeException e) {
-            log.accept("quarantine " + epic + " — unsubscribe refused: " + e);
+            log.accept(LogLine.warn("quarantine " + epic + " — unsubscribe refused: " + e));
             return false;
         }
     }
@@ -203,14 +204,15 @@ public final class IgStreamControl implements StreamControl, AutoCloseable {
             try {
                 live.close();
             } catch (RuntimeException closing) {
-                log.accept("half-built stream close failed: " + closing);
+                log.accept(LogLine.warn("half-built stream close failed: " + closing));
             }
             throw e;
         }
         stream = live;
         legs.putAll(subscribed);
-        log.accept("stream connected: account " + session.activeAccountId() + " via "
-                + session.lightstreamerEndpoint());
+        // never the account id: it is an .env value (G1, B21) — and the session manager has already switched
+        // to the configured account, so naming it says nothing the configuration does not
+        log.accept("stream connected: the configured account, via " + session.lightstreamerEndpoint());
     }
 
     /** Both legs or neither: a CHART subscribe that throws rolls the PRICE leg back, so no handle
@@ -224,7 +226,7 @@ public final class IgStreamControl implements StreamControl, AutoCloseable {
             try {
                 live.unsubscribe(price);
             } catch (RuntimeException rollback) {
-                log.accept("rollback of " + epic + " PRICE refused — a leg streams unowned: " + rollback);
+                log.accept(LogLine.error("rollback of " + epic + " PRICE refused — a leg streams unowned: " + rollback));
             }
             throw e;
         }
@@ -324,7 +326,7 @@ public final class IgStreamControl implements StreamControl, AutoCloseable {
             try {
                 live.close();
             } catch (RuntimeException e) {
-                log.accept("stream close failed: " + e);
+                log.accept(LogLine.warn("stream close failed: " + e));
             }
         }
     }
