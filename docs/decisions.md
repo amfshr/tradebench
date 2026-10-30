@@ -631,3 +631,19 @@ to 22:04Z Saturday, no rebuild. The heal's
 open minute. **Not a finding:** the same weekend's two silences while streaming were the host suspended (the
 Mac's power log matches them to the second); no verdict across a suspension is the design, and the box does
 not sleep. E1-T15.
+
+## D36 — Tradebench is the primary capture; the Python prototype is retired — **Accepted** (2026-10-30, Alex)
+
+The shadow-diff week (E1-T8, `docs/operations/2026-10-30-shadow-diff-week.md`) compared nine trading days of
+both systems capturing the same DAX feed. **Tradebench held 645,871 of the prototype's 645,877 ticks** — the six
+it lacks are its one 644 ms session rebuild and four rapid updates Lightstreamer's MERGE mode collapsed
+differently per session — **plus 375,172 the prototype missed**: its host asleep, and one silent stall of its
+own (2026-10-27, 2 h 36 min awake with no data and no warning). Every bar the prototype streamed live matches
+Tradebench exactly; the 159 that differ are its REST backfill disagreeing with IG's live stream at volatile
+minutes. **Alex ruled** on the result: "after this I really want to kill all the plist jobs on my Mac and fully
+retire/forget about the Python prototype." So Tradebench's production collector is the system of record for
+captured market data from 2026-10-18; the prototype's launchd jobs are stopped and its capture ends; its
+database is kept, untouched, until Alex chooses to delete it; its exported DAX data for the comparison window
+lives beside the archive mirror (`~/development/amfshr/tradebench-data/prototype/`). Supersedes the prototype's
+role as the capture oracle (the T8 plan's "the oracle already runs"). The shared IG key's historical allowance
+(D16) stops being drawn by the prototype's backfill.

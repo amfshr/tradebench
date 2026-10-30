@@ -557,7 +557,9 @@ env value (G1).
 - **The PRs:** #28 (the build, merge `9da0961`) · #30 (the x86 release, merge `c8cad7a`, tagged `v0.1.0`) · #31 (provisioning's
   current rclone, merge `bfa2da4`). The branches were deleted 2026-10-30, locally and on origin. The Done history entry tagged E1-T7.
 
-## T8 — Acceptance: shadow-diff week
+## T8 — Acceptance: shadow-diff week ✅ (done 2026-10-30 — the report `docs/operations/2026-10-30-shadow-diff-week.md`; Alex's ruling D36)
+
+**Type** test · **Branch** — · **Started** 2026-10-30 · **Blocked by** —
 
 **Goal:** the trust gate. Both systems (this service in the cloud, the Python appliance on
 the Air) capture the same DAX sessions for a full week.
@@ -568,6 +570,25 @@ ruling on making Tradebench the primary capture — recorded in `docs/decisions.
 **Note:** deltas are expected (clock edges, reconnect windows); the bar is *explained*, not
 *zero*.
 **Plan (2026-10-25):** Tradebench's side read from the week's R2 Parquet (no access to the box's database needed), the prototype's from its local Postgres on the Mac. Expected deltas: the Mac's sleep (the prototype is down while the host is suspended — E1-T15 finding 2), the nightly thin minutes both should agree on, reconnect windows. Also note the shared IG key: the prototype draws the historical allowance the collector's heal relies on (D16).
+
+### Done (2026-10-30)
+
+- **Run** 2026-10-30 over nine trading days, 2026-10-19..23 and 26..29; Tradebench's side from the R2 Parquet, the
+  prototype's from its local Postgres (market data only, G1). The figures and every delta's explanation: the report,
+  `docs/operations/2026-10-30-shadow-diff-week.md`.
+- **Ticks:** 645,871 of the prototype's 645,877 held — the 6 missing are 2 in Tradebench's one 644 ms session rebuild
+  (2026-10-21 10:20Z) and 4 MERGE-collapsed updates; plus 375,172 the prototype lacks (373,096 in its 89 silences over three
+  minutes, 2,058 in 73 shorter ones, 18 single ticks). The silences are the Mac asleep — 33 of the 34 the power log covers
+  at least 90% sleep — bar one: the prototype's own silent stall on 2026-10-27, 07:21–13:04Z, 2 h 36 min of it with the Mac
+  awake.
+- **1m bars:** every streamed bar identical; the 159 that differ are all prototype REST backfills. **10m bars:** 662 of 683
+  identical; all 21 that differ contain one of those backfilled minutes.
+- **The ruling:** D36, Accepted 2026-10-30 (Alex) — Tradebench is the primary capture; the prototype retired. Its launchd
+  jobs and containers to be stopped on the Mac (Alex), its database kept until he deletes it — on the next-session menu.
+- **The archive inspection** (the close-out menu's step 2), the same day: the Parquet integrity checks clean — 0 duplicate
+  ticks, 0 crossed prices, 0 bad OHLC, 0 off-day ticks; the busiest hour, 08:00–09:00 UK, ~12,000–13,500 ticks every
+  weekday; coverage solid in every hour, the one daily dip the market's own pause; the archive matching the heartbeat's
+  counts to within a few dozen ticks.
 
 ## T9 — Sink blip resilience: hold-and-retry for the capture sink ✅ (PR #13, 2026-10-05 — complete)
 

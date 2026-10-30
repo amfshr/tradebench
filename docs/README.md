@@ -11,6 +11,7 @@ evidence (the prototype's read-only seed pack) — plus the working layer in `.c
 | What Tradebench is and how it works, in prose | [`product/overview.md`](product/overview.md) |
 | To *understand* a mechanism (sockets, threads, queues, locks, clocks, resilience, busses) | [The Field Manual](field-manual/README.md) |
 | Running it — the first deploy, the evening check, rollback, secrets, restores | [`operations/runbook.md`](operations/runbook.md) |
+| The trust gate — Tradebench against the Python prototype, nine trading days (E1-T8) | [`operations/2026-10-30-shadow-diff-week.md`](operations/2026-10-30-shadow-diff-week.md) |
 | The platform — deployables, ownership, identity and roles | [`design/architecture/platform.md`](design/architecture/platform.md) |
 | The system's shape — modules, seams, data flows | [`design/architecture/README.md`](design/architecture/README.md) |
 | Why a decision was made (and its status) | [`decisions.md`](decisions.md) |
