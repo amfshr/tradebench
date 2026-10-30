@@ -583,8 +583,9 @@ ruling on making Tradebench the primary capture — recorded in `docs/decisions.
   awake.
 - **1m bars:** every streamed bar identical; the 159 that differ are all prototype REST backfills. **10m bars:** 662 of 683
   identical; all 21 that differ contain one of those backfilled minutes.
-- **The ruling:** D36, Accepted 2026-10-30 (Alex) — Tradebench is the primary capture; the prototype retired. Its launchd
-  jobs and containers to be stopped on the Mac (Alex), its database kept until he deletes it — on the next-session menu.
+- **The ruling:** D36, Accepted 2026-10-30 (Alex) — Tradebench is the primary capture; the prototype retired. Retired the same
+  evening: its 8 launchd jobs unloaded and their plists moved out of `~/Library/LaunchAgents` into the data folder; both
+  containers stopped with restart off; its database volume kept until Alex deletes it.
 - **The archive inspection** (the close-out menu's step 2), the same day: the Parquet integrity checks clean — 0 duplicate
   ticks, 0 crossed prices, 0 bad OHLC, 0 off-day ticks; the busiest hour, 08:00–09:00 UK, ~12,000–13,500 ticks every
   weekday; coverage solid in every hour, the one daily dip the market's own pause; the archive matching the heartbeat's
