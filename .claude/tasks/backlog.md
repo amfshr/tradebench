@@ -482,3 +482,14 @@ Two questions, answered with a month of production evidence:
 
 Not blocked — it waits only for the month of data. The suggested re-entry point after the pause that follows the E1
 close-out (see the board's next-session menu).
+
+## B27 — Bump the GitHub Actions to their Node-24 majors
+
+**Captured** 2026-10-31 (the E1 close-out — deprecation warnings only today) · **Likely home** a small CI chore, its own PR (workflows are not docs-only) · **Trigger** Alex's call — before GitHub stops running Node-20 actions, or at the next CI change · **Relates to** E1-T1 (CI) · E2-T3 (the Pages and `web` lanes) · E1-T7 (the release workflow) · E1-T12 (the replay-acceptance lane)
+
+The runs warn that the pinned actions run on Node 20. Pinned today across `ci.yml`, `release.yml`,
+`replay-acceptance.yml`, `pages.yml` and `web-ci.yml`: `actions/checkout@v4`, `actions/setup-java@v4`,
+`actions/setup-node@v4`, `actions/upload-artifact@v4`, `actions/deploy-pages@v4`, `actions/upload-pages-artifact@v3`,
+`gradle/actions/setup-gradle@v4`, `docker/build-push-action@v6`, `docker/login-action@v3`, `docker/setup-buildx-action@v3`.
+Which major of each runs on Node 24 (e.g. `checkout@v5`, `setup-java@v5`) is checked per action at the time, with its
+breaking changes read; the release lane is proven by a dry run before the next tag.
