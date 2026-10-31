@@ -14,6 +14,8 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 
 import com.sun.net.httpserver.HttpServer;
+import dev.amfshr.tradebench.marketdata.events.Severity;
+import dev.amfshr.tradebench.marketdata.events.LogLine;
 
 /** E1-T7, D33: a ping reaches the check; a refusing or unreachable check is said, never thrown. */
 class DeadManPingTest {
@@ -55,6 +57,7 @@ class DeadManPingTest {
         assertDoesNotThrow(ping::ping);
 
         assertTrue(log.getFirst().contains("dead-man ping failed"), log.toString());
+        assertEquals(Severity.WARN, LogLine.severityOf(log.getFirst()), "a warning, never info (E1-T16)");
     }
 
     @Test

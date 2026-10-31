@@ -17,6 +17,8 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 
+import dev.amfshr.tradebench.marketdata.events.LogLine;
+import dev.amfshr.tradebench.marketdata.events.Severity;
 import dev.amfshr.tradebench.ig.error.IgFatalConfigException;
 import dev.amfshr.tradebench.ig.error.IgRetryableException;
 import dev.amfshr.tradebench.ig.session.IgSession;
@@ -174,6 +176,18 @@ class IgStreamControlTest {
     }
 
     @Test
+    void theConnectedLineNamesTheEndpointButNeverTheAccount() throws Exception {
+        // B21 (folded into E1-T16): the account id is an .env value (G1), and this line reaches Grafana
+        boot();
+
+        List<String> connected = log.stream().filter(line -> line.startsWith("stream connected")).toList();
+        assertEquals(1, connected.size(), log.toString());
+        assertTrue(connected.getFirst().contains("the configured account"), connected.getFirst());
+        assertTrue(connected.getFirst().contains(FakeSessions.session("boot").lightstreamerEndpoint()), "the endpoint is IG's, public");
+        assertFalse(connected.getFirst().contains(FakeSessions.session("boot").activeAccountId()), "never the account: " + connected.getFirst());
+    }
+
+    @Test
     void startRefusesToRunUnbound() {
         assertThrows(IllegalStateException.class, () -> control.start(),
                 "an unbound control would stream into the void — fail loud at boot");
@@ -191,7 +205,8 @@ class IgStreamControlTest {
         assertEquals(3, sessions.currentCalls, "two failures, then the login that worked");
         assertEquals(List.of(BOOT_RETRY, BOOT_RETRY), sleeps, "paced between attempts");
         assertEquals(1, fake.connections.size());
-        assertEquals(2, log.stream().filter(line -> line.startsWith("boot attempt")).count(),
+        assertEquals(2, log.stream().filter(line -> LogLine.severityOf(line) == Severity.WARN
+                && LogLine.text(line).startsWith("boot attempt")).count(),
                 "each wait is announced — loud, not silent");
     }
 
@@ -408,7 +423,8 @@ class IgStreamControlTest {
         control.resubscribe(DAX);
         assertEquals(List.of(DAX_CHART, FTSE_PRICE, FTSE_CHART), activeItems(fake.last()),
                 "the PRICE leg went, the CHART leg stayed — and nothing new was subscribed over it");
-        assertTrue(log.stream().anyMatch(line -> line.startsWith("resubscribe " + DAX + " failed")));
+        assertTrue(log.stream().anyMatch(line -> LogLine.severityOf(line) == Severity.WARN
+                && LogLine.text(line).startsWith("resubscribe " + DAX + " failed")), "a warning: " + log);
 
         fake.refuseUnsubscribeOf.clear();
         control.resubscribe(DAX);

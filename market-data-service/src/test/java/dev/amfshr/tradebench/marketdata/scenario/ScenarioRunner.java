@@ -96,7 +96,7 @@ public final class ScenarioRunner {
                 stores.events(), stores.gaps(), stores.status(), observed.log::add,
                 () -> exitAsked = "FEED_DEAD → exit(1)",
                 cause -> exitAsked = "pump died → exit(1): " + cause,
-                Buffers.DEFAULT_TICK_CAPACITY));
+                Buffers.DEFAULT_TICK_CAPACITY, CaptureAssembly.Telemetry.none()));
         sleeper.onSleep = this::onTimePassed;
     }
 

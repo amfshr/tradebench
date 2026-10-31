@@ -9,6 +9,7 @@ import org.jspecify.annotations.Nullable;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 
+import dev.amfshr.tradebench.marketdata.events.LogLine;
 import dev.amfshr.tradebench.core.domain.Bar1m;
 import dev.amfshr.tradebench.core.domain.Tick;
 import dev.amfshr.tradebench.core.time.Clock;
@@ -182,11 +183,11 @@ public final class Pump implements Runnable {
             current = new Episode(cause, clock.monotonicNanos(), clock.wallInstant(), queues.droppedTicks());
             episode = current;
             sinkFailures.incrementAndGet();
-            log.accept("sink unavailable — holding " + queues.pendingWrites() + " queued writes: " + cause);
+            log.accept(LogLine.warn("sink unavailable — holding " + queues.pendingWrites() + " queued writes: " + cause));
         } else {
             current.recovered = false;
-            log.accept("sink failed again before a write landed — the episode continues at attempt "
-                    + (current.attempts + 1) + ": " + cause);
+            log.accept(LogLine.warn("sink failed again before a write landed — the episode continues at attempt "
+                    + (current.attempts + 1) + ": " + cause));
         }
         while (running) {
             current.attempts++;
@@ -197,7 +198,7 @@ public final class Pump implements Runnable {
             }
             if (!current.lossy && queues.droppedTicks() > current.droppedBefore) {
                 current.lossy = true;
-                log.accept("the hold is now lossy — the tick queue has begun shedding");
+                log.accept(LogLine.error("the hold is now lossy — the tick queue has begun shedding"));
             }
             boolean landedHeld;
             try {
@@ -206,7 +207,7 @@ public final class Pump implements Runnable {
                 if (!e.retryable()) {
                     throw e;
                 }
-                log.accept("sink still unavailable after attempt " + current.attempts + ": " + e);
+                log.accept(LogLine.warn("sink still unavailable after attempt " + current.attempts + ": " + e));
                 continue;
             }
             recovered(current, landedHeld);

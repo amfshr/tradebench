@@ -26,7 +26,7 @@
   same tunnel); a healthchecks.io dead-man's-switch gives the serious-tier "box down" alarm in
   v1 without Prometheus.
 - **R4 — scheduling (three clocks):** the per-market **stream window** is config (venue-local,
-  subscribe/unsubscribe only — host is 24/7, D37) and defaults **generous** (not a tight
+  subscribe/unsubscribe only — host is 24/7, the prototype's D37 in `docs/inherited/decisions-triage.md`) and defaults **generous** (not a tight
   06:00–17:00); the **`DLG_FLAG` watchdog** (T5) governs whether silence alarms; the **expected
   trading calendar** — not the window — is the gap-truth.
 - **R5 — the expected calendar** is a small config-encoded `market_calendar` (XETRA sessions +
@@ -108,18 +108,23 @@ market-day per kind.
 The monotonic-vs-wall discriminator is a watchdog *input*, not a column: it produces the
 *classification* (`host_suspend` vs `feed_dead`), which is the recorded `event_type`.
 
-## Metrics (Micrometer) + the Grafana/DIY split (R3)
+## Metrics + the Grafana/DIY split (R3)
 
-Tags on every metric: `instance`, `market` (epic). **Counters:** `capture.ticks.total`,
-`capture.bars.total`, `capture.ticks.dropped.total`, `capture.updates.malformed.total`,
-`capture.events.written.total`, `capture.publish.failures.total`, `capture.reconnects.total`,
-`capture.gaps.detected.total`. **Gauges:** `capture.tick.age.seconds`, `capture.bar.age.seconds`,
-`capture.queue.pending`, `capture.pacer.budget.remaining`. **JVM:** heap/GC/threads/uptime
-(Actuator built-ins). **Timers:** `capture.write.latency`, later `capture.heal.duration`.
+*As built (E1-T16, 2026-10-30):* the collector records through the OpenTelemetry API alone (no
+Micrometer, no Actuator — D33's agent bridges it), as `tradebench.<area>.<thing>` with `user` and
+`source` on every series and `market` where there is one; the app's name and `instance` are resource
+labels the agent adds. The set — capture counts (`tradebench.capture.ticks`, `.bars`, `.ticks.dropped`,
+`.updates.malformed`), ages and the queue (`.tick.age`, `.bar.age`, `.queue.pending`), the tick-gap
+histogram (`.tick.gap`), `tradebench.events` by type and severity, `tradebench.gap.minutes` by origin,
+`tradebench.store.write.duration`, the jobs (`tradebench.jobs.runs`, `.duration`) and the heal
+(`tradebench.heal.minutes`, `.points_spent`, `tradebench.ig.allowance.remaining`) — is pinned by
+name, unit and kind in `CollectorMetricsTest`, which is the contract `deploy/grafana/` reads. JVM,
+pool and HTTP metrics are the agent's own. Grafana is for trends, not alarms (R3); the logs follow
+D37's convention.
 
 - **DB (SPA, v1):** current status (`capture_status`), coverage map, gaps, catalogue, event
   log, downloads.
-- **Operational telemetry (D33, 2026-10-15):** structured JSON logs and these metrics leave every
+- **Operational telemetry (D33, 2026-10-15):** plain-text logs (D37 amends D33's "structured JSON") and these metrics leave every
   JVM through the OpenTelemetry Java agent over OTLP to Grafana Cloud's free tier, wired at E1-T7;
   the admin area links out to Grafana. (Supersedes "Prometheus/Grafana additive, later".)
 - **healthchecks.io (v1, D33):** the dead-man ping — one outbound GET per heartbeat from the
@@ -129,7 +134,7 @@ Tags on every metric: `instance`, `market` (epic). **Counters:** `capture.ticks.
 
 | Clock | Governs | Where |
 |---|---|---|
-| **Stream window** (per-market config, venue-local) | subscribe/unsubscribe — not process lifecycle (host 24/7, D37) | collector config; DAX default **generous** (~06:00–22:00 venue-local, warm-up + post-close) |
+| **Stream window** (per-market config, venue-local) | subscribe/unsubscribe — not process lifecycle (host 24/7, the prototype's D37) | collector config; DAX default **generous** (~06:00–22:00 venue-local, warm-up + post-close) |
 | **`DLG_FLAG` watchdog** (from stream) | whether silence *alarms*; self-suppresses weekends/holidays (D25/D25-triage) | T5 `StalenessWatchdog` |
 | **Expected calendar** — *as built (E1-T6): IG's recorded deal flags, no table* | classifies **gap vs closure**: a missing bar inside a `DEAL` span is a gap, under any other flag it is not, an unobserved window is unknown | `service_events` `market_state_change` + `service_start` rows (Field Manual ch. 12) |
 

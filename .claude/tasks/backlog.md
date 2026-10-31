@@ -411,12 +411,15 @@ On 2026-10-16 the reconnect rows after an eight-minute suspension read `hostSlep
 600. The connection noticed the drop only after waking, so the outage measured was the short one after the wake. The
 watchdog itself was right and rendered no verdict. Cosmetic for the record.
 
-## B21 — The `stream connected` log line prints the IG account id
+## B21 — The `stream connected` log line prints the IG account id — folded into E1-T16 (2026-10-30)
 
 **Captured** 2026-10-18 (E1-T7's first production deploy) · **Likely home** the next collector release (E1) — small · **Trigger** the next collector release · **Relates to** G1 (everything in `.env*` is personal — Alex, 2026-10-10) · E1-T7 (the logs exported to Grafana Cloud, D33) · `market-data-service/src/main/java/dev/amfshr/tradebench/marketdata/supervise/IgStreamControl.java` (`stream connected: account …`)
 
 The line logs `session.activeAccountId()` in full. The account id is an `.env` value, so personal under G1. It reaches
 the console and Grafana Cloud's logs — neither is public. **Fix:** log the account masked, or omit it.
+
+**Folded 2026-10-30 into E1-T16 (the design nod's ruling (b); Alex):** the account id is masked in the `stream connected`
+line — T16's increment ③, released with it as `v0.2.0`. It leaves the backlog when T16 merges.
 
 ## B22 — Leave the archived days out of the nightly dump
 
@@ -462,3 +465,20 @@ with a read-only R2 token of its own (not the box's read-write one), its env fil
 check it ran. `sync` mirrors deletions, so the dumps the box retires leave the mirror too; `copy` keeps everything.
 Which one — and whether the mirror keeps its own history — is the decision. The Parquet archive is the part worth
 keeping forever; the dumps are rolling by design.
+
+## B26 — A one-month review of the data and the limits: room for a second market, or per-second data?
+
+**Captured** 2026-10-30 (Alex: "in a month's time review/analyse the data and limit usages, as we could feasibly start streaming another market and doing secs potentially if we had enough usage left, and we can analyse the market open and close times, at least for the DAX") · **Likely home** a dated analysis doc in `docs/operations/` and a recommendation for Alex to rule on (a design nod, D13) — not code · **Trigger** earliest ~2026-12-01: a month of data after `v0.2.0` deploys (the weekend of 2026-10-31/11-01) and its week of monitoring · **Relates to** E1-T16 (the metrics it reads) · D16 (the shared IG key's historical allowance) · D36 (the prototype no longer draws on it) · D25 R4 (the three clocks: the stream window and session config) · B24 (the adaptive tick-silence threshold) · B25 (the Mac-side R2 mirror, which makes the archive analysis cheap)
+
+Two questions, answered with a month of production evidence:
+
+1. **Usage against the limits, to decide whether a second market can be streamed and whether per-second data is
+   affordable** (a `SECOND`/`5SECOND` CHART subscription, or second bars built from ticks). IG's historical-data
+   allowance (`tradebench.ig.allowance.remaining`, `heal.points_spent`); Lightstreamer's subscription and connection
+   limits; the box's own headroom (CPU, memory, disk); R2 storage growth; Grafana Cloud's free-tier series and log
+   volume.
+2. **The DAX's real open and close times as captured**, from the deal-flag record (`market_state_change`) and tick
+   density by minute in the R2 Parquet archive, to inform the stream window and session config.
+
+Not blocked — it waits only for the month of data. The suggested re-entry point after the pause that follows the E1
+close-out (see the board's next-session menu).

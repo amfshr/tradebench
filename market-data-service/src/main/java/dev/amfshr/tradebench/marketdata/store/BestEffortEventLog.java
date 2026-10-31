@@ -3,6 +3,7 @@ package dev.amfshr.tradebench.marketdata.store;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Consumer;
 
+import dev.amfshr.tradebench.marketdata.events.LogLine;
 import dev.amfshr.tradebench.marketdata.events.ServiceEvent;
 
 /**
@@ -27,7 +28,7 @@ public final class BestEffortEventLog implements EventLog {
             delegate.write(event);
         } catch (RuntimeException e) {
             failures.incrementAndGet();
-            log.accept("event not written (" + event.type() + "): " + e);
+            log.accept(LogLine.warn("event not written (" + event.type() + "): " + e));
         }
     }
 

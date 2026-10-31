@@ -204,12 +204,13 @@ class SupervisorTest {
 
     @Test
     void everyEventTheBeltRecordsIsAlsoAConsoleLine() {
-        // E1-T10 #9: the operator reads the console; the row may never land (the test above).
+        // E1-T10 #9: the operator reads the console; the row may never land (the test above). Since E1-T16
+        // the line leads with the event's own severity, so the exported record is logged at it.
         supervisor.onServerError(stream.generation, 7, "licence lapsed");
         supervisor.sweep();
 
         assertEquals(1, count(EventType.IG_API_ERROR));
-        assertEquals("belt IG_API_ERROR {\"code\":7,\"message\":\"licence lapsed\"}", log.get(0));
+        assertEquals("ERROR belt IG_API_ERROR {\"code\":7,\"message\":\"licence lapsed\"}", log.get(0));
     }
 
     @Test
@@ -219,8 +220,9 @@ class SupervisorTest {
         supervisor.sweep(); // strike 1 → a surgical retry, which records no event — so it says so itself
 
         assertEquals(List.of(DAX), stream.resubscribed);
-        assertEquals(List.of("belt RETRY " + DAX
-                + " — re-asking for the pair in place after its PRICE leg was rejected (40)"), log);
+        assertEquals(List.of("WARN belt RETRY " + DAX
+                + " — re-asking for the pair in place after its PRICE leg was rejected (40)"), log,
+                "a rejected leg is a warning (Alex, 2026-10-30)");
     }
 
     @Test
