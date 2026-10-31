@@ -25,7 +25,8 @@
         "type": "datasource",
         "query": "prometheus",
         "current": {},
-        "hide": 0
+        "hide": 0,
+        "regex": "/-prom$/"
       },
       {
         "name": "logs",
@@ -33,7 +34,8 @@
         "type": "datasource",
         "query": "loki",
         "current": {},
-        "hide": 0
+        "hide": 0,
+        "regex": "/-logs$/"
       },
       {
         "name": "instance",
@@ -88,7 +90,7 @@
             "type": "loki",
             "uid": "${logs}"
           },
-          "expr": "sum(count_over_time({service_name=\"market-data-service\"} |= \"ticks=\" [2m]))",
+          "expr": "sum(count_over_time({service_name=\"market-data-service\"} |= \"ticks=\" [2m])) or vector(0)",
           "legendFormat": "",
           "queryType": "range"
         }
@@ -148,7 +150,7 @@
             "type": "prometheus",
             "uid": "${prom}"
           },
-          "expr": "sum(increase(tradebench_capture_ticks_total{instance=~\"$instance\"}[5m]))",
+          "expr": "sum(increase(tradebench_capture_ticks_total{instance=~\"$instance\"}[5m])) or vector(0)",
           "legendFormat": "",
           "instant": true,
           "range": false
@@ -205,7 +207,7 @@
             "type": "prometheus",
             "uid": "${prom}"
           },
-          "expr": "sum(increase(tradebench_capture_ticks_dropped_total{instance=~\"$instance\"}[24h])) + sum(increase(tradebench_capture_updates_malformed_total{instance=~\"$instance\"}[24h]))",
+          "expr": "(sum(increase(tradebench_capture_ticks_dropped_total{instance=~\"$instance\"}[24h])) or vector(0)) + (sum(increase(tradebench_capture_updates_malformed_total{instance=~\"$instance\"}[24h])) or vector(0))",
           "legendFormat": "",
           "instant": true,
           "range": false
@@ -266,7 +268,7 @@
             "type": "prometheus",
             "uid": "${prom}"
           },
-          "expr": "sum(increase(tradebench_events_total{instance=~\"$instance\",severity=\"ERROR\"}[24h]))",
+          "expr": "sum(increase(tradebench_events_total{instance=~\"$instance\",severity=\"ERROR\"}[24h])) or vector(0)",
           "legendFormat": "",
           "instant": true,
           "range": false

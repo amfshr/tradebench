@@ -25,7 +25,8 @@
         "type": "datasource",
         "query": "prometheus",
         "current": {},
-        "hide": 0
+        "hide": 0,
+        "regex": "/-prom$/"
       },
       {
         "name": "logs",
@@ -33,7 +34,8 @@
         "type": "datasource",
         "query": "loki",
         "current": {},
-        "hide": 0
+        "hide": 0,
+        "regex": "/-logs$/"
       },
       {
         "name": "instance",

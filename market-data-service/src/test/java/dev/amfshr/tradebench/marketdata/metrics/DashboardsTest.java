@@ -102,7 +102,7 @@ class DashboardsTest {
     }
 
     /** The functions the panels may call — PromQL's and LogQL's, as used here. A typo becomes an unknown name. */
-    private static final Set<String> FUNCTIONS = Set.of("sum", "max", "avg", "rate", "increase", "histogram_quantile",
+    private static final Set<String> FUNCTIONS = Set.of("sum", "max", "avg", "rate", "increase", "histogram_quantile", "vector",
             "count_over_time", "label_values");
     private static final Pattern CALL = Pattern.compile("([a-zA-Z_][a-zA-Z0-9_.]*)\\s*\\(");
 
@@ -145,6 +145,36 @@ class DashboardsTest {
                 if (v.path("name").asText().equals("instance")) {
                     assertTrue(v.path("current").isEmpty() && v.path("options").isEmpty(),
                             f + ": the instance variable saves no value of its own (G1): " + v);
+                }
+            }
+        }
+    }
+
+    @Test
+    void eachDataSourceVariablePicksItsSourceByNameNotByAlphabet() throws IOException {
+        // live 2026-10-31: with no saved value, ${logs} took the first Loki source A–Z, the stack's alert history
+        for (Path f : dashboards()) {
+            for (JsonNode v : MAPPER.readTree(f.toFile()).path("templating").path("list")) {
+                if (v.path("type").asText().equals("datasource")) {
+                    String expected = Map.of("prom", "/-prom$/", "logs", "/-logs$/").get(v.path("name").asText());
+                    assertEquals(expected, v.path("regex").asText(null), f + ": " + v);
+                }
+            }
+        }
+    }
+
+    @Test
+    void aStatPanelReadsZeroNotNoDataWhenNothingHappened() throws IOException {
+        // live 2026-10-31: no ERROR event has ever happened, so its series does not exist and a bare sum is empty
+        for (Path f : dashboards()) {
+            for (JsonNode panel : MAPPER.readTree(f.toFile()).path("panels")) {
+                if (panel.path("type").asText().equals("stat")) {
+                    for (String expr : expressions(panel)) {
+                        for (String part : expr.split(" \\+ ")) {
+                            assertTrue(part.endsWith("or vector(0)") || part.endsWith("or vector(0))"),
+                                    f + " " + panel.path("title").asText() + ": " + expr);
+                        }
+                    }
                 }
             }
         }
