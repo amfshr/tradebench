@@ -68,6 +68,9 @@ tasks.test {
     useJUnitPlatform {
         excludeTags("acceptance")
     }
+    // DashboardsTest reads the dashboards: an edit to them must rerun it, not leave it up to date
+    inputs.dir(rootProject.layout.projectDirectory.dir("deploy/grafana"))
+        .withPropertyName("dashboards").withPathSensitivity(PathSensitivity.RELATIVE)
 }
 
 tasks.register<Test>("replayAcceptance") {
