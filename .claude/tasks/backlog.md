@@ -482,3 +482,31 @@ Two questions, answered with a month of production evidence:
 
 Not blocked — it waits only for the month of data. The suggested re-entry point after the pause that follows the E1
 close-out (see the board's next-session menu).
+
+## B27 — Bump the GitHub Actions to their Node-24 majors
+
+**Captured** 2026-10-31 (the E1 close-out — deprecation warnings only today) · **Likely home** a small CI chore, its own PR (workflows are not docs-only) · **Trigger** Alex's call — before GitHub stops running Node-20 actions, or at the next CI change · **Relates to** E1-T1 (CI) · E2-T3 (the Pages and `web` lanes) · E1-T7 (the release workflow) · E1-T12 (the replay-acceptance lane)
+
+The runs warn that the pinned actions run on Node 20. Pinned today across `ci.yml`, `release.yml`,
+`replay-acceptance.yml`, `pages.yml` and `web-ci.yml`: `actions/checkout@v4`, `actions/setup-java@v4`,
+`actions/setup-node@v4`, `actions/upload-artifact@v4`, `actions/deploy-pages@v4`, `actions/upload-pages-artifact@v3`,
+`gradle/actions/setup-gradle@v4`, `docker/build-push-action@v6`, `docker/login-action@v3`, `docker/setup-buildx-action@v3`.
+Which major of each runs on Node 24 (e.g. `checkout@v5`, `setup-java@v5`) is checked per action at the time, with its
+breaking changes read; the release lane is proven by a dry run before the next tag.
+
+## B28 — Capture the two authored IG wire fixtures at the gated demo smoke
+
+**Captured** 2026-10-31 (Alex, at the E1 close-out: "make the smoke residual a backlog item") · **Likely home** a small
+`ig-client` test chore, its own PR (fixtures and tests are not docs-only) · **Trigger** any session with the demo
+credentials at hand; before anything new leans on the login's `timezoneOffset` or the pacer's discovery for a second
+market (B26) · **Relates to** E1-T3's residual 1 · E1-T6 · E1-T7 (carried through both, open at E1's close) ·
+`ig-client/src/test/resources/wire/README.md` (its "still to capture" items) · D16
+
+Two wire fixtures are still *authored* from IG's documentation rather than captured from IG: `application-allowance.json`
+(`GET /operations/application`, the pacer's discovery) and the login response's `timezoneOffset`. Run the gated smoke on
+the Mac (`IG_SMOKE=1 ./gradlew :ig-client:demoSmoke`, with the demo credentials from the local `.env`), save both
+responses, replace every personal value with a synthetic one of the same shape (G1 — account ids, client ids, API key
+names), re-golden the fixtures and mark them captured in the wire README. **Already known:** production reads the
+endpoint correctly — v0.2.0's boot logged "IG publishes 30/min for the account and 60/min for our key" (2026-10-31),
+so the field names hold; what is missing is the captured bytes, not a working parser. A skew still fails safe:
+refused at the boundary, 10/min kept.

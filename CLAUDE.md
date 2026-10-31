@@ -12,11 +12,12 @@ the loop between idea and verdict*. Owner/admin: Alex (SWE); future users: his b
 
 **Status: building.** Requirements complete; the DSL's core semantics are ruled (D7–D9,
 design session 2026-09-27); the AI operating framework (E0) is in place. Epic 1 (the 24/7
-collection service) is the active build epic — T1–T15 done (foundations, IG client,
+collection service) is complete (2026-10-31) — T1–T16 done (foundations, IG client,
 streaming, Postgres persistence, a sink that holds through database blips, the resilience belt
 hardened through every finding of its independent review, proven against real captured outages on
 a replay rig in acceptance mode and re-reviewed as a whole, the `platform` user, and the daily heal
-and Parquet archive, the first live weekend's fixes, and the deploy — production on IG demo since 2026-10-18 on a Hetzner box, archiving to R2, and the shadow-diff week: Tradebench is the primary capture, the Python prototype retired, D36); next: T16 metrics and dashboards, then E1 closes
+and Parquet archive, the first live weekend's fixes, and the deploy — production on IG demo since 2026-10-18 on a Hetzner box, archiving to R2, and the shadow-diff week: Tradebench is the primary capture, the Python prototype retired, D36; and the collector's metrics and Grafana dashboards, `v0.2.0` deployed 2026-10-31). Next: merge PR #33
+(the dashboard fixes), a week of monitoring, then the project pauses with no fixed return date — the re-entry point backlog B26
 (board).
 
 ## Read-first order

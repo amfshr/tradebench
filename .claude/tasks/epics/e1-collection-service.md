@@ -11,6 +11,11 @@
 > decisions D2/D6 (amended 2026-10-15 — no Spring in the collector)/D12; the 2026-10-15 session
 > (D31–D33) for the `platform` user, the command plane, telemetry and the dead-man ping.
 
+**Status: ✅ complete 2026-10-31** (Alex approved the close-out) — T1–T16 done; the collector in production on IG demo since
+2026-10-18, the primary capture since 2026-10-30 (D36), `v0.2.0` with its metrics and dashboards since 2026-10-31 (T16 § "Done
+(2026-10-31)"). Open after the close: PR #33 (the dashboard fixes), the week's monitoring, the gated demo smoke's captures
+(the known residual since T6); then the pause, re-entry at backlog B26.
+
 ## Epic shape
 
 **Dependency spine:** T2 (session/REST) → T3 (streaming) → T4 (persistence) → T5 (resilience)
@@ -20,7 +25,7 @@ schema/migrations can start alongside T3; T6's Parquet half only needs T2+T4 (it
 **Risk concentrates in T5** (the resilience belt is most of what the playbook exists to
 transfer — budget it as the long tail) and in T6's provider-allowance realities.
 **Trust arrives only at T8** — until the shadow week diffs clean, the Python appliance
-remains the capture of record.
+remains the capture of record. (Arrived 2026-10-30: D36, Tradebench the primary capture.)
 
 ---
 
@@ -1932,7 +1937,7 @@ waits for this ticket:** "will happily spend today fixing these issues before pu
 - **Deferred:** backlog B19 (a CHART snapshot) and B20 (the reconnect row's host-sleep label).
 - **Next:** T7's first deploy, by the runbook §1 (the T7 § "Unblocked (2026-10-18)"). Its close-out is the Done history entry tagged E1-T15.
 
-## T16 — The collector's metrics and its Grafana dashboards 🔶 (started 2026-10-30; the design nod held 2026-10-30, Alex — D13; born 2026-10-19)
+## T16 — The collector's metrics and its Grafana dashboards ✅ (done 2026-10-31 — PR #32, merged by Alex, merge `16ac140`; `v0.2.0` deployed 2026-10-31; started 2026-10-30; the design nod held 2026-10-30, Alex — D13; born 2026-10-19 — complete; closes E1)
 
 **Type** build · **Branch** `e1-t16-metrics-and-dashboards` (cut from main `d2d39fa`, 2026-10-30) · **Started** 2026-10-30 · **Blocked by** —
 
@@ -2031,8 +2036,9 @@ instrument kinds), the gap double-count, and the § "Decision" above:
 - (b) **B21 is folded in:** mask the IG account id in the `stream connected` log line.
 - (c) **Released as `v0.2.0`** after the merge, deployed with `deploy.sh`, every panel then verified live.
 
-**Increments:** ① metrics plumbing + capture metrics · ② event, job and heal metrics · ③ B21 · ④ dashboards + their tests ·
-⑤ the doctrine review's fixes (added 2026-10-30) · ⑥ after the merge, the release, deploy and live check.
+**Increments:** ① metrics plumbing + capture metrics ✅ · ② event, job and heal metrics ✅ · ③ B21 ✅ · ④ dashboards + their tests ✅ ·
+⑤ the doctrine review's fixes (added 2026-10-30) ✅ · ⑥ after the merge, the release, deploy and live check ✅ (2026-10-31; its two
+dashboard fixes in PR #33, open).
 
 **Progress (2026-10-30) — built, reviewed, not done.** On the branch, in commit order:
 ① `1317151` the capture metrics · ② `89b2dad` events, gaps, jobs and the heal as metrics, real log levels, a line per job
@@ -2052,7 +2058,43 @@ closing the gaps too; D37 names the `[instance]` prefix and the dev jsonl line n
 "structured JSON logs" corrected; a failed job's line names the real cause. **Ruled (Alex, 2026-10-30):** a rejected leg's
 `belt RETRY` line is a `WARN `, and the lint learns `rejected`; a resubscribe skipped with no live stream stays INFO (routine).
 
-**Remaining before the ticket closes:** the PR (next) → Alex's merge → increment ⑥ at a weekend: tag `v0.2.0`,
+**Remaining before the ticket closes** (as written 2026-10-30; all done 2026-10-31 — below): the PR (next) → Alex's merge → increment ⑥ at a weekend: tag `v0.2.0`,
 deploy, and validate live — the agent bridges the API; the histogram buckets' `le` values; the stored names match the
 contract; the `job_name` and `instance` labels; Loki's `detected_level` from JUL WARNING/SEVERE; what the Hikari and AWS SDK
 lines carry; every domain panel against real data → the close-out. E1 closes after T16.
+
+### Done (2026-10-31)
+
+Alex approved the close-out 2026-10-31 ("yes do both, close out the epic").
+
+- **Merged:** PR #32 (`e1-t16-metrics-and-dashboards` → `main`, opened 2026-10-30T23:17:00Z), merged by Alex — GitHub stamps
+  2026-10-31T15:55:16Z — merge `16ac140`; CI green on the PR (`build`, `web`, GitGuardian). After the progress note above, the
+  branch also carried `6426cef` (the re-review's fixes) and `bf3e0d6` (the rejected-leg `WARN` ruling) and `1ae82e3` (backlog
+  B26). 509 tests; 57 mutants killed (11 · 22 · 1 · 6 · 15 · 2 — the PR body's figures). The branch not yet deleted.
+- **Released:** `v0.2.0` tagged on `16ac140`; the Release workflow run 41217617307 succeeded.
+- **Deployed:** `deploy.sh` 2026-10-31 ~16:05Z, replacing `v0.1.0`; Flyway at 6, no migration. The box then took its OS updates
+  and a reboot (a new kernel); the collector capturing again 16:21:45Z, streaming 16:21:48Z. The lesson in the runbook §3
+  (`59f06f0`): updates and reboots at a weekend inside tmux, the Hetzner console for a Tailscale lock-out, a rebuild rather
+  than `do-release-upgrade` — the box stays on Ubuntu 24.04 (Alex, 2026-10-31).
+- **The live check (⑥, via the Grafana MCP):**
+  - the agent bridges the API: 11 `tradebench_*` series in Prometheus, names matching the contract (e.g.
+    `tradebench_capture_ticks_total`, `_tick_age_seconds`, `_store_write_duration_seconds_bucket`);
+  - labels `market`, `user=platform`, `source=ig-stream-demo`, the instance from the resource;
+  - the store-write histogram's buckets exactly 0.001…10 s;
+  - the pacer's events counted — `PACER_DISCOVERED` in `tradebench_events_total` (the review's F2, live);
+  - Loki reads `detected_level` warn from JUL WARNING through the SLF4J bridge — six HikariCP "Failed to validate connection"
+    lines during the apt upgrade's Postgres restart; the heartbeats showed `sinkFailures=0`.
+- **Two dashboard bugs found live → PR #33** (`e1-t16-dashboard-fixes`, open; `build` and GitGuardian green on its head; already
+  pushed to the stack as version 2 of each dashboard): (1) the logs data-source variable defaulted to the alphabetically first
+  Loki source — the stack's alert-state history — so the log panels read No data; both variables now pick by name regex,
+  `/-prom$/` and `/-logs$/`; (2) stats over never-occurred series read No data — now `or vector(0)`. `DashboardsTest` pins both;
+  the test task declares `deploy/grafana` an input.
+- **DoD:** the metrics emitted from production, visible per market, user and source — met · both dashboards in the repo and live
+  in the stack, every query checked against live data — met, with PR #33's two fixes; the panels whose series have not yet
+  occurred are the week's monitoring (below) · G1 — met (`DashboardsTest`; the `.env` leak check over the diff) · G5 — met ·
+  the doctrine review before the PR — met · released as `v0.2.0` and deployed — met · the design nod before the code — met.
+- **The week's monitoring — data-dependent, not code, not open DoD** (Alex, 2026-10-31): the job and heal series
+  (`tradebench.jobs.*`, `heal.*`, `ig.allowance.remaining`, `gap.minutes`, the `job_name` label) after the first `v0.2.0` daily
+  job, 00:10 UTC 2026-11-01; the tick-gap histogram and the per-minute rates after the DAX reopens (Sunday night).
+- **E1 closes with T16.** Then a week of monitoring, then the project pauses with no fixed return date; the re-entry point is
+  backlog B26 (the board's next-session menu).

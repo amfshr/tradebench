@@ -90,7 +90,29 @@ docker compose -f /opt/tradebench/deploy/compose.prod.yaml exec postgres psql -U
 df -h /                       # disk: well under 80% (a full DAX year is ~10 GB)
 free -m                       # memory: the collector capped at 1 GB, Postgres beside it
 docker system df              # images: prune old releases with `docker image prune -a` when it grows
+ls /var/run/reboot-required   # present: an update (often the kernel) waits for a reboot
 ```
+
+**Updates and reboots.** Security updates install themselves (`unattended-upgrades`, from `provision.sh`); the rest,
+and any reboot they need, are by hand — **on a weekend**, when the markets are closed and the heal covers the minute
+or so the collector is down. Every container restarts with the box (`restart: unless-stopped`).
+
+```
+tmux new -s upgrade           # an apt run that survives a dropped session — reattach: tmux attach -t upgrade
+apt update && apt upgrade -y
+reboot                        # only at a root@tradebench-prod prompt — check it is the box, not the Mac
+```
+
+- **Always inside `tmux`.** Upgrading `tailscale` restarts it and drops every SSH session over it, mid-upgrade
+  (2026-10-31): the session falls back to the Mac's shell without saying so, and the box can be left with Tailscale
+  stopped — reachable by nobody, the collector still capturing.
+- **Locked out:** the Hetzner Cloud console (the server's `>_ Console`), as `root`, with the root password kept in
+  Proton Pass (if it is lost: the server's Rescue tab → Reset root password; nothing restarts). Then
+  `dpkg --configure -a && apt upgrade -y && systemctl restart tailscaled && tailscale status`, and check
+  `ssh root@tradebench-prod` works from the Mac before any reboot.
+- **No release upgrades in place** (`do-release-upgrade`): the box stays on Ubuntu 24.04 LTS (Alex, 2026-10-31;
+  supported to 2029). When it has to move, rebuild — a fresh box from `provision.sh`, the last dump restored (§6),
+  `deploy.sh`, the old box retired.
 
 ## 4. Rolling back
 
