@@ -510,3 +510,24 @@ names), re-golden the fixtures and mark them captured in the wire README. **Alre
 endpoint correctly — v0.2.0's boot logged "IG publishes 30/min for the account and 60/min for our key" (2026-10-31),
 so the field names hold; what is missing is the captured bytes, not a working parser. A skew still fails safe:
 refused at the boundary, 10/min kept.
+
+## B29 — Start the collector's counters at zero, so a restart's first count is not lost
+
+**Captured** 2026-11-02 (the week's monitoring after `v0.2.0`; Alex: "yes add B29 to the backlog") · **Likely home** a
+small `market-data-service` fix and a `v0.2.1` release · **Trigger** with B26, or before the next release · **Relates to**
+E1-T16 (`CollectorMetrics`, `JobMetrics`) · B26 (its analysis reads these panels) · D37
+
+Prometheus's `increase()` cannot see a counter's first value: a series that appears already holding *n* has no earlier
+sample to measure from. The collector creates each counter series the first time it records one, so **the first count of
+every series after a process start is lost** to the dashboards. Seen live 2026-11-02: two `WATCHDOG_STALE` resubscribes
+in the log, `increase()` showed 1; the 2026-10-31 heal found 13 unobserved minutes (all `absent_at_source`, 13 gap
+minutes by origin `heal`) and the domain panels showed 0, because it was the first heal record since that day's restart.
+After the first record each series counts correctly, so the loss is one record per series per restart — small with
+restarts only at deploys, but it hits the rare series (the heal's outcomes, gap minutes, job runs) hardest. The record
+itself is whole: `job_runs`, `bar_gaps` and `service_events` hold every row.
+
+**The fix:** at construction, record 0 for each label set already known — per watched market: `tradebench.jobs.runs` by
+`job_name` (heal, archive) × outcome, `tradebench.heal.minutes` by outcome, `tradebench.gap.minutes` by origin,
+`tradebench.heal.points_spent`, and `tradebench.events` for the types the dashboards query (the observable capture
+counters already report from start). A test reads every pinned series at zero before anything happens; the mutation
+removes one pre-registration. Release as `v0.2.1` at a weekend, as `v0.2.0` was.
