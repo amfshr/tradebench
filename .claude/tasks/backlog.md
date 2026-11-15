@@ -466,6 +466,13 @@ check it ran. `sync` mirrors deletions, so the dumps the box retires leave the m
 Which one — and whether the mirror keeps its own history — is the decision. The Parquet archive is the part worth
 keeping forever; the dumps are rolling by design.
 
+**Evidence 2026-11-15 (done once by hand, the data-and-storage review).** The read-only remote exists: `r2ro`, from
+`~/.config/tradebench/r2-readonly.env` (outside the repository; loaded with `set -a; . <file>; set +a`, its values never
+printed). `rclone copy r2ro:tradebench-archive/platform ~/development/amfshr/tradebench-data/r2/tradebench-archive/platform`
+brought down 50 files, 21 MB locally. The per-day summary query is saved outside the repository at
+`~/development/amfshr/tradebench-data/archive/2026-11-15-data-review/summary.sql`, with that day's output beside it. So the
+script this item makes should mirror `platform/` (the dumps optional) and can run that query after each mirror.
+
 ## B26 — A one-month review of the data and the limits: room for a second market, or per-second data?
 
 **Captured** 2026-10-30 (Alex: "in a month's time review/analyse the data and limit usages, as we could feasibly start streaming another market and doing secs potentially if we had enough usage left, and we can analyse the market open and close times, at least for the DAX") · **Likely home** a dated analysis doc in `docs/operations/` and a recommendation for Alex to rule on (a design nod, D13) — not code · **Trigger** earliest ~2026-12-01: a month of data after `v0.2.0` deploys (the weekend of 2026-10-31/11-01) and its week of monitoring · **Relates to** E1-T16 (the metrics it reads) · D16 (the shared IG key's historical allowance) · D36 (the prototype no longer draws on it) · D25 R4 (the three clocks: the stream window and session config) · B24 (the adaptive tick-silence threshold) · B25 (the Mac-side R2 mirror, which makes the archive analysis cheap)
@@ -482,6 +489,28 @@ Two questions, answered with a month of production evidence:
 
 Not blocked — it waits only for the month of data. The suggested re-entry point after the pause that follows the E1
 close-out (see the board's next-session menu).
+
+**Evidence 2026-11-15 — R2 storage (question 1; Alex's data-and-storage review, observed through the Mac's read-only
+remote).** The bucket holds 291 MiB in 63 objects: `dumps/daily` 8 objects, 202 MiB (69%); `dumps/weekly` 5 objects,
+71 MiB (24%); the Parquet archive `platform/` 50 objects, 18.5 MiB (6%). Retention works as `deploy/backup.sh` writes it
+(dailies older than 8 days and weeklies older than 29 days deleted): exactly 8 dailies (2026-11-08 → 11-15), weeklies
+2026-10-18 → 11-15. **The growth is the shape:** every dump is the whole database, which keeps every tick (P8). The weekly
+dumps grew 7.1 → 14.1 → 22.9 → 29.8 MB (~7.5 MB a week); with ~13 copies retained that is ~100 MB a week of R2 growth,
+itself growing — R2's free 10 GB reached in roughly two years on this course. The same ticks are ~30 MB in a dump against
+~18 MB as Parquet. Options, most to least effective:
+(a) **dump only what the Parquet archive does not already hold** — exclude the archived days' ticks and bars; restore =
+the dump plus a reload from Parquet. A design decision for Alex (the restore path, D34 R4).
+(b) **fewer copies**, e.g. 3 dailies + 4 weeklies — about half; a two-line `backup.sh` change, the quick win.
+(c) **`pg_dump --compress=zstd`** (Postgres 16) — likely 20–40% smaller.
+
+**Evidence 2026-11-15 — the archive and the box (question 2, and question 1's headroom; read from the Parquet with
+DuckDB and from Grafana).** 25 archived days: every weekday 2026-10-19 → 11-13, plus the Sunday opens. Weekdays hold
+135k–232k ticks and 1,400–1,440 bars; missing bar-minutes run 0–17 a day, nearly all 21:00–22:35 UTC (thin evening trade —
+IG had no candles there either); the longest hole in four weeks is 4 minutes; only 3 bars were ever healed from REST, 2 of
+them after a 72 s session rebuild on 2026-11-10 08:55Z ("User/password check failed"). **The DAX's open and close:** the
+Sunday open moved 22:02 → 23:02 UTC at the EU clock change (2026-10-25), while the Friday close moved ~21:00 → 21:59 UTC only
+after the US change (2026-11-01) — IG's DAX Friday close follows US time. **The app** (Grafana, 14 days): CPU 0.13% on
+average; heap ~70 MB after GC, of ~360 MB; DB write p99 ~4 ms; 0 dropped ticks; queue max 3.
 
 ## B27 — Bump the GitHub Actions to their Node-24 majors
 
@@ -511,11 +540,15 @@ endpoint correctly — v0.2.0's boot logged "IG publishes 30/min for the account
 so the field names hold; what is missing is the captured bytes, not a working parser. A skew still fails safe:
 refused at the boundary, 10/min kept.
 
-## B29 — Start the collector's counters at zero, so a restart's first count is not lost
+## B29 — The collector's dashboards undercount: counters start at zero, and ERROR lines reach the warnings panel
 
-**Captured** 2026-11-02 (the week's monitoring after `v0.2.0`; Alex: "yes add B29 to the backlog") · **Likely home** a
-small `market-data-service` fix and a `v0.2.1` release · **Trigger** with B26, or before the next release · **Relates to**
-E1-T16 (`CollectorMetrics`, `JobMetrics`) · B26 (its analysis reads these panels) · D37
+**Captured** 2026-11-02 (the week's monitoring after `v0.2.0`; Alex: "yes add B29 to the backlog"); the second defect
+2026-11-15 (Alex's data-and-storage review) · **Likely home** a small `market-data-service` fix and a `v0.2.1` release (the
+counters); the dashboard half needs no release · **Trigger** with B26, or before the next release · **Relates to**
+E1-T16 (`CollectorMetrics`, `JobMetrics`, `DashboardsTest`, `deploy/grafana/collector-operations.json`) · B26 (its analysis
+reads these panels) · D37
+
+**1. Counters start at zero.**
 
 Prometheus's `increase()` cannot see a counter's first value: a series that appears already holding *n* has no earlier
 sample to measure from. The collector creates each counter series the first time it records one, so **the first count of
@@ -531,3 +564,10 @@ itself is whole: `job_runs`, `bar_gaps` and `service_events` hold every row.
 `tradebench.heal.points_spent`, and `tradebench.events` for the types the dashboards query (the observable capture
 counters already report from start). A test reads every pinned series at zero before anything happens; the mutation
 removes one pre-registration. Release as `v0.2.1` at a weekend, as `v0.2.0` was.
+
+**2. ERROR lines never reach the warnings panel (2026-11-15).** Loki labels the collector's ERROR lines
+`detected_level="SEVERE"` — the JUL level name — not `error`, so the operations dashboard's "Warnings and errors" panel
+(filter `detected_level=~"(?i)warn|error"`) never shows them. Seen live: three
+`belt IG_API_ERROR {"code":1,"message":"User/password check failed"}` lines (2026-11-05 22:00Z, 11-09 11:25Z, 11-10 08:55Z),
+absent from that panel. **The fix:** the filter also matches `severe|fatal|critical`; a `DashboardsTest` pin (the mutation
+drops `severe` from the filter); the dashboard pushed to the stack via the Grafana MCP. No release needed for this half.
