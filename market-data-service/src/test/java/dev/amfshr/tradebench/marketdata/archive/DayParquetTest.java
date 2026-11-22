@@ -47,6 +47,23 @@ class DayParquetTest {
     }
 
     @Test
+    void ticksReadBackAsWrittenInTimeOrder() throws Exception {
+        // E1-T17: what a restore reloads (D39) — six-decimal prices, microseconds, the source, oldest first
+        Path file = dir.resolve("ticks.parquet");
+        DayParquet.writeTicks(file, List.of(
+                new ArchivedTick(Instant.parse("2026-10-15T07:00:01Z"), new BigDecimal("0.000001"),
+                        new BigDecimal("24511.123456"), "ig-stream-demo"),
+                new ArchivedTick(Instant.parse("2026-10-15T07:00:00.123456Z"), new BigDecimal("24510.5"),
+                        new BigDecimal("24511.7"), "ig-stream-demo")));
+
+        assertEquals(List.of(
+                new ArchivedTick(Instant.parse("2026-10-15T07:00:00.123456Z"), new BigDecimal("24510.500000"),
+                        new BigDecimal("24511.700000"), "ig-stream-demo"),
+                new ArchivedTick(Instant.parse("2026-10-15T07:00:01Z"), new BigDecimal("0.000001"),
+                        new BigDecimal("24511.123456"), "ig-stream-demo")), DayParquet.readTicks(file));
+    }
+
+    @Test
     void barsRoundTripWithTheirSourceAndAnOptionalVolume() throws Exception {
         Path file = dir.resolve("bars.parquet");
         OhlcPrices bid = new OhlcPrices(new BigDecimal("1.5"), new BigDecimal("2.5"), new BigDecimal("1"), new BigDecimal("2"));

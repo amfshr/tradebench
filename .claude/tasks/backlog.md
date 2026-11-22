@@ -424,7 +424,7 @@ the console and Grafana Cloud's logs — neither is public. **Fix:** log the acc
 **Folded 2026-10-30 into E1-T16 (the design nod's ruling (b); Alex):** the account id is masked in the `stream connected`
 line — T16's increment ③, released with it as `v0.2.0`. It leaves the backlog when T16 merges.
 
-## B22 — Leave the archived days out of the nightly dump
+## B22 — Leave the archived days out of the nightly dump — folded into E1-T17 (2026-11-22)
 
 **Captured** 2026-10-18 (Alex, after the first deploy: "erase previous dumps … keep the latest three") · **Likely home** an ops follow-up (E1) — small · **Trigger** R2 storage passing the free 10 GB · **Relates to** E1-T7 (`deploy/backup.sh`: dailies > 8 days and weeklies > 29 days deleted, D34 R4) · E1-T6 (the Parquet archive) · runbook §6 (restores)
 
@@ -436,6 +436,11 @@ small dump. A restore then needs the archive re-imported for history — the run
 **Answered 2026-11-22 by D39** (B26's design session): the dump leaves out *all* the ticks, not only the archived days'
 (`--exclude-table-data=ticks`; the bars stay in it — small), with the DuckDB reload and a restore drill. The work is the
 backup item of the proposed "Collector follow-ups after the first month" ticket; this entry leaves the backlog when it lands.
+
+**Folded 2026-11-22 into E1-T17** (Alex cut the ticket: "yes cut the follow-ups ticket and do the nod"): the nod's ruling 2
+(`backup.sh` with `--exclude-table-data=ticks`, live from the `v0.2.1` deploy), ruling 3 (`reload-ticks`, a Java command in
+`market-data-service` reading the Parquet through DuckDB) and ruling 4 (the restore drill, the runbook §6 rewritten). It
+leaves the backlog when T17 merges.
 
 ## B23 — Review a managed Postgres against the box's own
 
@@ -470,11 +475,11 @@ the archive does not.
 it (the heal finds IG has no candles there either). Overnight runs ~5,000–7,000 ticks an hour. The hour moves with the US
 clock change, not the EU one. A per-market, per-hour threshold learnt from the archive would see this hour as quiet, not dead.
 
-## B25 — A weekly mirror of the R2 bucket on the Mac
+## B25 — A weekly mirror of the R2 bucket on the Mac — folded into E1-T17 (2026-11-22)
 
 **Captured** 2026-10-25 (Alex: "a weekly backup job that I can set to run on the Mac to file and backup all the stored objects in R2") · **Likely home** an ops follow-up (E1, after T16) — small · **Trigger** Alex's call — he asked for it after the E1 close-out · **Relates to** D34 R4 (the dumps and Hetzner's backups) · E1-T6 (the Parquet archive) · B22 · G1 (the R2 credentials stay out of the repo)
 
-A third copy, at home: `rclone sync r2:tradebench-archive <a local folder>` once a week from a launchd job on the Mac,
+A third copy, at home: `rclone sync r2:<bucket> <a local folder>` once a week from a launchd job on the Mac,
 with a read-only R2 token of its own (not the box's read-write one), its env file outside the repository, a log, and a
 check it ran. `sync` mirrors deletions, so the dumps the box retires leave the mirror too; `copy` keeps everything.
 Which one — and whether the mirror keeps its own history — is the decision. The Parquet archive is the part worth
@@ -482,10 +487,15 @@ keeping forever; the dumps are rolling by design.
 
 **Evidence 2026-11-15 (done once by hand, the data-and-storage review).** The read-only remote exists: `r2ro`, from
 `~/.config/tradebench/r2-readonly.env` (outside the repository; loaded with `set -a; . <file>; set +a`, its values never
-printed). `rclone copy r2ro:tradebench-archive/platform ~/development/amfshr/tradebench-data/r2/tradebench-archive/platform`
+printed). `rclone copy r2ro:<bucket>/platform ~/development/amfshr/tradebench-data/r2/<bucket>/platform`
 brought down 50 files, 21 MB locally. The per-day summary query is saved outside the repository at
 `~/development/amfshr/tradebench-data/archive/2026-11-15-data-review/summary.sql`, with that day's output beside it. So the
 script this item makes should mirror `platform/` (the dumps optional) and can run that query after each mirror.
+
+**Folded 2026-11-22 into E1-T17** (the nod's ruling 6; Alex): `scripts/r2-mirror.sh`, run by hand on the Mac — no
+scheduler (Alex retired the launchd jobs), so not weekly — mirrors `platform/` (dumps optional) via the read-only remote with
+`copy`, never `sync`, then prints the per-day summary; the query moves into the repo as `scripts/analysis/archive-summary.sql`.
+The `sync`-or-`copy` question above is answered: `copy`. It leaves the backlog when T17 merges.
 
 ## B26 — A one-month review of the data and the limits: room for a second market, or per-second data? — closed 2026-11-22 (design session; D39, D40)
 
@@ -534,8 +544,8 @@ a DuckDB script, proven by a restore drill); the ≤2.5 h overnight tick cost ac
 and (c) above are no longer needed. **R3–R4 → D40:** NASDAQ (`IX.D.NASDAQ.CASH.IP`) is the second market, its own ticket
 after the collector follow-ups (**B30**); per-second data is derived from ticks on read, no `CHART:SECOND`. **R5:** the DAX's
 hours are recorded, not coded — `docs/reference/ig-dax-hours.md` (IG runs the epic on New York time); the thin hour
-becomes **B24**'s evidence. The backup work goes into the proposed "Collector follow-ups after the first month" ticket (the
-board's next-session menu). The entry stays here, closed, for its evidence.
+becomes **B24**'s evidence. The backup work goes into the "Collector follow-ups after the first month" ticket (cut 2026-11-22 as
+**E1-T17**). The entry stays here, closed, for its evidence.
 
 ## B27 — Bump the GitHub Actions to their Node-24 majors
 
@@ -548,7 +558,7 @@ The runs warn that the pinned actions run on Node 20. Pinned today across `ci.ym
 Which major of each runs on Node 24 (e.g. `checkout@v5`, `setup-java@v5`) is checked per action at the time, with its
 breaking changes read; the release lane is proven by a dry run before the next tag.
 
-## B28 — Capture the two authored IG wire fixtures at the gated demo smoke
+## B28 — Capture the two authored IG wire fixtures at the gated demo smoke — folded into E1-T17 (2026-11-22)
 
 **Captured** 2026-10-31 (Alex, at the E1 close-out: "make the smoke residual a backlog item") · **Likely home** a small
 `ig-client` test chore, its own PR (fixtures and tests are not docs-only) · **Trigger** any session with the demo
@@ -565,7 +575,11 @@ endpoint correctly — v0.2.0's boot logged "IG publishes 30/min for the account
 so the field names hold; what is missing is the captured bytes, not a working parser. A skew still fails safe:
 refused at the boundary, 10/min kept.
 
-## B29 — The collector's dashboards undercount: counters start at zero, and ERROR lines reach the warnings panel
+**Folded 2026-11-22 into E1-T17** (the nod's ruling 7; Alex): the ticket's last increment, run only with Alex's go at the
+time — a real IG demo login (G6), more than 60 s from the collector's login, the captured responses made synthetic before
+commit (G1). T17's DoD: done, or explicitly deferred. It leaves the backlog when T17 merges.
+
+## B29 — The collector's dashboards undercount: counters start at zero, and ERROR lines reach the warnings panel — folded into E1-T17 (2026-11-22)
 
 **Captured** 2026-11-02 (the week's monitoring after `v0.2.0`; Alex: "yes add B29 to the backlog"); the second defect
 2026-11-15 (Alex's data-and-storage review) · **Likely home** a small `market-data-service` fix and a `v0.2.1` release (the
@@ -597,11 +611,15 @@ removes one pre-registration. Release as `v0.2.1` at a weekend, as `v0.2.0` was.
 absent from that panel. **The fix:** the filter also matches `severe|fatal|critical`; a `DashboardsTest` pin (the mutation
 drops `severe` from the filter); the dashboard pushed to the stack via the Grafana MCP. No release needed for this half.
 
+**Folded 2026-11-22 into E1-T17** (the nod's ruling 5; Alex): (a) the filter half first, increment ①, no release; (b) the
+counters at zero, increment ② — every series the dashboards read, including every event type at its fixed severity
+(`WATCHDOG_STALE` with both actions) — released as `v0.2.1`. It leaves the backlog when T17 merges.
+
 ## B30 — NASDAQ as the second market (`IX.D.NASDAQ.CASH.IP`): the two-market design D25 left open
 
 **Captured** 2026-11-22 (B26's design session, R3 → D40; Alex: "i agree with all your recommendations") · **Likely home**
 its own ticket after the collector follow-ups, with its own design nod (D13) — proposed on the board's next-session menu,
-not cut · **Trigger** the follow-ups ticket done, and Alex cuts it · **Relates to** D40 · D25 (refined 2026-10-17: a
+not cut · **Trigger** the follow-ups ticket (E1-T17, cut 2026-11-22) done, and Alex cuts it · **Relates to** D40 · D25 (refined 2026-10-17: a
 quarantined market counts as not observing, built "when a second market arrives") · B17 (that ruling) · B14 (the session
 verdict's `≥ 2`, its nod at the third market) · B28 (the pacer's captured discovery, wanted before a second market leans on
 it) · E1-T16 (the dashboards) · PRD §7 ("DAX and NASDAQ first") · `docs/design/sessions/2026-11-22-the-one-month-review.md`

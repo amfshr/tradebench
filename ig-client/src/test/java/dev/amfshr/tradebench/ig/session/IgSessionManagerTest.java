@@ -69,6 +69,24 @@ class IgSessionManagerTest {
     }
 
     @Test
+    void theCapturedLoginLandsOnTheConfiguredAccountWithAZeroOffset() throws Exception {
+        // E1-T17 (B28): IG demo's real login, 2026-11-22, its personal values made synthetic — the preferred account
+        // already the configured one, so no switch; timezoneOffset 0 in UK winter time, a whole number of hours
+        transport.enqueue(FakeTransport.jsonWithTokens(200, Wire.fixture("captured-login-response-v2.json"),
+                "loginCst", "loginXst"));
+
+        IgSession session = manager.current();
+
+        assertEquals(1, transport.calls.size(), "one call: no switch when the login lands on the configured account");
+        assertEquals(new IgTokens("loginCst", "loginXst"), session.tokens());
+        assertEquals("AB12CE", session.activeAccountId());
+        assertEquals(List.of(
+                new IgAccount("AB12CD", "CFD", false),
+                new IgAccount("AB12CE", "SPREADBET", true)), session.accounts());
+        assertEquals(java.time.Duration.ZERO, session.accountUtcOffset(), "a present zero is UTC, not unknown");
+    }
+
+    @Test
     void aLoginWithoutATimezoneOffsetLeavesItUnknownNotZero() throws Exception {
         String noOffset = Wire.fixture("login-response.json").replaceAll("\"timezoneOffset\"\\s*:\\s*[-0-9.]+\\s*,?", "");
         transport.enqueue(FakeTransport.jsonWithTokens(200, noOffset, "loginCst", "loginXst"));

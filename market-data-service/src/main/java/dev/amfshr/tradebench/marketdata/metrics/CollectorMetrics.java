@@ -21,6 +21,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import dev.amfshr.tradebench.core.domain.Bar1m;
 import dev.amfshr.tradebench.core.domain.Tick;
 import dev.amfshr.tradebench.marketdata.events.EventType;
+import dev.amfshr.tradebench.marketdata.events.Severity;
 import dev.amfshr.tradebench.marketdata.ingest.Buffers;
 import dev.amfshr.tradebench.marketdata.store.CaptureStore;
 import dev.amfshr.tradebench.marketdata.store.EventLog;
@@ -99,6 +100,31 @@ public final class CollectorMetrics {
                 .setDescription("Seconds a database write took: a bar, or the pump's flush of a tick batch. During a"
                         + " backlog the store also flushes every 500 ticks inside its writes; those are not timed")
                 .setExplicitBucketBoundariesAdvice(STORE_WRITE_BUCKETS).build();
+        startAtZero();
+    }
+
+    /**
+     * Every counter series the dashboards read exists from the start, at 0 (E1-T17, B29): Prometheus's
+     * {@code increase()} cannot see a series' first value, so a series born holding 1 would lose that count.
+     * An event's series is its type at the severity it is recorded at — the type's own, and RECONNECT's replayed
+     * INFO too — without a market and for each watched one; a watchdog verdict per action.
+     */
+    private void startAtZero() {
+        List<Attributes> scopes = new ArrayList<>(List.of(dimensions));
+        scopes.addAll(byMarket.values());
+        for (Attributes scope : scopes) {
+            for (EventType type : EventType.values()) {
+                Attributes base = scope.toBuilder().put(TYPE, type.name()).put(SEVERITY, type.defaultSeverity().name()).build();
+                if (type == EventType.WATCHDOG_STALE) {
+                    events.add(0, base.toBuilder().put(ACTION, "rebuild").build());
+                    events.add(0, base.toBuilder().put(ACTION, "resubscribe").build());
+                } else {
+                    events.add(0, base);
+                }
+            }
+            events.add(0, scope.toBuilder().put(TYPE, EventType.RECONNECT.name()).put(SEVERITY, Severity.INFO.name()).build());
+        }
+        byMarket.values().forEach(market -> gapMinutes.add(0, market.toBuilder().put(ORIGIN, "stream").build()));
     }
 
     /** One instrument whichever side counts: the stream's detector here, the heal in {@link JobMetrics}. */

@@ -41,7 +41,8 @@ public final class JobMetrics {
     private final LongCounter gapMinutes;
     private final AtomicLong allowance = new AtomicLong(UNKNOWN);
 
-    public JobMetrics(Meter meter, String user, String source) {
+    /** @param epics the markets the daily jobs work; @param jobs the jobs' names — their series start at 0 */
+    public JobMetrics(Meter meter, String user, String source, List<String> epics, List<String> jobs) {
         this.dimensions = Attributes.of(USER, user, SOURCE, source);
         this.runs = meter.counterBuilder(CollectorMetrics.JOB_RUNS).setUnit("{run}")
                 .setDescription("Daily job runs recorded, by job and outcome").build();
@@ -61,6 +62,19 @@ public final class JobMetrics {
                         m.record(known, dimensions);
                     }
                 });
+        // every counter series the dashboards read, at 0 from the start (B29: increase() cannot see a first value)
+        for (String epic : epics) {
+            Attributes market = dimensions.toBuilder().put(MARKET, epic).build();
+            for (String job : jobs) {
+                for (String outcome : List.of("succeeded", "failed")) {
+                    runs.add(0, market.toBuilder().put(JOB, job).put(OUTCOME, outcome).build());
+                }
+            }
+            healMinutes.add(0, market.toBuilder().put(OUTCOME, "healed").build());
+            healMinutes.add(0, market.toBuilder().put(OUTCOME, "absent_at_source").build());
+            pointsSpent.add(0, market);
+            gapMinutes.add(0, market.toBuilder().put(ORIGIN, "heal").build());
+        }
     }
 
     /** Counts each run once {@code delegate} has stored it. */

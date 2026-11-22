@@ -603,7 +603,7 @@
             "type": "loki",
             "uid": "${logs}"
           },
-          "expr": "{service_name=\"market-data-service\"} | detected_level=~\"(?i)warn|error\"",
+          "expr": "{service_name=\"market-data-service\"} | detected_level=~\"(?i)warn|error|severe|fatal|critical\"",
           "legendFormat": "",
           "queryType": "range"
         }

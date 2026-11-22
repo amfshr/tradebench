@@ -43,9 +43,10 @@ class DemoLoginSmokeTest {
         assertEquals(credentials.accountId(), session.activeAccountId());
         assertTrue(session.lightstreamerEndpoint().startsWith("https://"),
                 "expected an LS endpoint, got: " + session.lightstreamerEndpoint());
-        System.out.println("[smoke] active account: " + session.activeAccountId());
+        // the account's ids are .env values (G1): the smoke says what it checked, never which
+        System.out.println("[smoke] active account: the configured one");
         System.out.println("[smoke] lightstreamer:  " + session.lightstreamerEndpoint());
-        System.out.println("[smoke] accounts:       " + session.accounts());
+        System.out.println("[smoke] accounts:       " + session.accounts().size());
 
         ApplicationAllowance allowance =
                 new IgRestClient(http, IgEnvironment.DEMO, credentials, pacer).applicationAllowance(session);

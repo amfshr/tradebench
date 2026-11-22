@@ -693,9 +693,12 @@ only in memory or habit is lost at the next cold start. Alex: "go ahead with the
 
 The dump runs with `pg_dump --exclude-table-data=ticks`: it carries what only the database holds — the schema, the
 bars, the events, the gaps, the job runs — and the Parquet archive in R2 is the record for ticks (P8). A restore is
-the dump, then the ticks reloaded from Parquet (a DuckDB script); it is proven by a restore drill before it is relied
-on. Retention is unchanged. **The accepted cost:** ticks from midnight to the 02:30 dump are in neither copy until the
-next night's archive — at most 2.5 overnight hours in a worst-case restore (today's full dumps already lose everything
+the dump, then the ticks reloaded from Parquet (a DuckDB script; built instead as a Java command reading the Parquet
+through DuckDB, so it is tested like the archiver — E1-T17's nod, ruling 3, 2026-11-22); it is proven by a restore
+drill before it is relied on. Retention is unchanged. **The accepted cost:** ticks from midnight to the 02:30 dump are in neither copy until the
+next night's archive — at most 2.5 overnight hours in a worst-case restore, **while the archive is current** (a
+restore's `--clean` empties `ticks`, so days the archive has failed to write would be lost too; the runbook's restore
+checks the archive first — E1-T17's review, 2026-11-22) (today's full dumps already lose everything
 after 02:30; the heal recovers those minutes as bars). **Why:** in the 2026-11-22 dump ticks were 98.6% of the data
 (254 MB of 258 MB uncompressed) and every dump copied all of them again — R2 grew ~100 MiB a week and accelerating;
 without them a dump is ~1–2 MB and R2 grows by the Parquet's ~5.5 MB a week per market. Amends D34's backup line. B26,

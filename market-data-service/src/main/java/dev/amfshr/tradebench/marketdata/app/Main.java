@@ -161,7 +161,8 @@ public final class Main {
                 log(instance, "daily job: heal only — no TRADEBENCH_ARCHIVE_* set, so nothing is archived off the box");
             }
             jobs = new JobsRunner(new DailyJobs(clock, epics, phases,
-                    countedRuns(telemetry, new PostgresJobRunStore(db.dataSource(), user, source, instance)),
+                    countedRuns(telemetry, epics, phases.stream().map(DayPhase::name).toList(),
+                            new PostgresJobRunStore(db.dataSource(), user, source, instance)),
                     JobTuning.playbook(),
                     message -> log(instance, message)), JobTuning.playbook().wake(), message -> log(instance, message));
         }
@@ -308,8 +309,9 @@ public final class Main {
     }
 
     /** The job-run record, counted on its way in (E1-T16): the jobs panels read what this wrapper sees. */
-    static JobRunStore countedRuns(CaptureAssembly.Telemetry telemetry, JobRunStore store) {
-        return new JobMetrics(telemetry.meter(), telemetry.user(), telemetry.source()).counting(store);
+    static JobRunStore countedRuns(CaptureAssembly.Telemetry telemetry, List<String> epics, List<String> jobs,
+            JobRunStore store) {
+        return new JobMetrics(telemetry.meter(), telemetry.user(), telemetry.source(), epics, jobs).counting(store);
     }
 
     /** The heal's sessions: the current one, or — on a retry — the failure path, which validates the token
@@ -360,7 +362,7 @@ public final class Main {
         return required(env, "TRADEBENCH_USER");
     }
 
-    private static String required(Map<String, String> env, String key) {
+    static String required(Map<String, String> env, String key) {
         String value = env.get(key);
         if (value == null || value.isBlank()) {
             throw new IgFatalConfigException("Missing required environment variable '" + key

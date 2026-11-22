@@ -7,12 +7,14 @@ import java.nio.file.Path;
 import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.PreparedStatement;
+import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
 import java.sql.Types;
 import java.time.Instant;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
+import java.util.ArrayList;
 import java.util.List;
 
 /**
@@ -68,6 +70,28 @@ public final class DayParquet {
             }
             s.setString(11, b.source());
         });
+    }
+
+    /** A day's ticks read back from its file, in time order — what a restore reloads (D39, E1-T17). */
+    public static List<ArchivedTick> readTicks(Path file) throws IOException {
+        try (Connection duck = DriverManager.getConnection("jdbc:duckdb:");
+                PreparedStatement s = duck.prepareStatement(
+                        "SELECT ts_utc, bid, ask, source FROM read_parquet(?) ORDER BY ts_utc")) {
+            try (Statement utc = duck.createStatement()) {
+                utc.execute("SET TimeZone = 'UTC'");
+            }
+            s.setString(1, file.toAbsolutePath().toString());
+            List<ArchivedTick> ticks = new ArrayList<>();
+            try (ResultSet r = s.executeQuery()) {
+                while (r.next()) {
+                    ticks.add(new ArchivedTick(r.getObject(1, OffsetDateTime.class).toInstant(), r.getBigDecimal(2),
+                            r.getBigDecimal(3), r.getString(4)));
+                }
+            }
+            return ticks;
+        } catch (SQLException e) {
+            throw new IOException("reading the ticks of " + file + " failed", e);
+        }
     }
 
     @FunctionalInterface

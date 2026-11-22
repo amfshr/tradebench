@@ -12,7 +12,7 @@
 | Account | What to create | What to keep |
 |---|---|---|
 | Hetzner Cloud | an account and a project | — |
-| Cloudflare R2 | a bucket (e.g. `tradebench-archive`) and an API token scoped to it, read and write | the access key id, the secret, the account's S3 endpoint |
+| Cloudflare R2 | a bucket (its name is an env value, G1) and an API token scoped to it, read and write | the access key id, the secret, the account's S3 endpoint |
 | Grafana Cloud | a free stack in the **EU** region | its OTLP endpoint, and an access-policy token with metrics and logs write — base64 of `<instance id>:<token>` is the header's value |
 | healthchecks.io | one check: period 1 minute, grace 5 minutes (a second, period 1 day, for the nightly dump — optional) | each check's ping URL |
 | Tailscale | a free personal account, installed on your Mac | — |
@@ -140,15 +140,51 @@ Then put the same value in both env files and restart `market-data`.
 
 ## 6. Restoring from a dump
 
+A dump holds everything but the ticks' rows (D39); the ticks come back from the Parquet archive in a second step.
+**Before restoring, check the archive is current.** `pg_restore --clean` empties the `ticks` table, so any tick the
+archive does not hold is lost. On the box:
+
 ```
-rclone ls r2:<bucket>/dumps/daily                                    # with backup.env loaded: set -a; . /etc/tradebench/backup.env; set +a
+docker compose -f /opt/tradebench/deploy/compose.prod.yaml exec -T postgres psql -U postgres -d market_data -c \
+  "SELECT DISTINCT ON (covers_date) covers_date, status FROM job_runs WHERE job_name = 'archive'
+   ORDER BY covers_date DESC, started_utc DESC LIMIT 7"
+```
+
+Every day up to yesterday should read `succeeded` (its latest run). If an archive has been failing, don't restore yet: run the daily job until
+it catches up (or, if only bars or events need repairing and the `ticks` table itself is intact, restore from a
+`pg_restore -l` list with the `TABLE DATA public ticks` line removed, which leaves the box's ticks as they are). Then,
+with `backup.env` loaded (`set -a; . /etc/tradebench/backup.env; set +a`):
+
+```
+# 1 — the dump: schema, bars, events, gaps, job runs (seconds)
+rclone ls r2:<bucket>/dumps/daily
 rclone copyto r2:<bucket>/dumps/daily/market_data-<day>.dump /tmp/restore.dump
-docker compose … stop market-data
-docker compose … exec -T postgres pg_restore -U postgres -d market_data --clean --if-exists < /tmp/restore.dump
-docker compose … start market-data
+docker compose -f /opt/tradebench/deploy/compose.prod.yaml stop market-data
+docker compose -f /opt/tradebench/deploy/compose.prod.yaml exec -T postgres \
+    pg_restore -U postgres -d market_data --clean --if-exists < /tmp/restore.dump
+
+# 2 — the ticks, from the archive (about a minute a month of DAX)
+rclone copy r2:<bucket>/platform /var/backups/tradebench/archive/platform
+docker compose -f /opt/tradebench/deploy/compose.prod.yaml run --rm --no-deps \
+    -v /var/backups/tradebench/archive:/archive:ro --entrypoint /opt/market-data-service/bin/reload-ticks \
+    market-data /archive IX.D.DAX.DAILY.IP <first archived day> <last archived day>
+docker compose -f /opt/tradebench/deploy/compose.prod.yaml start market-data
 ```
+
+It runs in the collector's image with the collector's settings (`market-data.env`); naming its own entrypoint skips
+the OpenTelemetry agent, so a restore's lines never pass for the collector's in Grafana. `reload-ticks` prints a line a day — archived, inserted, now in the database — and exits non-zero naming any day that
+came back short; run it again safely (a tick already there is skipped). One market per run. **What a restore cannot
+bring back:** ticks after the last archived day — up to the dump's 02:30 on the dump's day are in neither copy (D39's
+accepted cost), and everything after the dump was taken. The heal refills those minutes as bars, up to seven days
+back (Field Manual chapter 12); ticks have no history at IG.
+
+**Drilled 2026-11-22** (E1-T17), on the Mac in a throwaway Postgres 16 with production's 2026-11-22 dump and the
+mirrored archive: the dump restored without its ticks' rows in under a second (schema V6, 35,562 bars, 447 events);
+`reload-ticks` brought back 31 archived days, 4,493,329 ticks, in 75 seconds, every day whole; and the result matched
+a full restore of the same dump day by day — every day's count and every tick's time and prices identical.
+
 A whole-box failure is faster from Hetzner's daily backup: restore the server from the console, then check the
-collector came back (§2). The heal fills the bars the outage cost, up to seven days back (Field Manual chapter 12).
+collector came back (§2).
 
 ## 7. When something is wrong
 

@@ -206,6 +206,15 @@ class IgRestClientTest {
     }
 
     @Test
+    void theCapturedApplicationListGivesOurKeysRealBudget() throws Exception {
+        // E1-T17 (B28): IG demo's real list, 2026-11-22, names and keys synthetic — ours second, the other DISABLED;
+        // demo publishes 30 a minute per account, not the 10 the authored fixture took from trading-ig
+        transport.enqueue(FakeTransport.json(200, Wire.fixture("captured-application.json")));
+
+        assertEquals(new ApplicationAllowance("placeholder-key", 30, 60, 100, 10000, 40), client.applicationAllowance(session));
+    }
+
+    @Test
     void applicationAllowanceIsNullWhenOurKeyIsNotListed() throws Exception {
         transport.enqueue(FakeTransport.json(200,
                 "[{\"apiKey\":\"other-key\",\"allowanceAccountOverall\":30}]"));

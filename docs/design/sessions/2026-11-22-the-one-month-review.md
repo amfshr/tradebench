@@ -32,11 +32,12 @@ kept — so R2 grew about 100 MiB a week, the weekly increase itself growing. In
 
 | Table | Size | Rows |
 |---|---:|---:|
-| `ticks` | 254.4 MB | 4,493,331 |
-| `bars_1m` | 3.4 MB | 35,564 |
+| `ticks` | 254.4 MB | 4,493,329 |
+| `bars_1m` | 3.4 MB | 35,562 |
 | everything else (`service_events`, `job_runs`, `bar_gaps`, `archives`, status, reference) | ~0.13 MB | ~740 |
 
-Ticks are 98.6% of a dump. The same ticks are already in the Parquet archive, at about 5.5 MB a week.
+Ticks are 98.6% of a dump. *(Row counts corrected 2026-11-22 after E1-T17's restore drill: first measured as 4,493,331
+and 35,564 by counting the dump's text lines, which over-counts by two a table.)* The same ticks are already in the Parquet archive, at about 5.5 MB a week.
 
 **Headroom.** The collector: CPU 0.13% on average, the heap at most 133 MB after GC of ~360 MB. Grafana Cloud's free
 tier: 591 of 10,000 active series, ~0.2 GB of 50 GB logs a month. IG: the historical allowance untouched (10,000 of

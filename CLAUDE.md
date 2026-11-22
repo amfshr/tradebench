@@ -18,8 +18,9 @@ hardened through every finding of its independent review, proven against real ca
 a replay rig in acceptance mode and re-reviewed as a whole, the `platform` user, and the daily heal
 and Parquet archive, the first live weekend's fixes, and the deploy — production on IG demo since 2026-10-18 on a Hetzner box, archiving to R2, and the shadow-diff week: Tradebench is the primary capture, the Python prototype retired, D36; and the collector's metrics and Grafana dashboards, `v0.2.0` deployed 2026-10-31). E0 (the AI
 operating framework) is complete too (2026-11-22: G1 enforced by machine, the contract reviewed, D38), and the
-one-month review ruled D39–D40 (dumps leave the ticks to Parquet; NASDAQ next; per-second derived from ticks). Next
-(board): the collector follow-ups ticket (D39's backups, B29 → `v0.2.1`, B25), then NASDAQ (B30), then E9.
+one-month review ruled D39–D40 (dumps leave the ticks to Parquet; NASDAQ next; per-second derived from ticks). E1 is
+reopened for **T17**, the collector follow-ups (D39's backups and restore drill, B29 → `v0.2.1`, B25), in progress
+from 2026-11-22; then NASDAQ (B30), then E9 (board).
 
 ## Read-first order
 

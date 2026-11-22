@@ -105,11 +105,13 @@ class MainTest {
                 new MarketDay("IX.D.DAX.DAILY.IP", LocalDate.of(2026, 10, 29)),
                 Instant.EPOCH, Instant.EPOCH.plusSeconds(3), true, "{}");
 
-        Main.countedRuns(new CaptureAssembly.Telemetry(provider.get("test"), "platform", "ig-stream-demo"), store).record(run);
+        Main.countedRuns(new CaptureAssembly.Telemetry(provider.get("test"), "platform", "ig-stream-demo"),
+                List.of("IX.D.DAX.DAILY.IP"), List.of("archive"), store).record(run);
 
         assertEquals(List.of(run), written);
         var runs = reader.collectAllMetrics().stream().filter(m -> m.getName().equals("tradebench.jobs.runs")).findFirst()
-                .orElseThrow().getLongSumData().getPoints().iterator().next();
+                .orElseThrow().getLongSumData().getPoints().stream()
+                .filter(p -> "succeeded".equals(p.getAttributes().get(AttributeKey.stringKey("outcome")))).findFirst().orElseThrow();
         assertEquals(1, runs.getValue());
         assertEquals("platform", runs.getAttributes().get(AttributeKey.stringKey("user")));
         assertEquals("archive", runs.getAttributes().get(AttributeKey.stringKey("job_name")));
