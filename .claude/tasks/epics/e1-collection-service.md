@@ -16,6 +16,9 @@
 (2026-10-31)"). Open after the close: PR #33 (the dashboard fixes), the week's monitoring, the gated demo smoke's captures
 (the known residual since T6); then the pause, re-entry at backlog B26.
 
+**Reopened 2026-11-22 for T17** (Alex: "yes cut the follow-ups ticket and do the nod") — the collector follow-ups after the
+first month, from B26's design session (D39) and backlog B29, B25, B22, B28. E1 closes again when T17 merges (T17 §).
+
 ## Epic shape
 
 **Dependency spine:** T2 (session/REST) → T3 (streaming) → T4 (persistence) → T5 (resilience)
@@ -2098,3 +2101,63 @@ Alex approved the close-out 2026-10-31 ("yes do both, close out the epic").
   job, 00:10 UTC 2026-11-01; the tick-gap histogram and the per-minute rates after the DAX reopens (Sunday night).
 - **E1 closes with T16.** Then a week of monitoring, then the project pauses with no fixed return date; the re-entry point is
   backlog B26 (the board's next-session menu).
+
+## T17 — Collector follow-ups after the first month 🔶 (born and started 2026-11-22; the design nod held 2026-11-22, Alex — D13; E1 reopened for it)
+
+**Type** build · **Branch** `e1-t17-collector-follow-ups` (cut from main `5037fa5`, 2026-11-22) · **Started** 2026-11-22 · **Blocked by** —
+
+**Source.** The follow-ups the first month of production left, proposed on the board's next-session menu since 2026-11-15
+and cut 2026-11-22 (Alex: "yes cut the follow-ups ticket and do the nod"):
+- **D39** — B26's design session (`docs/design/sessions/2026-11-22-the-one-month-review.md`, R1–R2): the nightly dump leaves
+  the ticks to the Parquet archive; a restore is the dump, then the ticks reloaded from Parquet, proven by a restore drill
+  before it is relied on. It answers **B22** (leave the archived days out of the dump).
+- **B29** both halves — the counters created at zero, and ERROR lines reaching the warnings panel.
+- **B25** — the Mac-side mirror of the R2 bucket.
+- **B28** — the two authored IG wire fixtures captured at the gated demo smoke.
+
+**Nod (Alex, 2026-11-22 — "yes i agree with all seven, go ahead")** — the design nod (D13), held the day the ticket started.
+Seven rulings, all accepted:
+1. **Placement:** E1-T17, E1 reopened for it; E1 closes again when T17 merges.
+2. **Backups (D39):** `deploy/backup.sh` adds `--exclude-table-data=ticks`; live from the `v0.2.1` deploy. The old dumps age
+   out under the current retention (dailies 8 days, weeklies 29 days).
+3. **The reload:** a Java command in `market-data-service`, `reload-ticks <day range>` (D39's "a DuckDB script", as ruled
+   here: DuckDB the reader, the command the loader).
+   - It reads each day's `ticks.parquet` (the local mirror or R2) through DuckDB.
+   - It inserts with `ON CONFLICT DO NOTHING` against the `ticks_dedupe` key.
+   - It compares the per-day counts with the Parquet.
+   - Test: a Testcontainers round trip — archive a day of synthetic ticks, delete them, reload; every tick back exactly once,
+     and idempotent on a second run. Mutation-verified.
+4. **The restore drill:** on the Mac, with real data, in a throwaway Postgres 16 container (never the dev database).
+   - `pg_restore` the latest dump, `reload-ticks` over the mirror, per-day counts against the Parquet.
+   - The result (counts and timings, no data) recorded in the runbook; its §6 rewritten as the two-step restore.
+   - The same drill repeated on the first tick-free dump after the deploy.
+5. **B29:**
+   - (a) the operations dashboard's "Warnings and errors" filter also matches `severe|fatal|critical` (Loki labels JUL SEVERE
+     as `SEVERE`); pinned in `DashboardsTest`; pushed to the stack. No release.
+   - (b) counters created at 0 at startup for every series the dashboards read — per market: job runs (heal, archive ×
+     outcome), heal minutes by outcome, gap minutes by origin, points spent; every event type at its fixed severity
+     (`WATCHDOG_STALE` with both actions). A test reads every pinned series at 0 before anything happens.
+6. **B25:** `scripts/r2-mirror.sh` on the Mac, run by hand (no scheduler — Alex retired the launchd jobs).
+   - It mirrors `platform/` (dumps optional) via the read-only remote into `~/development/amfshr/tradebench-data/r2/` with
+     `copy`, never `sync`, then prints the per-day summary.
+   - The summary query moves into the repo as `scripts/analysis/archive-summary.sql`.
+7. **B28 last, only with Alex's go at the time:** a real IG demo login (G6); more than 60 s from the collector's login; the
+   captured responses made synthetic before commit (G1).
+
+**Increments:** ① the dashboard filter · ② counters at zero · ③ `reload-ticks` + its tests + `backup.sh` · ④ the restore
+drill + the runbook §6 · ⑤ the mirror script · ⑥ B28, with Alex's go · ⑦ release `v0.2.1` at a weekend, deploy, and drill
+the first tick-free dump.
+
+**DoD:**
+- The dump excludes ticks, and a restore (dump + reload) is drilled on real data and recorded.
+- Every dashboard series exists at 0 from startup.
+- The warnings panel shows ERROR lines.
+- The mirror script works.
+- Every behavioural test mutation-verified (G5).
+- Doctrine review before the PR.
+- `v0.2.1` deployed and validated live.
+- B28 done, or explicitly deferred.
+
+**Relates to:** D39 (amends D34's backup line) · D34 R4 (the nightly dump, its retention) · D37 · E1-T6 (the Parquet archive)
+· E1-T7 (`deploy/backup.sh`, the runbook) · E1-T16 (`CollectorMetrics`, `JobMetrics`, `DashboardsTest`, the dashboards) ·
+backlog B22, B25, B28, B29 (folded in 2026-11-22) · B30 (NASDAQ, next after this ticket — D40).
