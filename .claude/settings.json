@@ -22,7 +22,12 @@
     ],
     "allow": [
       "Bash(git status:*)",
-      "Bash(git diff:*)",
+      "Bash(git diff)",
+      "Bash(git diff --cached:*)",
+      "Bash(git diff --stat:*)",
+      "Bash(git diff main:*)",
+      "Bash(git diff origin/main:*)",
+      "Bash(git diff HEAD:*)",
       "Bash(git log:*)",
       "Bash(git show:*)",
       "Bash(git branch --show-current)",

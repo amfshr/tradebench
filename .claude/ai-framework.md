@@ -81,10 +81,12 @@ G1 is checked by machine as well as by discipline, in three layers — each a ba
 
 **Claude Code's permissions baseline — `.claude/settings.json`, committed.** It denies reading the env files with
 the Read tool (`.env`, any `*.env`, `~/.config/tradebench/`, `/etc/tradebench/`), and the `git diff --no-index` /
-`--output` forms that would print or write any file, so a session does not read their values by accident — loading
+`--output` forms; `git diff` is allowed only in its revision forms (bare, `--cached`, `--stat`, against `main` or
+`HEAD`), because given a path outside the working tree it compares files directly and would print one — so a
+session does not read their values by accident — loading
 one into a command's environment (`set -a; . <file>; set +a`) still works, and is how tools that need them get them.
 It denies `git push --force`, `git add -A` / `git add .`, and `git commit --no-verify`. It allows the routine
-read-only commands (`git status`/`diff`/`log`/`show`, the Gradle tests, the docs tests, the guardrail and deploy test
+read-only commands (`git status`/`log`/`show`, `git diff`'s revision forms, the Gradle tests, the docs tests, the guardrail and deploy test
 scripts). The rules match a command's start, so they are a seatbelt, not a wall — a shell can still `cat` a file, or
 put a flag later in the command: G1 and G7 bind whatever the matcher misses. A root `.env.*` other than
 `.env.example` is not denied by name (a deny cannot except the example); keep personal env files as `.env` or

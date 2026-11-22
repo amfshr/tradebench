@@ -27,10 +27,18 @@ def repo_root():
 
 
 def unquote(value):
-    """The value as the shell sees it: inside its quotes, or up to a ` #` comment."""
+    """The value as the shell sees it: inside its quotes (a backslash-escaped quote kept), or up to a ` #` comment;
+    a line whose value is only a comment has none."""
+    if value.startswith("#"):
+        return ""
     if value[:1] in ("'", '"'):
-        end = value.find(value[0], 1)
-        return value[1:end] if end > 0 else value[1:]
+        quote, i, out = value[0], 1, []
+        while i < len(value) and value[i] != quote:
+            if value[i] == "\\" and quote == '"' and i + 1 < len(value):
+                i += 1
+            out.append(value[i])
+            i += 1
+        return "".join(out)
     return value.split(" #", 1)[0].split("\t#", 1)[0].strip()
 
 
@@ -45,8 +53,8 @@ def committed_examples(root):
     head = subprocess.run(["git", "rev-parse", "--verify", "-q", "HEAD"], capture_output=True, cwd=root)
     if head.returncode != 0:
         return []
-    names = subprocess.run(["git", "ls-tree", "-r", "--name-only", "HEAD"], capture_output=True, text=True,
-                           check=True, cwd=root).stdout.split()
+    names = subprocess.run(["git", "ls-tree", "-r", "-z", "--name-only", "HEAD"], capture_output=True, text=True,
+                           check=True, cwd=root).stdout.split("\0")
     return [n for n in names if n == ".env.example" or n.endswith(".env.example")]
 
 
@@ -99,7 +107,9 @@ def staged():
 
 def history():
     commit, where, in_message = "?", "?", False
-    for line in git_lines(["log", "--all", "-p", "--no-color", "--unified=0", "--no-ext-diff", "--format=commit %H%n%B"]):
+    # a merge's own changes (a conflict resolution) against its first parent: git log -p shows none by default
+    for line in git_lines(["log", "--all", "-p", "--diff-merges=first-parent", "--no-color", "--unified=0",
+                           "--no-ext-diff", "--format=commit %H%n%B"]):
         if line.startswith("commit ") and len(line) == 47:
             commit, where, in_message = line[7:14], line[7:14] + " (message)", True
         elif line.startswith("diff --git "):

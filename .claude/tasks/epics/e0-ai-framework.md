@@ -50,12 +50,15 @@ framework doc.
 - *Added:* `git commit --no-verify` / `-n` denied, so a session cannot skip the hook (ruling 2 accepts a human
   bypassing it; the AI does not need to); the `git diff --no-index` / `--output` forms denied (the review's finding 4:
   the `git diff` allow would otherwise print a denied file); `deploy/test/deploy-test.sh` allowed beside the
-  guardrail test.
+  guardrail test; `git diff` allowed only in its revision forms (the re-review's finding 1: given a path outside the
+  working tree it compares files directly).
+- *Ruling 4, built differently:* the planted fixtures are not allow-listed files in the repo — the test makes them
+  at run time from random values, so no fake secret is ever committed and the real scan needs no allow-list.
 
 **The history sweep (2026-11-22) — clean, nothing to decide.** gitleaks over every commit on every branch, with its
 defaults and with this repo's rules: no findings. The value check against `.env` and `~/.config/tradebench/*.env`:
-three variables matched — the IG demo account id, the IG demo identifier and the local instance name — every match in
-a commit dated before 2026-10-10 21:10, when `120415d` and `c9442f9` redacted them; `120415d` records Alex's ruling
+three variables matched — the IG demo account id, the IG demo identifier and the local instance name — every match —
+merge resolutions included, re-swept after the re-review's finding 3 — in a commit dated before 2026-10-10 21:10, when `120415d` and `c9442f9` redacted them; `120415d` records Alex's ruling
 that day, "history keeps the old values; Alex is fine with that". Nothing has leaked since. A fourth match — the R2
 remote's provider, a vendor name — was the checker's own false positive: the value is published in
 `deploy/env/*.env.example`, so every committed `*.env.example` now counts as public, not only the root one.

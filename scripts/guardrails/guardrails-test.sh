@@ -52,9 +52,10 @@ gitleaks dir "$T/innocent" --config "$root/.gitleaks.toml" --no-banner --log-lev
 
 # the env value check, in a scratch repository with its own copy of the guardrails
 repo="$T/repo"; mkdir -p "$repo/deploy/env" "$repo/scripts/guardrails" "$repo/.githooks"
-secret="acct-$(hex 6)" commented="user-$(hex 6)" bare="inst-$(hex 6)"
+secret="acct-$(hex 6)" commented="user-$(hex 6)" bare="inst-$(hex 6)" escaped="pw-$(hex 4)\"$(hex 4)"
 printf 'IG_DEMO_ACCOUNT_ID=%s\nTRADEBENCH_USER=platform\nRCLONE_CONFIG_R2RO_PROVIDER=Cloudflare\n' "$secret" > "$T/personal.env"
 printf "IG_DEMO_IDENTIFIER='%s' # the demo login\nTRADEBENCH_INSTANCE=%s # this machine\n" "$commented" "$bare" >> "$T/personal.env"
+printf 'IG_DEMO_PASSWORD="%s"\nTRADEBENCH_PING_URL= # set on the server\n' "${escaped//\"/\\\"}" >> "$T/personal.env"
 printf 'TRADEBENCH_USER=platform\n' > "$repo/.env.example"
 printf 'RCLONE_CONFIG_R2_PROVIDER=Cloudflare\n' > "$repo/deploy/env/backup.env.example"
 cp "$root/scripts/guardrails/env-value-check.py" "$repo/scripts/guardrails/"
@@ -67,7 +68,7 @@ staged() { (cd "$repo" && git reset -q && git checkout -q -- . && git clean -qfd
 staged leak.txt 'the account is %s\n' "$secret"; out=$(check --staged); status=$?
 [ "$status" = 1 ] || fail "a staged env value was not refused (exit $status)"
 grep -q "IG_DEMO_ACCOUNT_ID (from personal.env) appears in leak.txt" <<< "$out" || fail "the refusal does not name the variable: $out"
-for v in "$secret" "$commented" "$bare"; do grep -qF "$v" <<< "$out" && fail "the refusal printed an env value"; done
+for v in "$secret" "$commented" "$bare" "$escaped"; do grep -qF "$v" <<< "$out" && fail "the refusal printed an env value"; done
 
 refused() { # <variable> <what> — the staged change must be refused, naming the variable
     out=$(check --staged); status=$?
@@ -75,6 +76,9 @@ refused() { # <variable> <what> — the staged change must be refused, naming th
 }
 staged leak.txt 'the login is %s\n' "$commented"; refused IG_DEMO_IDENTIFIER "a quoted value with a trailing comment was not refused"
 staged leak.txt 'the instance is %s\n' "$bare"; refused TRADEBENCH_INSTANCE "a bare value with a trailing comment was not refused"
+staged leak.txt 'the password is %s\n' "$escaped"; refused IG_DEMO_PASSWORD "a double-quoted value with an escaped quote was not refused"
+staged notes.txt 'the ping URL is %s\n' "# set on the server"
+check --staged > /dev/null || fail "an empty value's trailing comment was taken for a value"
 
 staged deploy/env/new.env.example 'IG_DEMO_ACCOUNT_ID=%s\n' "$secret"; refused IG_DEMO_ACCOUNT_ID "a value staged into a new example made itself public"
 staged .env.example 'IG_DEMO_ACCOUNT_ID=%s\n' "$secret"; refused IG_DEMO_ACCOUNT_ID "a value staged into the committed example made itself public"
@@ -94,13 +98,21 @@ hist=$(check --history)
 grep -q "IG_DEMO_ACCOUNT_ID (from personal.env) appears in .* (message)" <<< "$hist" \
     || fail "the history sweep missed a value in a commit message"
 grep -q "appears in $redaction" <<< "$hist" && fail "the history sweep blamed the redaction commit: $hist"
+(cd "$repo" && git checkout -q -b side && printf 'side\n' > side.txt && git add side.txt && git commit -qm side \
+    && git checkout -q - && git merge -q --no-ff --no-commit side > /dev/null && printf 'resolved with %s\n' "$bare" > merge.txt \
+    && git add merge.txt && git commit -qm "merge side")
+merge=$(cd "$repo" && git rev-parse --short=7 HEAD)
+check --history | grep -q "TRADEBENCH_INSTANCE (from personal.env) appears in $merge merge.txt" \
+    || fail "the history sweep missed a value a merge introduced"
 
 # the pre-commit hook: refuses a leak, refuses without gitleaks, lets a clean commit through
-hook() { (cd "$repo" && TRADEBENCH_ENV_FILES="$T/personal.env" PATH="$1" git -c core.hooksPath=.githooks commit -qm t) > /dev/null 2>&1; }
+hook() { (cd "$repo" && TRADEBENCH_ENV_FILES="$T/personal.env" PATH="$1" git -c core.hooksPath=.githooks commit -qm t) > "$T/hook.out" 2>&1; }
 nogitleaks="$T/bin"; mkdir -p "$nogitleaks"
 for tool in bash git python3 env; do ln -s "$(command -v "$tool")" "$nogitleaks/$tool"; done
 staged leak.txt 'the account is %s\n' "$secret"; hook "$PATH" && fail "the hook let a staged env value through"
+grep -q "^env-value-check: IG_DEMO_ACCOUNT_ID (from" "$T/hook.out" || fail "the hook refused, but not for the value: $(cat "$T/hook.out")"
 staged ok.txt 'nothing personal %s\n' here; hook "$nogitleaks" && fail "the hook committed without gitleaks"
+grep -q "gitleaks is not installed" "$T/hook.out" || fail "the hook refused, but not for gitleaks: $(cat "$T/hook.out")"
 staged ok.txt 'nothing personal %s\n' here; hook "$PATH" || fail "the hook refused a clean commit"
 
 [ "$failures" = 0 ] && echo "guardrails: every planted violation caught, the innocent ones passed" || exit 1
