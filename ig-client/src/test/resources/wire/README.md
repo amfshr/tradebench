@@ -36,9 +36,15 @@ remains unit-tested only). `/markets` and `/prices` met the real wire on 2026-10
 probe, `MarketHoursAndDatedPricesProbe`): **`captured-market-details-dax.json`** and
 **`captured-prices-dated-window.json`** are real bytes, kept beside the authored fixtures with tests
 parsing both. They showed `openingHours: null` for the DAX epic and that a dated request's `from`/`to`
-are read in the account's local time. **Still authored, still to capture:** `application-allowance.json`
-(`GET /operations/application`) and the login response's `timezoneOffset` — the probe saved neither;
-capture both at the next gated demo smoke.
+are read in the account's local time. **Captured 2026-11-22** (E1-T17, B28; the probe `LoginAndApplicationProbe`, one login and one read):
+**`captured-login-response-v2.json`** and **`captured-application.json`** keep IG's real structure, key order and
+public values (the limits, the flags, the account types, the demo streaming host) with every personal value made
+synthetic — the ids, the client id, the balances, the application names and keys — the same synthetic values the
+authored fixtures use. They showed: the authored shapes were right, field for field; `timezoneOffset` is a whole
+number of hours (`0` in UK winter time — the authored `1` is a summer value); ours is the second application, the
+other `DISABLED`; and demo **publishes `allowanceAccountOverall` 30**, not the 10 the authored fixture took from
+trading-ig. Whether demo *enforces* a lower rate than it publishes is unproven — the collector paces at 30 − 5 and
+makes too few REST calls to have met a limit. Tests parse both the authored and the captured fixtures.
 
 All credentials/tokens in fixtures and tests are obvious fakes; account ids and the
 identifier reuse values the inherited playbook already publishes.
