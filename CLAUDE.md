@@ -16,9 +16,10 @@ collection service) is complete (2026-10-31) — T1–T16 done (foundations, IG 
 streaming, Postgres persistence, a sink that holds through database blips, the resilience belt
 hardened through every finding of its independent review, proven against real captured outages on
 a replay rig in acceptance mode and re-reviewed as a whole, the `platform` user, and the daily heal
-and Parquet archive, the first live weekend's fixes, and the deploy — production on IG demo since 2026-10-18 on a Hetzner box, archiving to R2, and the shadow-diff week: Tradebench is the primary capture, the Python prototype retired, D36; and the collector's metrics and Grafana dashboards, `v0.2.0` deployed 2026-10-31). Next: merge PR #33
-(the dashboard fixes), a week of monitoring, then the project pauses with no fixed return date — the re-entry point backlog B26
-(board).
+and Parquet archive, the first live weekend's fixes, and the deploy — production on IG demo since 2026-10-18 on a Hetzner box, archiving to R2, and the shadow-diff week: Tradebench is the primary capture, the Python prototype retired, D36; and the collector's metrics and Grafana dashboards, `v0.2.0` deployed 2026-10-31). E0 (the AI
+operating framework) is complete too (2026-11-22: G1 enforced by machine, the contract reviewed, D38), and the
+one-month review ruled D39–D40 (dumps leave the ticks to Parquet; NASDAQ next; per-second derived from ticks). Next
+(board): the collector follow-ups ticket (D39's backups, B29 → `v0.2.1`, B25), then NASDAQ (B30), then E9.
 
 ## Read-first order
 

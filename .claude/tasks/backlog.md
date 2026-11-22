@@ -384,6 +384,9 @@ to the process run's end, as **unknown**, so the heal asks IG (free on closed sp
 single-market collector never quarantines its last market — the belt rebuilds the session instead — so the
 case cannot arise until a second market streams beside it.
 
+**The second market is ruled (2026-11-22, D40):** NASDAQ, its own ticket after the collector follow-ups — **B30**, where
+this ruling is built.
+
 
 ## B18 — CI keeps no test reports; an intermittent store test
 
@@ -430,6 +433,10 @@ copy. Shrinking retention to three dumps would cost restore points for the small
 (events, `job_runs`, later profiles and configuration). Excluding archived days keeps every restore point and a
 small dump. A restore then needs the archive re-imported for history — the runbook would say how.
 
+**Answered 2026-11-22 by D39** (B26's design session): the dump leaves out *all* the ticks, not only the archived days'
+(`--exclude-table-data=ticks`; the bars stay in it — small), with the DuckDB reload and a restore drill. The work is the
+backup item of the proposed "Collector follow-ups after the first month" ticket; this entry leaves the backlog when it lands.
+
 ## B23 — Review a managed Postgres against the box's own
 
 **Captured** 2026-10-18 (Alex: "maybe look at other providers for the dbs") · **Likely home** E9 or later — a design question · **Trigger** real money trading, or the box's Postgres outgrowing its disk · **Relates to** D17 (database topology) · D34 (the box) · B22
@@ -456,6 +463,13 @@ timestamp is in the R2 Parquet archive, so the gap distribution by market and ho
 any time, over months. The archive is the better source anyway — the Grafana free tier keeps 14 days, so telemetry ages out;
 the archive does not.
 
+**Evidence 2026-11-22 — the thin hour (the one-month review, B26 R5; `docs/design/sessions/2026-11-22-the-one-month-review.md`,
+`docs/reference/ig-dax-hours.md`).** The DAX on IG trades around the clock on weekdays, with one thin hour every weekday:
+**17:00–18:00 New York** (21:00 UTC while the US is on summer time, 22:00 after) — the US index futures' daily break. About
+250–500 ticks in it (256–472 observed) against 9,000–12,000 in a busy hour; most of the archive's missing bar-minutes fall in
+it (the heal finds IG has no candles there either). Overnight runs ~5,000–7,000 ticks an hour. The hour moves with the US
+clock change, not the EU one. A per-market, per-hour threshold learnt from the archive would see this hour as quiet, not dead.
+
 ## B25 — A weekly mirror of the R2 bucket on the Mac
 
 **Captured** 2026-10-25 (Alex: "a weekly backup job that I can set to run on the Mac to file and backup all the stored objects in R2") · **Likely home** an ops follow-up (E1, after T16) — small · **Trigger** Alex's call — he asked for it after the E1 close-out · **Relates to** D34 R4 (the dumps and Hetzner's backups) · E1-T6 (the Parquet archive) · B22 · G1 (the R2 credentials stay out of the repo)
@@ -473,7 +487,7 @@ brought down 50 files, 21 MB locally. The per-day summary query is saved outside
 `~/development/amfshr/tradebench-data/archive/2026-11-15-data-review/summary.sql`, with that day's output beside it. So the
 script this item makes should mirror `platform/` (the dumps optional) and can run that query after each mirror.
 
-## B26 — A one-month review of the data and the limits: room for a second market, or per-second data?
+## B26 — A one-month review of the data and the limits: room for a second market, or per-second data? — closed 2026-11-22 (design session; D39, D40)
 
 **Captured** 2026-10-30 (Alex: "in a month's time review/analyse the data and limit usages, as we could feasibly start streaming another market and doing secs potentially if we had enough usage left, and we can analyse the market open and close times, at least for the DAX") · **Likely home** a dated analysis doc in `docs/operations/` and a recommendation for Alex to rule on (a design nod, D13) — not code · **Trigger** earliest ~2026-12-01: a month of data after `v0.2.0` deploys (the weekend of 2026-10-31/11-01) and its week of monitoring · **Relates to** E1-T16 (the metrics it reads) · D16 (the shared IG key's historical allowance) · D36 (the prototype no longer draws on it) · D25 R4 (the three clocks: the stream window and session config) · B24 (the adaptive tick-silence threshold) · B25 (the Mac-side R2 mirror, which makes the archive analysis cheap)
 
@@ -508,9 +522,20 @@ DuckDB and from Grafana).** 25 archived days: every weekday 2026-10-19 → 11-13
 135k–232k ticks and 1,400–1,440 bars; missing bar-minutes run 0–17 a day, nearly all 21:00–22:35 UTC (thin evening trade —
 IG had no candles there either); the longest hole in four weeks is 4 minutes; only 3 bars were ever healed from REST, 2 of
 them after a 72 s session rebuild on 2026-11-10 08:55Z ("User/password check failed"). **The DAX's open and close:** the
-Sunday open moved 22:02 → 23:02 UTC at the EU clock change (2026-10-25), while the Friday close moved ~21:00 → 21:59 UTC only
+Sunday open moved 22:02 → 23:02 UTC ~~at the EU clock change (2026-10-25)~~ *[corrected 2026-11-22: on 2026-11-01, the US
+change — 2026-10-25 still opened at 22:02; the record's "Correction" §]*, while the Friday close moved ~21:00 → 21:59 UTC only
 after the US change (2026-11-01) — IG's DAX Friday close follows US time. **The app** (Grafana, 14 days): CPU 0.13% on
 average; heap ~70 MB after GC, of ~360 MB; DB write p99 ~4 ms; 0 dropped ticks; queue max 3.
+
+**Closed 2026-11-22 by its design session** (record `docs/design/sessions/2026-11-22-the-one-month-review.md`; Alex ruled
+all five recommendations: "i agree with all your recommendations"). **R1–R2 → D39:** the nightly dump leaves the ticks to
+the Parquet archive (`pg_dump --exclude-table-data=ticks`; a restore = the dump, then the ticks reloaded from Parquet with
+a DuckDB script, proven by a restore drill); the ≤2.5 h overnight tick cost accepted; retention unchanged, so options (b)
+and (c) above are no longer needed. **R3–R4 → D40:** NASDAQ (`IX.D.NASDAQ.CASH.IP`) is the second market, its own ticket
+after the collector follow-ups (**B30**); per-second data is derived from ticks on read, no `CHART:SECOND`. **R5:** the DAX's
+hours are recorded, not coded — `docs/reference/ig-dax-hours.md` (IG runs the epic on New York time); the thin hour
+becomes **B24**'s evidence. The backup work goes into the proposed "Collector follow-ups after the first month" ticket (the
+board's next-session menu). The entry stays here, closed, for its evidence.
 
 ## B27 — Bump the GitHub Actions to their Node-24 majors
 
@@ -571,3 +596,19 @@ removes one pre-registration. Release as `v0.2.1` at a weekend, as `v0.2.0` was.
 `belt IG_API_ERROR {"code":1,"message":"User/password check failed"}` lines (2026-11-05 22:00Z, 11-09 11:25Z, 11-10 08:55Z),
 absent from that panel. **The fix:** the filter also matches `severe|fatal|critical`; a `DashboardsTest` pin (the mutation
 drops `severe` from the filter); the dashboard pushed to the stack via the Grafana MCP. No release needed for this half.
+
+## B30 — NASDAQ as the second market (`IX.D.NASDAQ.CASH.IP`): the two-market design D25 left open
+
+**Captured** 2026-11-22 (B26's design session, R3 → D40; Alex: "i agree with all your recommendations") · **Likely home**
+its own ticket after the collector follow-ups, with its own design nod (D13) — proposed on the board's next-session menu,
+not cut · **Trigger** the follow-ups ticket done, and Alex cuts it · **Relates to** D40 · D25 (refined 2026-10-17: a
+quarantined market counts as not observing, built "when a second market arrives") · B17 (that ruling) · B14 (the session
+verdict's `≥ 2`, its nod at the third market) · B28 (the pacer's captured discovery, wanted before a second market leans on
+it) · E1-T16 (the dashboards) · PRD §7 ("DAX and NASDAQ first") · `docs/design/sessions/2026-11-22-the-one-month-review.md`
+
+Capacity is not the constraint (the one-month review: the collector at 0.13% CPU, 591 of Grafana Cloud's 10,000 series,
+2 of IG's 40 subscriptions a connection, the historical allowance untouched); the design work is. **What the ticket
+settles:** the witness-quarantine path with two markets in one collector, and B17's ruling — a quarantined market's span,
+from its `market_quarantined` row to the process run's end, counts as not observing, so the heal asks IG. **Already in
+place:** the domain dashboard's `market` variable is multi-select (`deploy/grafana/collector-domain.json`). Per-second
+data stays derived from ticks (D40), for NASDAQ as for the DAX.

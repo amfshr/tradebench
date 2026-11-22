@@ -688,3 +688,26 @@ are relayed, and agents leave the committing to the session (§5). §4 gains T4'
 Java 25, Spring Boot for the HTTP services only (the collector is framework-free, D33), and D37's logging. Next
 review: at E9's start. **Why:** the contract is the cold-start truth for any session (PRD §9); practice that lives
 only in memory or habit is lost at the next cold start. Alex: "go ahead with the contract review and close e0".
+
+## D39 — The nightly dump leaves the ticks to the Parquet archive — **Accepted** (2026-11-22, Alex)
+
+The dump runs with `pg_dump --exclude-table-data=ticks`: it carries what only the database holds — the schema, the
+bars, the events, the gaps, the job runs — and the Parquet archive in R2 is the record for ticks (P8). A restore is
+the dump, then the ticks reloaded from Parquet (a DuckDB script); it is proven by a restore drill before it is relied
+on. Retention is unchanged. **The accepted cost:** ticks from midnight to the 02:30 dump are in neither copy until the
+next night's archive — at most 2.5 overnight hours in a worst-case restore (today's full dumps already lose everything
+after 02:30; the heal recovers those minutes as bars). **Why:** in the 2026-11-22 dump ticks were 98.6% of the data
+(254 MB of 258 MB uncompressed) and every dump copied all of them again — R2 grew ~100 MiB a week and accelerating;
+without them a dump is ~1–2 MB and R2 grows by the Parquet's ~5.5 MB a week per market. Amends D34's backup line. B26,
+the one-month review (`docs/design/sessions/2026-11-22-the-one-month-review.md`, R1–R2).
+
+## D40 — The data scope after the first month: NASDAQ is the second market; per-second data is derived from ticks — **Accepted** (2026-11-22, Alex)
+
+**NASDAQ** (`IX.D.NASDAQ.CASH.IP`, the PRD's named second market) is added in its own ticket after the collector
+follow-ups; capacity is no constraint — the collector at 0.13% CPU, 591 of Grafana's 10,000 series, 2 of IG's 40
+subscriptions a connection, the history allowance untouched — the work is the two-market design D25 left for "when a
+second market arrives". **Per-second data** is built from the stored ticks on read, with no `CHART:SECOND`
+subscription and no extra storage; IG's own second candles are added only if a strategy needs exact intra-second
+extremes the conflated tick stream can lose, as their own source (D25). **The DAX's hours** are recorded, not coded
+(`docs/reference/ig-dax-hours.md`: IG runs the epic on New York time). **Why:** the ticks are the superset (P6), and
+every limit has an order of magnitude to spare. B26 (R3–R5).
