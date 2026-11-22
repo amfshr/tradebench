@@ -10,7 +10,7 @@ reports a leaked variable by its NAME, never its value.
   env-value-check.py PATH...       files
 
 Env files: TRADEBENCH_ENV_FILES (colon-separated) if set, else <repo>/.env and ~/.config/tradebench/*.env.
-A value that .env.example also holds is public (a published default or example), and values under 5 characters
+A value any committed *.env.example also holds is public (a published default or example), and values under 5 characters
 are too short to mean anything; both are skipped.
 """
 import glob
@@ -47,8 +47,9 @@ def secrets(root):
     listed = os.environ.get("TRADEBENCH_ENV_FILES")
     files = listed.split(":") if listed else [os.path.join(root, ".env")] + sorted(
         glob.glob(os.path.expanduser("~/.config/tradebench/*.env")))
-    example = os.path.join(root, ".env.example")
-    public = set(parse(example).values()) if os.path.exists(example) else set()
+    examples = subprocess.run(["git", "ls-files", "--", ".env.example", "*.env.example"], capture_output=True,
+                              text=True, check=True, cwd=root).stdout.split()
+    public = {value for example in examples for value in parse(os.path.join(root, example)).values()}
     found = {}
     for path in files:
         if os.path.isfile(path):

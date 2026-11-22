@@ -46,8 +46,10 @@ repo="$T/repo"; mkdir -p "$repo"
 secret="acct-$(hex 6)"
 printf 'IG_DEMO_ACCOUNT_ID=%s\nTRADEBENCH_USER=platform\n' "$secret" > "$T/personal.env"
 printf 'TRADEBENCH_USER=platform\n' > "$repo/.env.example"
+mkdir -p "$repo/deploy/env" && printf 'RCLONE_CONFIG_R2_PROVIDER=Cloudflare\n' > "$repo/deploy/env/backup.env.example"
+printf 'RCLONE_CONFIG_R2RO_PROVIDER=Cloudflare\n' >> "$T/personal.env"
 (cd "$repo" && git init -q && git config user.email t@example.invalid && git config user.name t \
-    && git add .env.example && git commit -qm init)
+    && git add .env.example deploy && git commit -qm init)
 check() { (cd "$repo" && TRADEBENCH_ENV_FILES="$T/personal.env" python3 "$root/scripts/guardrails/env-value-check.py" "$@") 2>&1; }
 
 printf 'the account is %s\n' "$secret" > "$repo/leak.txt"; (cd "$repo" && git add leak.txt)
@@ -56,8 +58,8 @@ out=$(check --staged); status=$?
 grep -q "IG_DEMO_ACCOUNT_ID (from personal.env) appears in leak.txt" <<< "$out" || fail "the refusal does not name the variable: $out"
 grep -qF "$secret" <<< "$out" && fail "the refusal printed the value itself"
 
-(cd "$repo" && git rm -q --cached leak.txt && rm leak.txt && printf 'owned by platform\n' > ok.txt && git add ok.txt)
-check --staged > /dev/null || fail "a value .env.example publishes was refused"
+(cd "$repo" && git rm -q --cached leak.txt && rm leak.txt && printf 'owned by platform, stored at Cloudflare\n' > ok.txt && git add ok.txt)
+check --staged > /dev/null || fail "a value a committed .env.example publishes was refused"
 
 (cd "$repo" && git commit -qm "the account is $secret")
 check --history | grep -q "IG_DEMO_ACCOUNT_ID (from personal.env) appears in .* (message)" \

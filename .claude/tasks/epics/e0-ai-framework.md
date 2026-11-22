@@ -44,5 +44,13 @@ framework doc.
    reported by variable name only. Any finding is decided with Alex (rewriting public history
    is irreversible, G7).
 
+**The history sweep (2026-11-22) — clean, nothing to decide.** gitleaks over every commit on every branch, with its
+defaults and with this repo's rules: no findings. The value check against `.env` and `~/.config/tradebench/*.env`:
+three variables matched — the IG demo account id, the IG demo identifier and the local instance name — every match in
+a commit dated before 2026-10-10 21:10, when `120415d` and `c9442f9` redacted them; `120415d` records Alex's ruling
+that day, "history keeps the old values; Alex is fine with that". Nothing has leaked since. A fourth match — the R2
+remote's provider, a vendor name — was the checker's own false positive: the value is published in
+`deploy/env/*.env.example`, so every committed `*.env.example` now counts as public, not only the root one.
+
 **Then the E0 close-out.** The contract review `.claude/ai-framework.md` §6 asks for at an epic
 boundary (E1 shipped), and E0 marked complete — on Alex's confirmation, after T4 merges.
