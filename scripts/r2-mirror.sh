@@ -13,6 +13,7 @@ env_file=${TRADEBENCH_R2_ENV:-$HOME/.config/tradebench/r2-readonly.env}
 set -a; . "$env_file"; set +a
 : "${TRADEBENCH_ARCHIVE_BUCKET:?r2-mirror: TRADEBENCH_ARCHIVE_BUCKET is not set in the env file}"
 : "${TRADEBENCH_MIRROR_DIR:?r2-mirror: TRADEBENCH_MIRROR_DIR is not set in the env file}"
+export RCLONE_CONFIG=/dev/null # the remote is the env file's RCLONE_CONFIG_R2RO_*; no config file to look for
 
 rclone copy "r2ro:$TRADEBENCH_ARCHIVE_BUCKET/platform" "$TRADEBENCH_MIRROR_DIR/platform"
 if [ "${1:-}" = --dumps ]; then
