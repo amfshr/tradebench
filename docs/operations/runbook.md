@@ -12,7 +12,7 @@
 | Account | What to create | What to keep |
 |---|---|---|
 | Hetzner Cloud | an account and a project | — |
-| Cloudflare R2 | a bucket (e.g. `tradebench-archive`) and an API token scoped to it, read and write | the access key id, the secret, the account's S3 endpoint |
+| Cloudflare R2 | a bucket (its name is an env value, G1) and an API token scoped to it, read and write | the access key id, the secret, the account's S3 endpoint |
 | Grafana Cloud | a free stack in the **EU** region | its OTLP endpoint, and an access-policy token with metrics and logs write — base64 of `<instance id>:<token>` is the header's value |
 | healthchecks.io | one check: period 1 minute, grace 5 minutes (a second, period 1 day, for the nightly dump — optional) | each check's ping URL |
 | Tailscale | a free personal account, installed on your Mac | — |

@@ -39,6 +39,7 @@
       "Bash(scripts/guardrails/guardrails-test.sh)",
       "Bash(deploy/test/deploy-test.sh)",
       "Bash(deploy/test/backup-test.sh)",
+      "Bash(scripts/test/r2-mirror-test.sh)",
       "Bash(env -u NODE_OPTIONS npm test:*)"
     ]
   }

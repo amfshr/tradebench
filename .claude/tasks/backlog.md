@@ -479,7 +479,7 @@ clock change, not the EU one. A per-market, per-hour threshold learnt from the a
 
 **Captured** 2026-10-25 (Alex: "a weekly backup job that I can set to run on the Mac to file and backup all the stored objects in R2") · **Likely home** an ops follow-up (E1, after T16) — small · **Trigger** Alex's call — he asked for it after the E1 close-out · **Relates to** D34 R4 (the dumps and Hetzner's backups) · E1-T6 (the Parquet archive) · B22 · G1 (the R2 credentials stay out of the repo)
 
-A third copy, at home: `rclone sync r2:tradebench-archive <a local folder>` once a week from a launchd job on the Mac,
+A third copy, at home: `rclone sync r2:<bucket> <a local folder>` once a week from a launchd job on the Mac,
 with a read-only R2 token of its own (not the box's read-write one), its env file outside the repository, a log, and a
 check it ran. `sync` mirrors deletions, so the dumps the box retires leave the mirror too; `copy` keeps everything.
 Which one — and whether the mirror keeps its own history — is the decision. The Parquet archive is the part worth
@@ -487,7 +487,7 @@ keeping forever; the dumps are rolling by design.
 
 **Evidence 2026-11-15 (done once by hand, the data-and-storage review).** The read-only remote exists: `r2ro`, from
 `~/.config/tradebench/r2-readonly.env` (outside the repository; loaded with `set -a; . <file>; set +a`, its values never
-printed). `rclone copy r2ro:tradebench-archive/platform ~/development/amfshr/tradebench-data/r2/tradebench-archive/platform`
+printed). `rclone copy r2ro:<bucket>/platform ~/development/amfshr/tradebench-data/r2/<bucket>/platform`
 brought down 50 files, 21 MB locally. The per-day summary query is saved outside the repository at
 `~/development/amfshr/tradebench-data/archive/2026-11-15-data-review/summary.sql`, with that day's output beside it. So the
 script this item makes should mirror `platform/` (the dumps optional) and can run that query after each mirror.
