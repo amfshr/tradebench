@@ -1,0 +1,60 @@
+# G1's scanner (E0-T4): gitleaks' default rules plus this repository's own shapes — the credentials it actually
+# handles, and the two strategy guards. CI scans the history with it; .githooks/pre-commit scans what is staged.
+# deploy/test/guardrails-test.sh plants one of each and must see every rule fire.
+
+title = "tradebench"
+
+[extend]
+useDefault = true
+
+[[rules]]
+id = "ig-api-key"
+description = "An IG API key: 40 hex characters, named as one"
+regex = '''(?i)(?:x-ig-api-key|ig_[a-z_]*api_key|apikey)["'\s:=]+([0-9a-f]{40})\b'''
+secretGroup = 1
+keywords = ["api"]
+
+[[rules]]
+id = "ig-session-token"
+description = "An IG session token: the CST or X-SECURITY-TOKEN header's value"
+regex = '''(?i)(?:x-security-token|\bcst)["'\s:=]+([0-9a-z]{32,})\b'''
+secretGroup = 1
+keywords = ["security-token", "cst"]
+
+[[rules]]
+id = "s3-access-key-id"
+description = "An S3-protocol access key id (R2's: 32 hex characters)"
+regex = '''(?i)access[_-]?key[_-]?id["'\s:=]+([0-9a-f]{32})\b'''
+secretGroup = 1
+keywords = ["access"]
+
+[[rules]]
+id = "s3-secret-access-key"
+description = "An S3-protocol secret access key (R2's: 64 hex characters)"
+regex = '''(?i)secret[_-]?access[_-]?key["'\s:=]+([0-9a-f]{64})\b'''
+secretGroup = 1
+keywords = ["secret"]
+
+[[rules]]
+id = "healthchecks-ping-url"
+description = "A healthchecks.io ping URL: the path is the secret"
+regex = '''hc-ping\.com/(?:[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}|[A-Za-z0-9_-]{22}/)'''
+keywords = ["hc-ping.com"]
+
+[[rules]]
+id = "otlp-basic-auth"
+description = "An OTLP exporter's Basic credentials (Grafana Cloud's instance id and token, base64)"
+regex = '''(?i)authorization=basic(?:%20|\s)+([a-z0-9+/]{40,}={0,2})'''
+secretGroup = 1
+keywords = ["authorization=basic"]
+
+[[rules]]
+id = "strategy-private-path"
+description = "A file under strategies/private/ — real strategy content never enters the repo (G1)"
+path = '''(?:^|/)strategies/private/'''
+
+[[rules]]
+id = "strategy-private-marker"
+description = "A file marked as real strategy content by its own line 'tradebench: private' (G1; E3 revisits)"
+regex = '''(?im)^[ \t]*(?:#|//|--|;)?[ \t]*tradebench:[ \t]*private[ \t]*$'''
+keywords = ["tradebench"]
