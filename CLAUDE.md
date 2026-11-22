@@ -91,3 +91,6 @@ stands alone) · P8 data collected forever, source-attributed always · P9 fail 
   shape (G1; the doctrine reviewer's `.env` leak check).
 - Commit style: `<area>: <emoji> <summary>` (inherited habit — e.g. `docs: 📈 …`,
   `collection: 📡 …`).
+- **Turn on the G1 hook once per clone:** `git config core.hooksPath .githooks` (needs `gitleaks`). It refuses a
+  commit carrying any local env value or credential shape; CI scans the whole history with the same rules
+  (`.claude/ai-framework.md` §2, Enforcement).
