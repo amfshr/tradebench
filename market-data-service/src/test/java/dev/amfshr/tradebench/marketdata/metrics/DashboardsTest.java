@@ -164,6 +164,23 @@ class DashboardsTest {
     }
 
     @Test
+    void aLevelFilterReadsJavaLoggingsNamesForErrorsToo() throws IOException {
+        // live 2026-11-22: Loki turns JUL's WARNING into "warn" but keeps SEVERE as it is — "warn|error" missed every ERROR line
+        for (Path f : dashboards()) {
+            for (String expr : expressions(MAPPER.readTree(f.toFile()))) {
+                Matcher m = Pattern.compile("detected_level=~\"([^\"]*)\"").matcher(expr);
+                while (m.find()) {
+                    Pattern levels = Pattern.compile(m.group(1));
+                    for (String level : List.of("warn", "error", "SEVERE", "fatal", "critical")) {
+                        assertTrue(levels.matcher(level).matches(), f + ": " + level + " is not shown by " + expr);
+                    }
+                    assertFalse(levels.matcher("info").matches(), f + ": info is shown by " + expr);
+                }
+            }
+        }
+    }
+
+    @Test
     void aStatPanelReadsZeroNotNoDataWhenNothingHappened() throws IOException {
         // live 2026-10-31: no ERROR event has ever happened, so its series does not exist and a bare sum is empty
         for (Path f : dashboards()) {
