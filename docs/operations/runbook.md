@@ -140,8 +140,20 @@ Then put the same value in both env files and restart `market-data`.
 
 ## 6. Restoring from a dump
 
-A dump holds everything but the ticks' rows (D39); the ticks come back from the Parquet archive in a second step. On
-the box, with `backup.env` loaded (`set -a; . /etc/tradebench/backup.env; set +a`):
+A dump holds everything but the ticks' rows (D39); the ticks come back from the Parquet archive in a second step.
+**Before restoring, check the archive is current.** `pg_restore --clean` empties the `ticks` table, so any tick the
+archive does not hold is lost. On the box:
+
+```
+docker compose -f /opt/tradebench/deploy/compose.prod.yaml exec -T postgres psql -U postgres -d market_data -c \
+  "SELECT DISTINCT ON (covers_date) covers_date, status FROM job_runs WHERE job_name = 'archive'
+   ORDER BY covers_date DESC, started_utc DESC LIMIT 7"
+```
+
+Every day up to yesterday should read `succeeded` (its latest run). If an archive has been failing, don't restore yet: run the daily job until
+it catches up (or, if only bars or events need repairing and the `ticks` table itself is intact, restore from a
+`pg_restore -l` list with the `TABLE DATA public ticks` line removed, which leaves the box's ticks as they are). Then,
+with `backup.env` loaded (`set -a; . /etc/tradebench/backup.env; set +a`):
 
 ```
 # 1 — the dump: schema, bars, events, gaps, job runs (seconds)

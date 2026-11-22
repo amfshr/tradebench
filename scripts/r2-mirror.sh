@@ -5,7 +5,7 @@
 #   Usage: scripts/r2-mirror.sh [--dumps]      (--dumps: the database dumps as well)
 # Reads TRADEBENCH_R2_ENV (default ~/.config/tradebench/r2-readonly.env), which holds the read-only remote
 # RCLONE_CONFIG_R2RO_*, the bucket TRADEBENCH_ARCHIVE_BUCKET and the local folder TRADEBENCH_MIRROR_DIR — all personal
-# (G1), so none of them is here. Never prints a value from that file.
+# (G1), so none of them is here. It prints none of them itself; an error rclone raises names the path it failed on.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 env_file=${TRADEBENCH_R2_ENV:-$HOME/.config/tradebench/r2-readonly.env}

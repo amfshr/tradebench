@@ -6,12 +6,15 @@ import java.nio.file.Path;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
+import java.util.TreeSet;
 import java.util.function.Consumer;
 import java.util.stream.Stream;
 
 import javax.sql.DataSource;
 
 import dev.amfshr.tradebench.marketdata.archive.DayParquet;
+import dev.amfshr.tradebench.marketdata.events.LogLine;
 import dev.amfshr.tradebench.marketdata.store.Database;
 import dev.amfshr.tradebench.marketdata.store.TickReload;
 
@@ -51,24 +54,34 @@ public final class ReloadTicks {
     static boolean run(Path root, String user, String epic, LocalDate first, LocalDate last, DataSource db,
             Consumer<String> out) throws IOException {
         TickReload reload = new TickReload(db, user, epic);
-        int days = 0;
+        Set<LocalDate> days = new TreeSet<>();
         boolean whole = true;
         for (LocalDate day = first; !day.isAfter(last); day = day.plusDays(1)) {
             for (Path file : files(root.resolve(user), epic, day)) {
-                TickReload.Day result = reload.reload(day, DayParquet.readTicks(file));
-                days++;
+                String source = file.getParent().getParent().getParent().getFileName().toString();
+                String what = "reload-ticks: " + epic + " " + day + " (" + source + ")";
+                days.add(day);
+                TickReload.Day result;
+                try {
+                    result = reload.reload(day, DayParquet.readTicks(file));
+                } catch (RuntimeException e) { // refused — the day's transaction rolled back; the other days go on
+                    whole = false;
+                    out.accept(LogLine.error(what + " — refused, nothing written: " + e.getMessage()));
+                    continue;
+                }
                 whole &= result.whole();
-                out.accept((result.whole() ? "" : "ERROR ") + "reload-ticks: " + epic + " " + day + " — " + result.inFile()
-                        + " archived, " + result.inserted() + " inserted, " + result.inDatabase() + " in the database"
-                        + (result.whole() ? "" : " — SHORT: archived ticks are missing"));
+                String line = what + " — " + result.inFile() + " archived, " + result.inserted() + " inserted, "
+                        + result.inDatabase() + " in the database";
+                out.accept(result.whole() ? line : LogLine.error(line + " — SHORT: archived ticks are missing"));
             }
         }
-        if (days == 0) {
-            out.accept("ERROR reload-ticks: no archived ticks for " + epic + " from " + first + " to " + last
-                    + " under " + root);
+        if (days.isEmpty()) {
+            out.accept(LogLine.error("reload-ticks: no archived ticks for " + epic + " from " + first + " to " + last
+                    + " under " + root));
             return false;
         }
-        out.accept((whole ? "" : "ERROR ") + "reload-ticks: " + days + " days, " + (whole ? "every one whole" : "some SHORT"));
+        out.accept(whole ? "reload-ticks: " + days.size() + " days, every one whole"
+                : LogLine.error("reload-ticks: " + days.size() + " days, some SHORT or refused"));
         return whole;
     }
 

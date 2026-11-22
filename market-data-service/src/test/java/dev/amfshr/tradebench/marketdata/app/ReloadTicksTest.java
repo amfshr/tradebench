@@ -60,8 +60,8 @@ class ReloadTicksTest extends PostgresTestBase {
 
         assertTrue(run("2026-10-15", "2026-10-16"), String.join("\n", out));
         assertEquals(List.of(
-                "reload-ticks: IX.D.DAX.DAILY.IP 2026-10-15 — 2 archived, 2 inserted, 2 in the database",
-                "reload-ticks: IX.D.DAX.DAILY.IP 2026-10-16 — 1 archived, 1 inserted, 1 in the database",
+                "reload-ticks: IX.D.DAX.DAILY.IP 2026-10-15 (ig-stream-demo) — 2 archived, 2 inserted, 2 in the database",
+                "reload-ticks: IX.D.DAX.DAILY.IP 2026-10-16 (ig-stream-demo) — 1 archived, 1 inserted, 1 in the database",
                 "reload-ticks: 2 days, every one whole"), out, "the 14th is outside the range");
     }
 
@@ -73,10 +73,61 @@ class ReloadTicksTest extends PostgresTestBase {
 
         assertFalse(run("2026-10-15", "2026-10-16"));
         assertEquals(List.of(
-                "ERROR reload-ticks: IX.D.DAX.DAILY.IP 2026-10-15 — 2 archived, 1 inserted, 1 in the database"
+                "ERROR reload-ticks: IX.D.DAX.DAILY.IP 2026-10-15 (ig-stream-demo) — 2 archived, 1 inserted, 1 in the database"
                         + " — SHORT: archived ticks are missing",
-                "reload-ticks: IX.D.DAX.DAILY.IP 2026-10-16 — 1 archived, 1 inserted, 1 in the database",
-                "ERROR reload-ticks: 2 days, some SHORT"), out, "a later whole day does not hide an earlier short one");
+                "reload-ticks: IX.D.DAX.DAILY.IP 2026-10-16 (ig-stream-demo) — 1 archived, 1 inserted, 1 in the database",
+                "ERROR reload-ticks: 2 days, some SHORT or refused"), out, "a later whole day does not hide an earlier short one");
+    }
+
+    @Test
+    void aDayWithTwoSourcesIsOneDayWithALineForEachSource() throws Exception {
+        archived("2026-10-15", tick("2026-10-15T09:00:00Z"));
+        Path live = Files.createDirectories(root.resolve("platform/ig-stream-live").resolve(DAX).resolve("2026-10-15"));
+        DayParquet.writeTicks(live.resolve("ticks.parquet"), List.of(new ArchivedTick(Instant.parse("2026-10-15T09:00:00Z"),
+                new BigDecimal("24510.5"), new BigDecimal("24511.7"), "ig-stream-live")));
+
+        assertTrue(run("2026-10-15", "2026-10-15"), String.join("\n", out));
+        assertEquals(List.of(
+                "reload-ticks: IX.D.DAX.DAILY.IP 2026-10-15 (ig-stream-demo) — 1 archived, 1 inserted, 1 in the database",
+                "reload-ticks: IX.D.DAX.DAILY.IP 2026-10-15 (ig-stream-live) — 1 archived, 1 inserted, 1 in the database",
+                "reload-ticks: 1 days, every one whole"), out, "each source's ticks counted as its own; one day, not two files");
+    }
+
+    @Test
+    void aRefusedDayIsNamedAndWritesNothingAndTheOthersStillComeBack() throws Exception {
+        // a source the database does not know: refused, never invented (TickReload's lookup) — and the day's batch
+        // already sent is rolled back with it, so the refusal leaves nothing half-written
+        List<ArchivedTick> ticks = new ArrayList<>();
+        for (int i = 0; i < 6_000; i++) {
+            ticks.add(tick(Instant.parse("2026-10-15T09:00:00Z").plusMillis(i).toString()));
+        }
+        ticks.add(new ArchivedTick(Instant.parse("2026-10-15T10:00:00Z"), BigDecimal.ONE, BigDecimal.TWO, "no-such-source"));
+        archived("2026-10-15", ticks.toArray(ArchivedTick[]::new));
+        archived("2026-10-16", tick("2026-10-16T09:00:00Z"));
+
+        assertFalse(run("2026-10-15", "2026-10-16"));
+        assertTrue(out.get(0).startsWith("ERROR reload-ticks: IX.D.DAX.DAILY.IP 2026-10-15 (ig-stream-demo) — refused, nothing written: "),
+                out.get(0));
+        assertEquals("reload-ticks: IX.D.DAX.DAILY.IP 2026-10-16 (ig-stream-demo) — 1 archived, 1 inserted, 1 in the database",
+                out.get(1));
+        assertEquals("ERROR reload-ticks: 2 days, some SHORT or refused", out.get(2));
+        try (Connection c = database.dedicatedConnection(); Statement s = c.createStatement();
+                java.sql.ResultSet r = s.executeQuery("SELECT count(*) FROM ticks WHERE ts_utc < '2026-10-16'")) {
+            r.next();
+            assertEquals(0, r.getLong(1), "the refused day's first 5,000-tick batch went back with it");
+        }
+    }
+
+    @Test
+    void anUnknownUserIsRefusedForEveryDay() throws Exception {
+        archived("2026-10-15", tick("2026-10-15T09:00:00Z"));
+        Path elsewhere = Files.createDirectories(root.resolve("nobody/ig-stream-demo").resolve(DAX).resolve("2026-10-15"));
+        Files.copy(root.resolve("platform/ig-stream-demo").resolve(DAX).resolve("2026-10-15/ticks.parquet"),
+                elsewhere.resolve("ticks.parquet"));
+
+        assertFalse(ReloadTicks.run(root, "nobody", DAX, LocalDate.parse("2026-10-15"), LocalDate.parse("2026-10-15"),
+                database.dataSource(), out::add));
+        assertTrue(out.get(0).startsWith("ERROR reload-ticks: IX.D.DAX.DAILY.IP 2026-10-15 (ig-stream-demo) — refused"), out.get(0));
     }
 
     @Test
