@@ -41,7 +41,7 @@ class JobMetricsTest {
     void setUp() {
         reader = InMemoryMetricReader.create();
         JobMetrics metrics = new JobMetrics(SdkMeterProvider.builder().registerMetricReader(reader).build().get("test"),
-                "platform", "ig-stream-demo");
+                "platform", "ig-stream-demo", List.of(DAX), List.of("heal", "archive"));
         store = metrics.counting(new JobRunStore() {
             @Override
             public List<JobRun> runs(String job, MarketDay day) {
@@ -74,6 +74,26 @@ class JobMetricsTest {
 
     private static Attributes with(String key, String value, String key2, String value2) {
         return DAX_DIMS.toBuilder().put(key, value).put(key2, value2).build();
+    }
+
+    @Test
+    void everyJobAndHealSeriesTheDashboardsReadStartsAtZero() {
+        // B29: increase() cannot see a series' first value — the first heal after a restart once read as nothing
+        Collection<MetricData> all = reader.collectAllMetrics();
+        var runs = metric(all, CollectorMetrics.JOB_RUNS).getLongSumData().getPoints();
+        for (String job : List.of("heal", "archive")) {
+            for (String outcome : List.of("succeeded", "failed")) {
+                assertEquals(0, value(runs, with("job_name", job, "outcome", outcome)), job + " " + outcome);
+            }
+        }
+        var minutes = metric(all, CollectorMetrics.HEAL_MINUTES).getLongSumData().getPoints();
+        assertEquals(0, value(minutes, DAX_DIMS.toBuilder().put("outcome", "healed").build()));
+        assertEquals(0, value(minutes, DAX_DIMS.toBuilder().put("outcome", "absent_at_source").build()));
+        assertEquals(0, value(metric(all, CollectorMetrics.HEAL_POINTS_SPENT).getLongSumData().getPoints(), DAX_DIMS));
+        assertEquals(0, value(metric(all, CollectorMetrics.GAP_MINUTES).getLongSumData().getPoints(),
+                DAX_DIMS.toBuilder().put("origin", "heal").build()));
+        assertTrue(all.stream().noneMatch(m -> m.getName().equals(CollectorMetrics.IG_ALLOWANCE_REMAINING)
+                && !m.getLongGaugeData().getPoints().isEmpty()), "a gauge is not a counter: no reading, no made-up zero");
     }
 
     @Test
@@ -119,7 +139,7 @@ class JobMetricsTest {
         store.record(new JobRun("archive", DAY, T0, T0, true, "{\"missing\":9,\"healedMinutes\":2}"));
 
         assertTrue(reader.collectAllMetrics().stream().noneMatch(m -> m.getName().equals(CollectorMetrics.HEAL_MINUTES)
-                && !m.getLongSumData().getPoints().isEmpty()));
+                && m.getLongSumData().getPoints().stream().anyMatch(p -> p.getValue() != 0)));
     }
 
     @Test
@@ -132,13 +152,13 @@ class JobMetricsTest {
         var minutes = metric(all, CollectorMetrics.HEAL_MINUTES).getLongSumData().getPoints();
 
         assertEquals(3, value(minutes, DAX_DIMS.toBuilder().put("outcome", "healed").build()));
-        assertTrue(minutes.stream().noneMatch(p -> "absent_at_source".equals(p.getAttributes().get(CollectorMetrics.OUTCOME))),
+        assertEquals(0, value(minutes, DAX_DIMS.toBuilder().put("outcome", "absent_at_source").build()),
                 "what IG lacked is unknown when the heal stopped");
         assertEquals(3, value(metric(all, CollectorMetrics.HEAL_POINTS_SPENT).getLongSumData().getPoints(), DAX_DIMS));
         assertEquals(1999, metric(all, CollectorMetrics.IG_ALLOWANCE_REMAINING).getLongGaugeData().getPoints().iterator()
                 .next().getValue());
         assertTrue(all.stream().noneMatch(m -> m.getName().equals(CollectorMetrics.GAP_MINUTES)
-                && !m.getLongSumData().getPoints().isEmpty()), "gap rows the failed heal recorded are not known either");
+                && m.getLongSumData().getPoints().stream().anyMatch(p -> p.getValue() != 0)), "gap rows the failed heal recorded are not known either");
     }
 
     @Test
@@ -147,6 +167,6 @@ class JobMetricsTest {
         assertThrows(IllegalStateException.class, () -> store.record(heal("{\"missing\":1}")));
 
         assertTrue(reader.collectAllMetrics().stream().noneMatch(m -> m.getName().equals(CollectorMetrics.JOB_RUNS)
-                && !m.getLongSumData().getPoints().isEmpty()), "the runner retries it; counted once it lands");
+                && m.getLongSumData().getPoints().stream().anyMatch(p -> p.getValue() != 0)), "the runner retries it; counted once it lands");
     }
 }

@@ -173,7 +173,7 @@ class CollectorMetricsTest {
         var points = metric(reader.collectAllMetrics(), CollectorMetrics.EVENTS).getLongSumData().getPoints();
 
         assertEquals(4, written.size(), "every event still reaches the log");
-        assertEquals(3, points.size(), "resubscribes on DAX, the rebuild, the reconnect");
+        assertEquals(3, points.stream().filter(p -> p.getValue() != 0).count(), "resubscribes on DAX, the rebuild, the reconnect");
         assertEquals(2, value(points, Attributes.builder().putAll(DAX_DIMS).put("type", "WATCHDOG_STALE")
                 .put("severity", "WARN").put("action", "resubscribe").build()));
         assertEquals(1, value(points, Attributes.builder().put("user", "platform").put("source", "ig-stream-demo")
@@ -205,8 +205,9 @@ class CollectorMetricsTest {
             // the best-effort wrapper above it says so; the event happened all the same
         }
 
-        assertEquals(1, metric(reader.collectAllMetrics(), CollectorMetrics.EVENTS).getLongSumData().getPoints()
-                .iterator().next().getValue());
+        assertEquals(1, value(metric(reader.collectAllMetrics(), CollectorMetrics.EVENTS).getLongSumData().getPoints(),
+                Attributes.builder().put("user", "platform").put("source", "ig-stream-demo").put("type", "SINK_FAILURE")
+                        .put("severity", "ERROR").build()));
     }
 
     @Test
@@ -266,8 +267,30 @@ class CollectorMetricsTest {
     }
 
     @Test
+    void everyEventAndGapSeriesTheDashboardsReadStartsAtZero() {
+        // B29, seen live 2026-11-02: increase() cannot see a series' first value — a series born at 1 lost that count
+        var events = metric(reader.collectAllMetrics(), CollectorMetrics.EVENTS).getLongSumData().getPoints();
+        Attributes platform = Attributes.builder().put("user", "platform").put("source", "ig-stream-demo").build();
+        // the types the operations dashboard names, at the severities they are recorded at
+        for (String[] typeAndSeverity : new String[][] {{"RECONNECT", "WARN"}, {"RECONNECT", "INFO"},
+                {"CONNECTION_DEAD", "WARN"}, {"STUCK_SUBSTATE_ESCALATED", "WARN"}, {"FEED_DEAD", "ERROR"},
+                {"IG_API_ERROR", "ERROR"}, {"SINK_FAILURE", "ERROR"}}) {
+            assertEquals(0, value(events, platform.toBuilder().put("type", typeAndSeverity[0])
+                    .put("severity", typeAndSeverity[1]).build()), String.join(" ", typeAndSeverity));
+        }
+        for (String action : List.of("resubscribe", "rebuild")) {
+            assertEquals(0, value(events, DAX_DIMS.toBuilder().put("type", "WATCHDOG_STALE").put("severity", "WARN")
+                    .put("action", action).build()), "a watchdog verdict on the market: " + action);
+        }
+        assertEquals(0, value(events, DAX_DIMS.toBuilder().put("type", "BAR_GAP").put("severity", "WARN").build()));
+        assertEquals(0, value(metric(reader.collectAllMetrics(), CollectorMetrics.GAP_MINUTES).getLongSumData().getPoints(),
+                DAX_DIMS.toBuilder().put("origin", "stream").build()));
+        assertTrue(events.stream().allMatch(p -> p.getValue() == 0), "nothing has happened yet");
+    }
+
+    @Test
     void theMetricNamesAreTheDashboardsContract() {
-        JobMetrics jobs = new JobMetrics(provider.get("test"), "platform", "ig-stream-demo");
+        JobMetrics jobs = new JobMetrics(provider.get("test"), "platform", "ig-stream-demo", List.of(DAX), List.of("heal"));
         buffers.onTick(tick(DAX, 0, "1.0"));
         buffers.onTick(tick(DAX, 1, "2.0"));
         buffers.onSealedBar(bar(1));
