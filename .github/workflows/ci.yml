@@ -32,3 +32,4 @@ jobs:
       - uses: gradle/actions/setup-gradle@v4
       - run: ./gradlew build
       - run: deploy/test/deploy-test.sh # deploy.sh's record keeping against stubbed tools
+      - run: deploy/test/backup-test.sh # backup.sh's dump leaves the ticks to the archive (D39)

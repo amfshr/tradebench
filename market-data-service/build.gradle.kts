@@ -73,6 +73,16 @@ tasks.test {
         .withPropertyName("dashboards").withPathSensitivity(PathSensitivity.RELATIVE)
 }
 
+// A restore's second step (D39, E1-T17): bin/reload-ticks beside bin/market-data-service in the distribution
+val reloadTicksScripts = tasks.register<CreateStartScripts>("reloadTicksScripts") {
+    applicationName = "reload-ticks"
+    mainClass = "dev.amfshr.tradebench.marketdata.app.ReloadTicks"
+    defaultJvmOpts = listOf("--enable-native-access=ALL-UNNAMED")
+    outputDir = layout.buildDirectory.dir("reload-ticks-scripts").get().asFile
+    classpath = tasks.startScripts.get().classpath
+}
+distributions.main { contents { from(reloadTicksScripts) { into("bin") } } }
+
 tasks.register<Test>("replayAcceptance") {
     group = "verification"
     description = "Replays captured outages through the real stores into a Testcontainers Postgres (E1-T12)."

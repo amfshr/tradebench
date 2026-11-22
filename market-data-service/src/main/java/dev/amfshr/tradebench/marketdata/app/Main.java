@@ -362,7 +362,7 @@ public final class Main {
         return required(env, "TRADEBENCH_USER");
     }
 
-    private static String required(Map<String, String> env, String key) {
+    static String required(Map<String, String> env, String key) {
         String value = env.get(key);
         if (value == null || value.isBlank()) {
             throw new IgFatalConfigException("Missing required environment variable '" + key

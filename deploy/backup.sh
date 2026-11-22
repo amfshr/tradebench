@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# The nightly dump (E1-T7, D34 R4): pg_dump from the Postgres container, compressed (custom format), copied to
+# The nightly dump (E1-T7, D34 R4; D39): pg_dump from the Postgres container — every table but the ticks — compressed (custom format), copied to
 # R2 with rclone; every Sunday's also kept as a weekly. Retention: dailies older than 8 days and weeklies older
 # than 29 days are deleted. Run by tradebench-backup.timer; needs /etc/tradebench/backup.env.
 set -euo pipefail
@@ -10,7 +10,8 @@ day=$(date -u +%F)
 dump="/var/backups/tradebench/market_data-$day.dump"
 mkdir -p /var/backups/tradebench
 trap 'rm -f "$dump"' EXIT
-docker compose -f compose.prod.yaml exec -T postgres pg_dump -U postgres -Fc market_data > "$dump"
+# the ticks stay out: the Parquet archive holds them, and a restore reloads them from it (D39, bin/reload-ticks)
+docker compose -f compose.prod.yaml exec -T postgres pg_dump -U postgres -Fc --exclude-table-data=ticks market_data > "$dump"
 [ -s "$dump" ] || { echo "backup: the dump is empty — refusing to upload it" >&2; exit 1; }
 rclone copyto "$dump" "r2:$TRADEBENCH_BACKUP_BUCKET/dumps/daily/market_data-$day.dump"
 if [ "$(date -u +%u)" = 7 ]; then
