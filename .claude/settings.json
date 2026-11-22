@@ -1,0 +1,44 @@
+{
+  "$schema": "https://json.schemastore.org/claude-code-settings.json",
+  "permissions": {
+    "deny": [
+      "Read(./.env)",
+      "Read(./**/.env)",
+      "Read(./**/*.env)",
+      "Read(~/.config/tradebench/**)",
+      "Read(//etc/tradebench/**)",
+      "Bash(cat .env:*)",
+      "Bash(cat ./.env:*)",
+      "Bash(git diff --no-index:*)",
+      "Bash(git diff --output:*)",
+      "Bash(git push --force:*)",
+      "Bash(git push -f:*)",
+      "Bash(git push --force-with-lease:*)",
+      "Bash(git add -A:*)",
+      "Bash(git add --all:*)",
+      "Bash(git add .:*)",
+      "Bash(git commit --no-verify:*)",
+      "Bash(git commit -n:*)"
+    ],
+    "allow": [
+      "Bash(git status:*)",
+      "Bash(git diff)",
+      "Bash(git diff --cached:*)",
+      "Bash(git diff --stat:*)",
+      "Bash(git diff main:*)",
+      "Bash(git diff origin/main:*)",
+      "Bash(git diff HEAD:*)",
+      "Bash(git log:*)",
+      "Bash(git show:*)",
+      "Bash(git branch --show-current)",
+      "Bash(./gradlew build:*)",
+      "Bash(./gradlew test:*)",
+      "Bash(./gradlew :market-data-service:test:*)",
+      "Bash(./gradlew :ig-client:test:*)",
+      "Bash(./gradlew :core:test:*)",
+      "Bash(scripts/guardrails/guardrails-test.sh)",
+      "Bash(deploy/test/deploy-test.sh)",
+      "Bash(env -u NODE_OPTIONS npm test:*)"
+    ]
+  }
+}

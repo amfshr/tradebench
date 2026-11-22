@@ -1,0 +1,12 @@
+#!/usr/bin/env bash
+# G1 before every commit (E0-T4): no local env value in the staged changes, and no credential shape or private
+# strategy file (gitleaks, .gitleaks.toml). Turned on once per clone: git config core.hooksPath .githooks
+# CI scans the whole history with the same gitleaks rules, so --no-verify skips only the value check.
+set -euo pipefail
+root=$(git rev-parse --show-toplevel)
+python3 "$root/scripts/guardrails/env-value-check.py" --staged
+if ! command -v gitleaks > /dev/null; then
+    echo "pre-commit: gitleaks is not installed (brew install gitleaks) — refusing the commit (G1, fail closed)" >&2
+    exit 1
+fi
+gitleaks git --pre-commit --staged --config "$root/.gitleaks.toml" --redact --no-banner --log-level warn "$root"
