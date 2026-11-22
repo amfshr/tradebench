@@ -9,9 +9,9 @@ reports a leaked variable by its NAME, never its value.
   env-value-check.py --history     every commit's changes, every branch (the one-off sweep)
   env-value-check.py PATH...       files
 
-Env files: TRADEBENCH_ENV_FILES (colon-separated) if set, else <repo>/.env and ~/.config/tradebench/*.env.
-A value any committed *.env.example also holds is public (a published default or example), and values under 5 characters
-are too short to mean anything; both are skipped.
+Env files: TRADEBENCH_ENV_FILES (colon-separated) if set, else every <repo>/.env* but the examples, and
+~/.config/tradebench/*.env. A value some *.env.example holds as committed (never as staged) is public — a published
+default or example — and values under 5 characters are too short to mean anything; both are skipped.
 """
 import glob
 import os
@@ -26,30 +26,52 @@ def repo_root():
                           check=True).stdout.strip()
 
 
+def unquote(value):
+    """The value as the shell sees it: inside its quotes, or up to a ` #` comment."""
+    if value[:1] in ("'", '"'):
+        end = value.find(value[0], 1)
+        return value[1:end] if end > 0 else value[1:]
+    return value.split(" #", 1)[0].split("\t#", 1)[0].strip()
+
+
 def parse(path):
-    values = {}
     with open(path, encoding="utf-8", errors="replace") as f:
-        for line in f:
-            line = line.strip()
-            if not line or line.startswith("#") or "=" not in line:
-                continue
-            if line.startswith("export "):
-                line = line[len("export "):]
-            name, value = line.split("=", 1)
-            value = value.strip()
-            if len(value) >= 2 and value[0] == value[-1] and value[0] in "'\"":
-                value = value[1:-1]
-            values[name.strip()] = value
+        return parse_text(f.read())
+
+
+def committed_examples(root):
+    """The *.env.example files as committed — what was reviewed, never what is staged now: a value staged into an
+    example would otherwise make itself public."""
+    head = subprocess.run(["git", "rev-parse", "--verify", "-q", "HEAD"], capture_output=True, cwd=root)
+    if head.returncode != 0:
+        return []
+    names = subprocess.run(["git", "ls-tree", "-r", "--name-only", "HEAD"], capture_output=True, text=True,
+                           check=True, cwd=root).stdout.split()
+    return [n for n in names if n == ".env.example" or n.endswith(".env.example")]
+
+
+def parse_text(text):
+    values = {}
+    for line in text.splitlines():
+        line = line.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        if line.startswith("export "):
+            line = line[len("export "):]
+        name, value = line.split("=", 1)
+        values[name.strip()] = unquote(value.strip())
     return values
 
 
 def secrets(root):
     listed = os.environ.get("TRADEBENCH_ENV_FILES")
-    files = listed.split(":") if listed else [os.path.join(root, ".env")] + sorted(
+    files = listed.split(":") if listed else sorted(
+        f for f in glob.glob(os.path.join(root, ".env*")) if not f.endswith(".example")) + sorted(
         glob.glob(os.path.expanduser("~/.config/tradebench/*.env")))
-    examples = subprocess.run(["git", "ls-files", "--", ".env.example", "*.env.example"], capture_output=True,
-                              text=True, check=True, cwd=root).stdout.split()
-    public = {value for example in examples for value in parse(os.path.join(root, example)).values()}
+    public = set()
+    for example in committed_examples(root):
+        public |= set(parse_text(subprocess.run(["git", "show", "HEAD:" + example], capture_output=True, text=True,
+                                                errors="replace", check=True, cwd=root).stdout).values())
     found = {}
     for path in files:
         if os.path.isfile(path):
@@ -76,18 +98,19 @@ def staged():
 
 
 def history():
-    commit, where = "?", "?"
+    commit, where, in_message = "?", "?", False
     for line in git_lines(["log", "--all", "-p", "--no-color", "--unified=0", "--no-ext-diff", "--format=commit %H%n%B"]):
         if line.startswith("commit ") and len(line) == 47:
-            commit = line[7:14]
-            where = commit + " (message)"
+            commit, where, in_message = line[7:14], line[7:14] + " (message)", True
+        elif line.startswith("diff --git "):
+            where, in_message = commit + " (a deleted file)", False
+        elif in_message:
+            yield where, line
         elif line.startswith("+++ b/"):
             where = commit + " " + line[len("+++ b/"):]
             yield where, where
         elif line.startswith("+") and not line.startswith("+++"):
             yield where, line[1:]
-        elif where.endswith("(message)"):
-            yield where, line
 
 
 def files(paths):

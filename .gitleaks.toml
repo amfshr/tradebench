@@ -1,6 +1,6 @@
 # G1's scanner (E0-T4): gitleaks' default rules plus this repository's own shapes — the credentials it actually
 # handles, and the two strategy guards. CI scans the history with it; .githooks/pre-commit scans what is staged.
-# deploy/test/guardrails-test.sh plants one of each and must see every rule fire.
+# scripts/guardrails/guardrails-test.sh plants one of each and must see every rule fire.
 
 title = "tradebench"
 
@@ -16,10 +16,10 @@ keywords = ["api"]
 
 [[rules]]
 id = "ig-session-token"
-description = "An IG session token: the CST or X-SECURITY-TOKEN header's value"
-regex = '''(?i)(?:x-security-token|\bcst)["'\s:=]+([0-9a-z]{32,})\b'''
+description = "An IG session token: the CST or X-SECURITY-TOKEN header's value, or the CST-…|XST-… stream password"
+regex = '''(?i)(?:(?:x-security-token|\bcst)["'\s:=]+|\b(?:cst|xst)-)([0-9a-z]{32,})\b'''
 secretGroup = 1
-keywords = ["security-token", "cst"]
+keywords = ["security-token", "cst", "xst"]
 
 [[rules]]
 id = "s3-access-key-id"
@@ -38,15 +38,15 @@ keywords = ["secret"]
 [[rules]]
 id = "healthchecks-ping-url"
 description = "A healthchecks.io ping URL: the path is the secret"
-regex = '''hc-ping\.com/(?:[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}|[A-Za-z0-9_-]{22}/)'''
+regex = '''(?i)hc-ping\.com/(?:[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}|[A-Za-z0-9_-]{22}/)'''
 keywords = ["hc-ping.com"]
 
 [[rules]]
 id = "otlp-basic-auth"
-description = "An OTLP exporter's Basic credentials (Grafana Cloud's instance id and token, base64)"
-regex = '''(?i)authorization=basic(?:%20|\s)+([a-z0-9+/]{40,}={0,2})'''
+description = "Basic credentials: OTLP's env form (Grafana Cloud's instance id and token, base64) or a header"
+regex = '''(?i)authorization["']?\s*[=:]\s*["']?basic(?:%20|\s)+([a-z0-9+/]{40,}={0,2})'''
 secretGroup = 1
-keywords = ["authorization=basic"]
+keywords = ["basic"]
 
 [[rules]]
 id = "strategy-private-path"
@@ -56,5 +56,5 @@ path = '''(?:^|/)strategies/private/'''
 [[rules]]
 id = "strategy-private-marker"
 description = "A file marked as real strategy content by its own line 'tradebench: private' (G1; E3 revisits)"
-regex = '''(?im)^[ \t]*(?:#|//|--|;)?[ \t]*tradebench:[ \t]*private[ \t]*$'''
+regex = '''(?im)^[ \t]*(?:#|//|--|;|<!--|/\*)?[ \t]*tradebench:[ \t]*private[ \t]*(?:-->|\*/)?[ \t]*\r?$'''
 keywords = ["tradebench"]

@@ -73,14 +73,22 @@ G1 is checked by machine as well as by discipline, in three layers — each a ba
 - **Before every PR — the `doctrine-reviewer`'s `.env` leak check**, as before.
 - **History:** swept once (2026-11-22, the E0 plan's T4 §) — clean apart from the values redacted on 2026-10-10,
   kept in history by Alex's ruling. `env-value-check.py --history` re-runs the sweep.
+- **When a rule fires on something legitimate** (a same-shape synthetic fixture, say): CI scans the whole history,
+  so a finding stays red on every PR until it is dealt with. Prefer changing the fixture so it no longer has the
+  secret's shape; otherwise mark the line `gitleaks:allow`, or add the finding's fingerprint to `.gitleaksignore` —
+  each decided with Alex and named in the PR. A real leak already pushed is a G7 decision (rotate the secret first;
+  rewriting public history is irreversible).
 
 **Claude Code's permissions baseline — `.claude/settings.json`, committed.** It denies reading the env files with
-the Read tool (`.env`, any `*.env`, `~/.config/tradebench/`, `/etc/tradebench/`) so their values never enter a
-session's context — loading one into a command's environment (`set -a; . <file>; set +a`) still works, and is how
-tools that need them get them — and denies `git push --force`, `git add -A` / `git add .`, and `git commit
---no-verify`. It allows the routine read-only commands (`git status`/`diff`/`log`/`show`, the Gradle tests, the two
-guardrail scripts). The rules match a command's start, so they are a seatbelt, not a wall: G1 and G7 still bind
-whatever the matcher misses. No Claude Code hooks — no need has shown (E0-T4's nod). Personal additions go in
+the Read tool (`.env`, any `*.env`, `~/.config/tradebench/`, `/etc/tradebench/`), and the `git diff --no-index` /
+`--output` forms that would print or write any file, so a session does not read their values by accident — loading
+one into a command's environment (`set -a; . <file>; set +a`) still works, and is how tools that need them get them.
+It denies `git push --force`, `git add -A` / `git add .`, and `git commit --no-verify`. It allows the routine
+read-only commands (`git status`/`diff`/`log`/`show`, the Gradle tests, the docs tests, the guardrail and deploy test
+scripts). The rules match a command's start, so they are a seatbelt, not a wall — a shell can still `cat` a file, or
+put a flag later in the command: G1 and G7 bind whatever the matcher misses. A root `.env.*` other than
+`.env.example` is not denied by name (a deny cannot except the example); keep personal env files as `.env` or
+`*.env`. No Claude Code hooks — no need has shown (E0-T4's nod). Personal additions go in
 `.claude/settings.local.json`, never committed.
 
 ## 3. Session protocols

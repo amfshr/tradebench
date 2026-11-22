@@ -44,6 +44,14 @@ framework doc.
    reported by variable name only. Any finding is decided with Alex (rewriting public history
    is irreversible, G7).
 
+**As built, against ruling 5 — for Alex's nod at the PR** (the doctrine review's finding 5, 2026-11-22):
+- *Not done as worded:* `.env.*` is not denied by pattern — a deny cannot except `.env.example`, which sessions must
+  read; personal env files are `.env` or `*.env` (both denied), and the framework doc says so.
+- *Added:* `git commit --no-verify` / `-n` denied, so a session cannot skip the hook (ruling 2 accepts a human
+  bypassing it; the AI does not need to); the `git diff --no-index` / `--output` forms denied (the review's finding 4:
+  the `git diff` allow would otherwise print a denied file); `deploy/test/deploy-test.sh` allowed beside the
+  guardrail test.
+
 **The history sweep (2026-11-22) — clean, nothing to decide.** gitleaks over every commit on every branch, with its
 defaults and with this repo's rules: no findings. The value check against `.env` and `~/.config/tradebench/*.env`:
 three variables matched — the IG demo account id, the IG demo identifier and the local instance name — every match in
