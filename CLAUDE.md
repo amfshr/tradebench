@@ -55,7 +55,8 @@ stands alone) · P8 data collected forever, source-attributed always · P9 fail 
 
 ## Engineering conventions
 
-- **Java 21+, Spring Boot, Gradle multi-module** (services); **React/TypeScript** in
+- **Java 25, Gradle multi-module**; Spring Boot for the HTTP services only (`control-service`, E9) — never in
+  libraries, and not in the collector (D33: it needs no framework); **React/TypeScript** in
   `web/` with its own toolchain (`web/docs` = the docs site; `web/platform` = the future SPA). PostgreSQL via Flyway migrations. Redis Streams for
   inter-service messaging (provisional — decisions.md D4). Docker; Linux targets only.
 - **Injectable clocks everywhere**; distinguish monotonic/awake time from wall time. Business
@@ -63,6 +64,8 @@ stands alone) · P8 data collected forever, source-attributed always · P9 fail 
 - Language/stack conventions: `docs/design/tech-notes.md` — Java 25 LTS feature policy,
   **JSpecify `@NullMarked` packages from birth** (D14), BigDecimal-for-prices, dependency
   policy. System shape: `docs/design/architecture/README.md`.
+- **Logs follow D37** (a `WARN `/`ERROR ` tag via `LogLine`, a line per meaningful outcome, no `.env` value in a
+  line); metrics through the OpenTelemetry API only (tech-notes §7).
 - Cheap work only on transport callback threads; queue the rest. At-least-once consumers,
   idempotent by key, ack-after-apply.
 - **User and data-source are first-class dimensions in every schema/API from day one** (the

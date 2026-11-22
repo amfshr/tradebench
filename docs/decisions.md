@@ -671,3 +671,20 @@ Alex ruled 2026-10-30 — "that's the point, to have the consistency and be able
 structure; if we really need to improve or add to it later we can". Plain text over structured JSON for now: the
 lines are short and greppable, and Loki's level and pattern detection read them as they are — this amends D33's
 "structured JSON logs". E1-T16, and every service after it.
+
+## D38 — The AI contract reviewed at E0's close: the practice of the first epics written in — **Accepted** (2026-11-22, Alex)
+
+`.claude/ai-framework.md` §6 asks for a review at every epic boundary; E1 shipped and E0 closes with T4, so it was
+reviewed against how the work has actually run since 2026-09-27. Nothing in it was wrong; several practices that the
+sessions settled had never been written down, and are now: **production is read, never touched, by AI** — commands on
+the box are Alex's, AI reads production only through read-only paths (the Grafana stack, the read-only R2 remote);
+**a leak found is fixed, not just reported** (Alex, 2026-10-10, into G1); **the mutation practice** — one mutant at a
+time, restores asserted, a survivor resolved as a gap or a bad mutant before anything else, claims copied from the
+run log (G5); **observe before recording** — a finding reaches a record only after its scenario has run (G8, after a
+review finding was once recorded from an inferred premise); **the review loop** — findings fixed on the branch with a red-under-mutant test, a FAIL
+re-reviewed, a departure from a nod listed in the PR (§3); **agents' reports are model output**, checked before they
+are relayed, and agents leave the committing to the session (§5). §4 gains T4's seats (`settings.json` born,
+`.githooks/`, `.gitleaks.toml`, `scripts/guardrails/`). Outside the contract, CLAUDE.md's conventions were trued:
+Java 25, Spring Boot for the HTTP services only (the collector is framework-free, D33), and D37's logging. Next
+review: at E9's start. **Why:** the contract is the cold-start truth for any session (PRD §9); practice that lives
+only in memory or habit is lost at the next cold start. Alex: "go ahead with the contract review and close e0".

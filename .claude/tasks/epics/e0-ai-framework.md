@@ -10,7 +10,7 @@ from their board rows; this file was born 2026-11-22 for T4's plan.
 
 ---
 
-## T4 — Guardrail enforcement 🔶 (started 2026-11-22; the design nod held 2026-11-22, Alex — D13)
+## T4 — Guardrail enforcement ✅ (done 2026-11-22 — PR #34, merged by Alex, merge `986eb1c`; started and the design nod held 2026-11-22, Alex — D13; E0 complete)
 
 **Type** build · **Branch** `e0-t4-guardrail-enforcement` (cut from main `443c642`, 2026-11-22) · **Started** 2026-11-22 · **Blocked by** —
 
@@ -44,7 +44,7 @@ framework doc.
    reported by variable name only. Any finding is decided with Alex (rewriting public history
    is irreversible, G7).
 
-**As built, against ruling 5 — for Alex's nod at the PR** (the doctrine review's finding 5, 2026-11-22):
+**As built, against ruling 5 — for Alex's nod at the PR** (the doctrine review's finding 5, 2026-11-22; listed in PR #34 and accepted with Alex's merge, 2026-11-22):
 - *Not done as worded:* `.env.*` is not denied by pattern — a deny cannot except `.env.example`, which sessions must
   read; personal env files are `.env` or `*.env` (both denied), and the framework doc says so.
 - *Added:* `git commit --no-verify` / `-n` denied, so a session cannot skip the hook (ruling 2 accepts a human
@@ -63,5 +63,26 @@ that day, "history keeps the old values; Alex is fine with that". Nothing has le
 remote's provider, a vendor name — was the checker's own false positive: the value is published in
 `deploy/env/*.env.example`, so every committed `*.env.example` now counts as public, not only the root one.
 
-**Then the E0 close-out.** The contract review `.claude/ai-framework.md` §6 asks for at an epic
-boundary (E1 shipped), and E0 marked complete — on Alex's confirmation, after T4 merges.
+**Then the E0 close-out** (as written before the merge; done 2026-11-22 — below). The contract review
+`.claude/ai-framework.md` §6 asks for at an epic boundary (E1 shipped), and E0 marked complete — on Alex's
+confirmation, after T4 merges.
+
+### Done (2026-11-22)
+
+Alex approved 2026-11-22: "merged, go ahead with the contract review and close e0".
+
+- **Merged:** PR #34 (`e0-t4-guardrail-enforcement` → `main`), merged by Alex — GitHub stamps 2026-11-22T15:36:48Z — merge
+  `986eb1c`; CI green on its head `8e88ecd`: `build` (its new step ran gitleaks over 283 commits, "no leaks found", then
+  "guardrails: every planted violation caught, the innocent ones passed"), `web`, GitGuardian. Commits: ① `225d37e` ·
+  ② `37d82a1` · ③ `dfe9048` · ④ `1b06899` · ⑤ `8e88ecd`. The branch not yet deleted (Alex deletes branches).
+- **Reviews:** the doctrine review FAIL (ten findings, two of them real fail-open holes in the value check) — all fixed in
+  `1b06899`; the re-review PASS-WITH-FINDINGS (six) — all fixed in `8e88ecd`. 30 mutants, all killed.
+- **DoD:** planted violations caught in CI — met (`scripts/guardrails/guardrails-test.sh` in the `build` job: planted
+  credential and strategy cases, an innocent file, the value check's refusals, the pre-commit hook itself) · permissions
+  documented in the framework doc — met (`.claude/ai-framework.md` §2 "Enforcement").
+- **The departures from the nod** (above, "As built, against ruling 5") — accepted with the merge.
+- **The E0 close-out:** the §6 contract review done 2026-11-22 → **D38** (production read-only for AI; G1's
+  fix-don't-surface; the mutation practice in G5; observe-before-recording in G8; the review loop in §3; agents' reports
+  in §5; §4 trued for T4's seats); CLAUDE.md's conventions trued (Java 25, Spring Boot for the HTTP services only, D37's
+  logging). Next contract review: at E9's start.
+- **E0 complete — T1–T5 done.** Its close-out is the Done history entry tagged E0-T4.

@@ -12,6 +12,10 @@
 anything spending money; anything touching broker accounts or credentials; deploys to shared
 environments; making content public beyond this repo.
 
+**Production is read, never touched, by AI.** Commands on the production host are Alex's (over Tailscale; he pastes the
+output); AI reads production only through read-only paths — the Grafana stack, the read-only R2 remote — and changes the
+stack's dashboards only on an explicit ask (G6).
+
 **AI (Claude Code)** is: **design partner** (surveys, strawmen, structured questions — the
 grill pattern), **implementer** (ticket-scoped build work), **reviewer** (doctrine +
 conventions), and **librarian** (keeps board/decisions/records current). The operating stance,
@@ -31,7 +35,8 @@ re-litigates silently, and never implements past an unmade decision — it surfa
   personal and of no relevance to anyone else, so none of it appears in code, tests, wire
   fixtures, docs, the board, commit messages or PR bodies; fixtures and examples use
   synthetic values of the same shape. The `doctrine-reviewer` runs the `.env` leak check
-  before every PR (its checklist), reporting a leaked variable's *name*, never its value.
+  before every PR (its checklist), reporting a leaked variable's *name*, never its value. **A leak found is fixed, not
+  just reported** (Alex, 2026-10-10): replace the value with a synthetic one of the same shape.
 - **G2 — Decisions are logged, never silent.** A real decision lands in `docs/decisions.md`
   with the why and a status. Inherited decisions are superseded by writing new Tradebench
   docs, never by editing `docs/inherited/` (read-only snapshot, D1).
@@ -43,7 +48,9 @@ re-litigates silently, and never implements past an unmade decision — it surfa
   behavioural test mutation-verified (apply the exact break it exists to catch → red);
   independent anchors; golden bytes for wire contracts; fail-closed paths get failure-mode
   tests; boundary equalities get exact tests. The doctrine exists because a green AI-written
-  suite once survived 14 of 19 planted bugs.
+  suite once survived 14 of 19 planted bugs. **In practice:** mutants run one at a time, each restore asserted; a
+  survivor is investigated before anything else — it is either a gap (sharpen the test) or a bad mutant (fix the
+  mutant), and which one is said; a commit's mutation claims are copied from the run's log.
 - **G6 — No external sends without an explicit ask.** No emails, no third-party API calls
   carrying project data, no publishing. Broker APIs only through the project's own clients
   and config.
@@ -51,7 +58,9 @@ re-litigates silently, and never implements past an unmade decision — it surfa
   deletes, force-pushes, DB drops, deploys, key rotation. Look at the target before
   overwriting anything.
 - **G8 — Honest reporting.** Failures reported with their output; skipped steps named; "done"
-  means verified. (P9's spirit applied to the AI itself: fail loud.)
+  means verified. (P9's spirit applied to the AI itself: fail loud.) **Observe before recording:** a finding reaches a
+  record — the board, a review, a decision — only after the failing scenario has been run and its actual output
+  read; never from an inferred premise.
 
 ### Enforcement (E0-T4, 2026-11-22)
 
@@ -108,7 +117,9 @@ Sessions come in three shapes; each has a project skill that carries the protoco
   substantial ticket (intended shape, seams, in-ticket decisions → Alex's nod — proposing
   applies to code design too); branch per ticket; doctrine-bound tests; PR with the DoD
   restated. Small, self-contained increments — every merged PR leaves the repo shippable and
-  self-explaining.
+  self-explaining. **The review loop:** the `doctrine-reviewer` runs before the PR opens; its findings are fixed on
+  the branch, each with a test red under its mutant, or recorded for Alex when they are his call; a FAIL earns a
+  re-review of the fixes. A departure from the design nod is listed in the PR for Alex, never left silent.
 
 **Close-out (every session, any shape):** board statuses current, records/decisions filed,
 work committed or PR'd, next-session menu refreshed. Leave the camp clean — the next session
@@ -126,7 +137,7 @@ may be months away.
   skills/              ← project skills (§5)
   reviews/             ← AI review records — ultra reviews, written-out doctrine reviews — dated
                           YYYY-MM-DD-<scope>.md; transient evidence, never rendered on the docs site (D29)
-  settings.json        ← permissions/hooks (E0-T4 — not yet born)
+  settings.json        ← the committed permissions baseline (E0-T4; personal additions: settings.local.json)
 docs/
   decisions.md         ← decision log (D1…)
   design/sessions/     ← dated answered records of design sessions (nested, D21)
@@ -134,6 +145,9 @@ docs/
   reference/           ← external reference material (e.g. the scraped IG API summary)
   inherited/           ← read-only prototype seed pack (never edit — D1)
 design/                ← UX/page designs and wireframes (human-facing surfaces)
+.githooks/pre-commit   ← G1 before every commit (enable: git config core.hooksPath .githooks)
+.gitleaks.toml         ← G1's scanner rules (CI and the hook)
+scripts/guardrails/    ← the env value check and the test that proves every rule red
 CLAUDE.md              ← entrypoint: project truth + conventions; points everywhere else
 ```
 
@@ -151,10 +165,15 @@ New AI artifacts go in these seats — never invent parallel structures.
 | `/design-session` | skill | Running a design deep-dive with Alex. |
 | `/start-ticket` | skill | Starting build work on a board ticket. |
 
+An agent's report is model output: the session that spawned it checks its claims before relaying them, and does
+the committing — agents leave their edits in the working tree.
+
 Add new agents/skills only when a repeated need proves out (same bar as tickets: no
 speculative machinery), and record the addition on the board (E0 family).
 
 ## 6. Evolution
 
-Review this contract when E1 ships (first real code will stress G4/G5 and the T4 enforcement)
-and at every epic boundary. Framework changes = decisions (G2).
+Review this contract at every epic boundary. Framework changes = decisions (G2). **Reviewed 2026-11-22** at E0's
+close, after E1 shipped (D38): the practice the first epics settled was written in — production access, G1's
+fix-don't-surface, the mutation and review loops, observe-before-recording, agents' reports — and §4 trued for T4.
+Next review: at E9's start.
