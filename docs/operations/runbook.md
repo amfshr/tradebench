@@ -182,6 +182,9 @@ back (Field Manual chapter 12); ticks have no history at IG.
 mirrored archive: the dump restored without its ticks' rows in under a second (schema V6, 35,562 bars, 447 events);
 `reload-ticks` brought back 31 archived days, 4,493,329 ticks, in 75 seconds, every day whole; and the result matched
 a full restore of the same dump day by day — every day's count and every tick's time and prices identical.
+**Drilled again 2026-11-26 on the first tick-free dump** (production's 2026-11-26 02:30 dump, 0.86 MB where the full
+ones had reached 38.8 MB): restored as it is, it held no tick rows and the `ticks` table with its three indexes, 40,078
+bars and 500 events; `reload-ticks` then brought back 35 archived days, 5,189,075 ticks, in 94 seconds, every day whole.
 
 A whole-box failure is faster from Hetzner's daily backup: restore the server from the console, then check the
 collector came back (§2).
